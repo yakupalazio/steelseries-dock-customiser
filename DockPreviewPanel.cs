@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Security.Cryptography;
 using System.Windows.Forms;
 
 namespace SteelseriesDockCustomiser;
@@ -38,6 +39,10 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly DockHardwareTest _hardware = new();
     private readonly Button _sendHardware = new() { Text="Gerçek dock'a gönder (10 sn)", Width=210,Height=31 };
     private readonly Button _restoreHardware = new() { Text="Dock ekranını geri yükle", Width=187,Height=31 };
+    private readonly Button _liveToggle = new() { Text="Canlı dock modunu başlat", Width=191,Height=31 };
+    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=4000 };
+    private bool _liveEnabled,_liveSending;
+    private string? _lastLiveFrame;
     private readonly Label _message = new() { Left=16,Top=725,Width=775,Height=42,
         Text = "Dock fotoğrafı simülasyondur. Fiziksel OLED'e yalnızca yukarıdaki düğmeyle geçici test görüntüsü gönderilir.",
         ForeColor=Color.FromArgb(42,90,75)
@@ -74,27 +79,41 @@ internal sealed class DockPreviewPanel : UserControl
         Controls.Add(options);
 
         var hardwareRow = new FlowLayoutPanel { Left=16,Top=641,Width=770,Height=43,WrapContents=false };
-        hardwareRow.Controls.AddRange([_sendHardware,_restoreHardware]);
+        hardwareRow.Controls.AddRange([_sendHardware,_restoreHardware,_liveToggle]);
         Controls.Add(hardwareRow);
         Controls.Add(new Label { Left=16,Top=686,Width=770,Height=37,
-            Text="Deneysel test: 12–63 satırları iki parçada güncellenir; üst 12 satır korunur.",
+            Text="Deneysel test: 10–63 satırları iki parçada güncellenir; üst 10 satır korunur.",
             ForeColor=Color.FromArgb(137,72,30) });
         Controls.Add(_message);
 
         _sendHardware.Click += async (_,_) => await SendHardwareTest();
+        _liveToggle.Click += async (_,_) => await ToggleLiveMode();
+        _liveTimer.Tick += async (_,_) => await RefreshLiveDock();
         _restoreHardware.Click += (_,_) =>
         {
-            if(_hardware.Active)
+            if(_liveEnabled) StopLiveMode();
+            else if(_hardware.Active)
             {
                 _hardware.Stop();
                 _message.Text="Test sonlandırılıyor; SteelSeries ekranına geri dönülüyor.";
             }
             else _message.Text=_hardware.RestoreNow();
         };
-        Disposed += (_,_) => { if(_hardware.Active)_hardware.RestoreNow(); };
+        Disposed += (_,_) =>
+        {
+            _liveTimer.Stop();
+            bool mustRestore=_liveEnabled||_hardware.Active||_liveSending;
+            _liveEnabled=false;
+            if(mustRestore)_hardware.RestoreNow();
+        };
         _photoBox.Paint += (_,e) => PaintPhoto(e.Graphics);
         _photoBox.MouseClick += PhotoClick;
-        _custom.CheckedChanged += (_,_) => { _sendHardware.Enabled=_custom.Checked&&!_hardware.Active; InvalidateFrame(); };
+        _custom.CheckedChanged += (_,_) =>
+        {
+            if(!_custom.Checked && _liveEnabled)StopLiveMode();
+            _sendHardware.Enabled=_custom.Checked&&!_hardware.Active&&!_liveEnabled;
+            InvalidateFrame();
+        };
         _factory.CheckedChanged += (_,_) => InvalidateFrame();
         _choose.Click += (_,_) => ChoosePhoto();
         _restore.Click += (_,_) => RestoreExample();
@@ -107,9 +126,96 @@ internal sealed class DockPreviewPanel : UserControl
 
     public void InvalidateFrame() => _photoBox.Invalidate();
 
+    private async System.Threading.Tasks.Task ToggleLiveMode()
+    {
+        if(_liveEnabled)
+        {
+            StopLiveMode();
+            return;
+        }
+        if(!_custom.Checked || _hardware.Active)
+        {
+            _message.Text="Önce Custom modunu seç ve varsa 10 saniyelik testi bitir.";
+            return;
+        }
+        string validation=_hardware.Validate();
+        if(validation!="")
+        {
+            _message.Text=validation;
+            return;
+        }
+        if(MessageBox.Show(this,
+            "Canlı OLED modu, Windows'ta çalan şarkıyı; medya durduğunda saat ve tarihi gösterecek.\n"+
+            "Yalnızca 10–63. satırlar güncellenir; ilk 10 satır aktarım dışında kalır.\n"+
+            "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
+            "OLED ömrü için değişmeyen kareler yeniden gönderilmez. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
+            "Canlı moda geçilsin mi?",
+            "Dock canlı modu (deneysel)",MessageBoxButtons.YesNo,MessageBoxIcon.Information)
+            !=DialogResult.Yes) return;
+
+        _liveEnabled=true;
+        _lastLiveFrame=null;
+        _sendHardware.Enabled=false;
+        _liveToggle.Text="Canlı modu durdur";
+        _message.Text="Canlı dock modu etkin. Medya otomatik; üst 10 satır korunuyor.";
+        _liveTimer.Start();
+        await RefreshLiveDock();
+    }
+
+    private void StopLiveMode()
+    {
+        if(!_liveEnabled)return;
+        _liveEnabled=false;
+        _liveTimer.Stop();
+        _lastLiveFrame=null;
+        if(!IsDisposed)
+        {
+            _liveToggle.Text="Canlı dock modunu başlat";
+            _sendHardware.Enabled=_custom.Checked&&!_hardware.Active;
+            _message.Text="Canlı mod durdu: SteelSeries ekranı geri yükleniyor.";
+        }
+        // The restore command is serialized after any in-flight OLED update.
+        string message=_hardware.RestoreNow();
+        if(!IsDisposed)_message.Text=message;
+    }
+
+    private async System.Threading.Tasks.Task RefreshLiveDock()
+    {
+        if(!_liveEnabled||_liveSending||IsDisposed)return;
+        _liveSending=true;
+        try
+        {
+            using var bitmap=_frameFactory();
+            var pixels=new byte[128*54];
+            int ptr=0;
+            for(int y=10;y<64;y++)
+            for(int x=0;x<128;x++)
+                pixels[ptr++]=bitmap.GetPixel(x,y).R>127?(byte)1:(byte)0;
+            string stamp=Convert.ToHexString(SHA256.HashData(pixels));
+            if(stamp!=_lastLiveFrame)
+            {
+                await _hardware.SendLiveFrameAsync(bitmap);
+                _lastLiveFrame=stamp;
+            }
+        }
+        catch(Exception ex)
+        {
+            _liveEnabled=false;
+            _liveTimer.Stop();
+            if(!IsDisposed)
+            {
+                _liveToggle.Text="Canlı dock modunu başlat";
+                _sendHardware.Enabled=_custom.Checked;
+                _message.Text="Canlı dock bağlantısı durdu: "+ex.Message;
+            }
+            _hardware.RestoreNow();
+        }
+        finally { _liveSending=false; }
+    }
+
     private async System.Threading.Tasks.Task SendHardwareTest()
     {
-        if(_hardware.Active)return;
+        if(_hardware.Active||_liveEnabled)return;
         if(!_custom.Checked)
         {
             _message.Text="Önce Custom (canlı tasarım) seç.";
@@ -123,8 +229,8 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         var answer=MessageBox.Show(this,
-            "Tasarımın yalnızca 12–63. satırları iki parçada dock OLED'ine 10 saniyeliğine gönderilecek.\n"+
-            "İlk 12 satıra dokunulmayacak; orijinal göstergelerin korunup korunmadığını gözle kontrol et.\n"+
+            "Tasarımın yalnızca 10–63. satırları iki parçada dock OLED'ine 10 saniyeliğine gönderilecek.\n"+
+            "İlk 10 satıra dokunulmayacak; orijinal göstergelerin korunup korunmadığını gözle kontrol et.\n"+
             "Sonunda normal SteelSeries ekranına dönüş komutu gönderilecek.\n"+
             "Devam edilsin mi?",
             "Gerçek dock ekranı — geçici test",
@@ -376,7 +482,7 @@ internal sealed class DockPreviewPanel : UserControl
             if(!map.TryInverse(x+.5,y+.5,out var u,out var v))continue;
             if(u<0 || u>=1 || v<0 || v>=1)continue;
             double nx=u*128,ny=v*64;
-            if(ny<12)continue; // Factory battery icons remain photo pixels.
+            if(ny<10)continue; // Factory battery icons remain photo pixels.
 
             var old=output.GetPixel(x,y);
             var bg=smooth[y];
@@ -387,7 +493,7 @@ internal sealed class DockPreviewPanel : UserControl
 
             double distance=Math.Min(
                 Math.Min(nx,128-nx),
-                Math.Min(ny-12,64-ny));
+                Math.Min(ny-10,64-ny));
             double edge=Math.Clamp(distance/3.0,0.0,1.0);
             // Restrained photo texture, clamped so that original white text
             // cannot leak through the new black pixels.

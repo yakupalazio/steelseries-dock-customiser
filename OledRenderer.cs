@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
+using System.Globalization;
+using System.Text;
 
 namespace SteelseriesDockCustomiser;
 
@@ -14,7 +16,7 @@ namespace SteelseriesDockCustomiser;
 /// </summary>
 internal static class OledRenderer
 {
-    public const int Width=128, Height=64, ReservedTop=12;
+    public const int Width=128, Height=64, ReservedTop=10;
     private static readonly IReadOnlyDictionary<char,string[]> Glyphs = MakeGlyphs();
 
     private static readonly Dictionary<string,string[]> IconSprites = new()
@@ -99,11 +101,12 @@ internal static class OledRenderer
         ]
     };
 
-    public static Bitmap Render(LayoutState layout,bool media,bool showDate,bool spotify,BatterySnapshot? batteries=null)
+    public static Bitmap Render(LayoutState layout,bool media,bool showDate,bool spotify,BatterySnapshot? batteries=null,MediaSnapshot? playback=null)
     {
         var frame=new bool[Width*Height];
 
-        DrawFactoryPlaceholder(frame);
+        // Physical OEM indicator rows are managed by the dock firmware, not by us.
+        // Leave the protected region black in the framebuffer; never transmit it.
 
         // Draw every editable pixel, clipped below simulated factory bar.
         for(int y=ReservedTop;y<Height;y++)
@@ -111,7 +114,7 @@ internal static class OledRenderer
             if(layout.Pixels[y*Width+x])frame[y*Width+x]=true;
 
         foreach(var w in layout.Widgets.Where(w=>w.Visible && ShouldShow(w,media,showDate)))
-            DrawWidget(frame,w,spotify,batteries);
+            DrawWidget(frame,w,spotify,batteries,playback);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
         for(int y=0;y<Height;y++)
@@ -127,12 +130,12 @@ internal static class OledRenderer
         _=>true
     };
 
-    public static string DisplayText(DockWidget w)=>w.Kind switch
+    public static string DisplayText(DockWidget w,MediaSnapshot? playback=null)=>w.Kind switch
     {
-        "Clock"=>DateTime.Now.ToString("HH:mm"),
-        "Date"=>DateTime.Now.ToString("dd/MM/yyyy"),
-        "Track"=>"PALE TORTURED",
-        "Artist"=>"DRACONIAN",
+        "Clock"=>DateTime.Now.ToString(ClockDateFormats.ClockFormat(w.Format),CultureInfo.InvariantCulture),
+        "Date"=>DateTime.Now.ToString(ClockDateFormats.DateFormat(w.Format),CultureInfo.InvariantCulture),
+        "Track"=>playback?.IsPlaying==true ? playback.Title : "PALE TORTURED",
+        "Artist"=>playback?.IsPlaying==true ? playback.Artist : "DRACONIAN",
         "Custom text"=>w.Text,
         _=>""
     };
@@ -143,7 +146,8 @@ internal static class OledRenderer
         "Source" => new(w.X,w.Y,14,14),
         "Mouse" or "Phone" or "Headset" or "Laptop" or "DualSense" =>
             new(w.X,w.Y,38,11),
-        "Clock" => new(w.X,w.Y,55,13),
+        "Clock" => new(w.X,w.Y,Math.Min(128-w.X,
+            DisplayText(w).Length*13),13),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
     };
 
@@ -168,13 +172,13 @@ internal static class OledRenderer
         for(int x=0;x<Width;x++)Dot(px,x,11,false);
     }
 
-    private static void DrawWidget(bool[] px,DockWidget w,bool spotify,BatterySnapshot? batteries)
+    private static void DrawWidget(bool[] px,DockWidget w,bool spotify,BatterySnapshot? batteries,MediaSnapshot? playback)
     {
         int x=w.X,y=w.Y;
         switch(w.Kind)
         {
             case "Source":
-                DrawIcon(px,spotify?"Spotify":"Media",x,y);
+                DrawIcon(px,(playback?.IsPlaying==true ? playback.IsSpotify : spotify)?"Spotify":"Media",x,y);
                 break;
             case "Mouse":
             case "Phone":
@@ -186,10 +190,20 @@ internal static class OledRenderer
                 DrawText(px,pct,x+15,y+2,1);
                 break;
             case "Progress":
-                DrawProgress(px,x,y,Math.Min(98,Width-x),46);
+                DrawProgress(px,x,y,Math.Min(98,Width-x),
+                    playback?.IsPlaying==true ? playback.ProgressPercent : 46);
                 break;
             case "Clock":
-                DrawClock(px,DisplayText(w),x,y);
+                DrawClock(px,DisplayText(w),x,y,Math.Clamp(w.StrokeWidth,1,3));
+                break;
+            case "Track":
+            case "Artist":
+                DrawText(px,ScrollText(DisplayText(w,playback),x,Scale(w.FontSize)),
+                    x,y,Scale(w.FontSize));
+                break;
+            case "Date":
+                DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
+                    Math.Clamp(w.StrokeWidth,1,3));
                 break;
             default:
                 DrawText(px,DisplayText(w),x,y,Scale(w.FontSize));
@@ -296,26 +310,58 @@ internal static class OledRenderer
         }
     }
 
-    private static void DrawText(bool[] px,string? text,int x,int y,int scale)
+    // Native OLED track titles cannot wrap. Move long labels by one character/second.
+    private static string ScrollText(string text,int x,int scale)
+    {
+        int capacity=Math.Max(1,(Width-x)/(6*scale));
+        var normalized=ToPixelAlphabet(text);
+        if(normalized.Length<=capacity)return normalized;
+        var padded=normalized+"   ";
+        int shift=(int)(DateTimeOffset.Now.ToUnixTimeSeconds()%padded.Length);
+        return new string(Enumerable.Range(0,capacity)
+            .Select(i=>padded[(i+shift)%padded.Length]).ToArray());
+    }
+
+    private static string ToPixelAlphabet(string input)
+    {
+        var normalized=input.Replace('ı','i').Normalize(NormalizationForm.FormD);
+        var sb=new StringBuilder(normalized.Length);
+        foreach(char c in normalized)
+        {
+            if(CharUnicodeInfo.GetUnicodeCategory(c)==UnicodeCategory.NonSpacingMark)
+                continue;
+            sb.Append(c);
+        }
+        return sb.ToString().ToUpperInvariant();
+    }
+
+    private static void DrawText(bool[] px,string? text,int x,int y,int scale,int stroke=1)
     {
         if(string.IsNullOrWhiteSpace(text))return;
-        foreach(char c in text.ToUpperInvariant())
+        int advance=6*scale+Math.Clamp(stroke,1,3)-1;
+        foreach(char c in ToPixelAlphabet(text))
         {
-            if(!Glyphs.TryGetValue(c,out var glyph))
+            if(Glyphs.TryGetValue(c,out var glyph))
             {
-                x+=6*scale;continue;
+                for(int gy=0;gy<7;gy++)
+                for(int gx=0;gx<5;gx++)
+                    if(glyph[gy][gx]=='1')
+                        for(int sy=0;sy<scale;sy++)
+                        for(int sx=0;sx<scale;sx++)
+                            StrokeDot(px,x+gx*scale+sx,y+gy*scale+sy,stroke);
             }
-            for(int gy=0;gy<7;gy++)
-            for(int gx=0;gx<5;gx++)
-                if(glyph[gy][gx]=='1')
-                    for(int sy=0;sy<scale;sy++)
-                    for(int sx=0;sx<scale;sx++)
-                        Dot(px,x+gx*scale+sx,y+gy*scale+sy);
-            x+=6*scale;
+            x+=advance;
         }
     }
 
-    private static void DrawClock(bool[] px,string value,int x,int y)
+    private static void StrokeDot(bool[] px,int x,int y,int thickness)
+    {
+        for(int yy=0;yy<thickness;yy++)
+        for(int xx=0;xx<thickness;xx++)
+            Dot(px,x+xx,y+yy);
+    }
+
+    private static void DrawClock(bool[] px,string value,int x,int y,int thickness)
     {
         const int SegT=1,SegUL=2,SegUR=4,SegM=8,SegLL=16,SegLR=32,SegB=64;
         int[] map=[119,36,93,109,46,107,123,37,127,111];
@@ -323,30 +369,30 @@ internal static class OledRenderer
         {
             if(c==':')
             {
-                Dot(px,x+2,y+4);Dot(px,x+3,y+4);
-                Dot(px,x+2,y+9);Dot(px,x+3,y+9);
+                StrokeDot(px,x+2,y+4,thickness);
+                StrokeDot(px,x+2,y+9,thickness);
                 x+=7;continue;
             }
             if(!char.IsDigit(c)){x+=10;continue;}
             int flags=map[c-'0'];
-            if((flags&SegT)!=0)Line(px,x+2,y,x+6,y);
-            if((flags&SegUL)!=0)Line(px,x+1,y+2,x+1,y+5);
-            if((flags&SegUR)!=0)Line(px,x+7,y+2,x+7,y+5);
-            if((flags&SegM)!=0)Line(px,x+2,y+6,x+6,y+6);
-            if((flags&SegLL)!=0)Line(px,x+1,y+8,x+1,y+11);
-            if((flags&SegLR)!=0)Line(px,x+7,y+8,x+7,y+11);
-            if((flags&SegB)!=0)Line(px,x+2,y+12,x+6,y+12);
-            x+=11;
+            if((flags&SegT)!=0)Line(px,x+2,y,x+6,y,thickness);
+            if((flags&SegUL)!=0)Line(px,x+1,y+2,x+1,y+5,thickness);
+            if((flags&SegUR)!=0)Line(px,x+7,y+2,x+7,y+5,thickness);
+            if((flags&SegM)!=0)Line(px,x+2,y+6,x+6,y+6,thickness);
+            if((flags&SegLL)!=0)Line(px,x+1,y+8,x+1,y+11,thickness);
+            if((flags&SegLR)!=0)Line(px,x+7,y+8,x+7,y+11,thickness);
+            if((flags&SegB)!=0)Line(px,x+2,y+12,x+6,y+12,thickness);
+            x+=11+thickness-1;
         }
     }
 
-    private static void Line(bool[] px,int x1,int y1,int x2,int y2)
+    private static void Line(bool[] px,int x1,int y1,int x2,int y2,int thickness=1)
     {
         int dx=Math.Abs(x2-x1),sx=x1<x2?1:-1;
         int dy=-Math.Abs(y2-y1),sy=y1<y2?1:-1,err=dx+dy;
         while(true)
         {
-            Dot(px,x1,y1);
+            StrokeDot(px,x1,y1,thickness);
             if(x1==x2&&y1==y2)break;
             int e=2*err;
             if(e>=dy){err+=dy;x1+=sx;}

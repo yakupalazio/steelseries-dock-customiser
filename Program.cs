@@ -34,6 +34,19 @@ internal static class Program
             image.Save(filename,System.Drawing.Imaging.ImageFormat.Png);
             return;
         }
+        if(args.Contains("--media-preview-file"))
+        {
+            int at=Array.IndexOf(args,"--media-preview-file");
+            if(at+1>=args.Length)return;
+            string output=args[at+1];
+            var playback=MediaSessionProvider.PollAsync().GetAwaiter().GetResult();
+            using var rendered=OledRenderer.Render(LayoutDefaults.Create(),playback.IsPlaying,true,
+                playback.IsSpotify,BatterySources.PollAsync().GetAwaiter().GetResult(),playback);
+            rendered.Save(output,System.Drawing.Imaging.ImageFormat.Png);
+            System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(output,".txt"),
+                $"Playing={playback.IsPlaying}; Spotify={playback.IsSpotify}; Title={playback.Title}; Artist={playback.Artist}; Progress={playback.ProgressPercent}%");
+            return;
+        }
         if(args.Contains("--self-test"))
         {
             var at=Array.IndexOf(args,"--demo-output");
@@ -52,6 +65,8 @@ public sealed class DockWidget
     public int X { get; set; }
     public int Y { get; set; } = 17;
     public int FontSize { get; set; } = 10;
+    public int StrokeWidth { get; set; } = 1;
+    public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;
     public override string ToString() => $"{Kind}  ({X}, {Y})";

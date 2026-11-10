@@ -97,6 +97,50 @@ internal static class SelfTests
             }
             if(!sourceDiff)throw new Exception("Spotify / generic source switching has no effect");
             if(!modeDiff)throw new Exception("Media / clock mode switching has no effect");
+            if(OledRenderer.ReservedTop!=10 || DockHardwareTest.EditableY!=10 || DockHardwareTest.MainY!=10)
+                throw new Exception("The factory indicator strip must reserve precisely 10 rows");
+            if(!MediaSnapshot.IsSpotifyApp("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify") ||
+                MediaSnapshot.IsSpotifyApp("GoogleChromePlaying"))
+                throw new Exception("Spotify source identification failed");
+            var playback=new MediaSnapshot(true,true,"My Generation","Limp Bizkit",
+                "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",TimeSpan.FromSeconds(72),
+                TimeSpan.FromSeconds(180),DateTimeOffset.Now);
+            if(playback.ProgressPercent is <39 or >41)
+                throw new Exception("Media position must map into progress percentage");
+            using(var actual=OledRenderer.Render(layout,true,true,true,null,playback))
+            using(var genericSession=OledRenderer.Render(layout,true,true,true,null,playback with { IsSpotify=false }))
+            {
+                bool changed=false;
+                for(int yy=10;yy<49;yy++)for(int xx=0;xx<127;xx++)
+                    if(actual.GetPixel(xx,yy).ToArgb()!=media.GetPixel(xx,yy).ToArgb())changed=true;
+                if(!changed)throw new Exception("Real song metadata does not replace demo text");
+                // Source logo must change when the active source is not Spotify.
+                if(actual.GetPixel(6,24).ToArgb()==genericSession.GetPixel(6,24).ToArgb())
+                {
+                    bool sourceChanged=false;
+                    for(int yy=18;yy<33;yy++)for(int xx=3;xx<17;xx++)
+                        sourceChanged|=actual.GetPixel(xx,yy).ToArgb()!=genericSession.GetPixel(xx,yy).ToArgb();
+                    if(!sourceChanged)throw new Exception("The real media source icon did not switch");
+                }
+            }
+            var weightedClock=layout.DeepClone();
+            weightedClock.Widgets.First(w=>w.Kind=="Clock").StrokeWidth=3;
+            using(var thickClock=OledRenderer.Render(weightedClock,false,true,true))
+            {
+                bool changed=false;
+                for(int yy=16;yy<36;yy++)for(int xx=33;xx<110;xx++)
+                    changed|=idle.GetPixel(xx,yy).ToArgb()!=thickClock.GetPixel(xx,yy).ToArgb();
+                if(!changed)throw new Exception("Clock 1–3 pixel stroke width had no effect");
+            }
+            var weightedDate=layout.DeepClone();
+            weightedDate.Widgets.First(w=>w.Kind=="Date").StrokeWidth=3;
+            using(var thickDate=OledRenderer.Render(weightedDate,false,true,true))
+            {
+                bool changed=false;
+                for(int yy=37;yy<55;yy++)for(int xx=30;xx<125;xx++)
+                    changed|=idle.GetPixel(xx,yy).ToArgb()!=thickDate.GetPixel(xx,yy).ToArgb();
+                if(!changed)throw new Exception("Date 1–3 pixel stroke width had no effect");
+            }
 
             var modified=layout.DeepClone();
             modified.Pixels[63*128+127]=true;
@@ -111,29 +155,29 @@ internal static class SelfTests
                 if(cropped.Width!=128||cropped.Height!=48||tail.Width!=128||tail.Height!=8)
                     throw new Exception("OLED hardware patch size mismatch.");
                 bool[] covered=new bool[64];
-                foreach(var section in new[]{(image:cropped,physicalY:12),(image:tail,physicalY:56)})
+                foreach(var section in new[]{(image:cropped,physicalY:10),(image:tail,physicalY:56)})
                 for(int y=0;y<section.image.Height;y++)
                 {
                     int yy=section.physicalY+y;
-                    if(yy<12||yy>=64)throw new Exception("Header or screen boundary modified!");
+                    if(yy<10||yy>=64)throw new Exception("Header or screen boundary modified!");
                     covered[yy]=true;
                     for(int x=0;x<128;x++)
                         if(section.image.GetPixel(x,y).ToArgb()!=media.GetPixel(x,yy).ToArgb())
                             throw new Exception("Pixel mismatch on physical row "+yy);
                 }
                 for(int y=0;y<64;y++)
-                    if(covered[y]!=(y>=12))
+                    if(covered[y]!=(y>=10))
                         throw new Exception("Bad OLED segment coverage at row "+y);
             }
             // User-painted pixels are blocked in the simulated firmware strip.
             modified=layout.DeepClone();
-            modified.Pixels[11*128]=true;
+            modified.Pixels[9*128]=true;
             using(var changed=OledRenderer.Render(modified,true,true,true))
-            if(changed.GetPixel(0,11).ToArgb()!=media.GetPixel(0,11).ToArgb())
+            if(changed.GetPixel(0,9).ToArgb()!=media.GetPixel(0,9).ToArgb())
                 throw new Exception("Reserved factory region accepted user pixel");
 
             // Perspective overlay is a photo simulation only. The factory
-            // indicator strip (first 12 native OLED rows) must stay untouched.
+            // indicator strip (first 10 native OLED rows) must stay untouched.
             using(var photo=new Bitmap(480,260))
             {
                 using(var g=Graphics.FromImage(photo))
