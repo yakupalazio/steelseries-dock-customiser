@@ -198,8 +198,7 @@ internal static class OledRenderer
                 break;
             case "Track":
             case "Artist":
-                DrawText(px,ScrollText(DisplayText(w,playback),x,Scale(w.FontSize)),
-                    x,y,Scale(w.FontSize));
+                DrawMarquee(px,DisplayText(w,playback),x,y,Scale(w.FontSize));
                 break;
             case "Date":
                 DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
@@ -310,16 +309,52 @@ internal static class OledRenderer
         }
     }
 
-    // Native OLED track titles cannot wrap. Move long labels by one character/second.
-    private static string ScrollText(string text,int x,int scale)
+    // A physical OLED is 128 pixels wide: text moves by actual PIXELS,
+    // rather than jumping one entire character at each update.
+    public const int MarqueePixelsPerSecond=3;
+    internal static int MarqueeOffset(int textWidth,int displayWidth,long seconds)
     {
-        int capacity=Math.Max(1,(Width-x)/(6*scale));
-        var normalized=ToPixelAlphabet(text);
-        if(normalized.Length<=capacity)return normalized;
-        var padded=normalized+"   ";
-        int shift=(int)(DateTimeOffset.Now.ToUnixTimeSeconds()%padded.Length);
-        return new string(Enumerable.Range(0,capacity)
-            .Select(i=>padded[(i+shift)%padded.Length]).ToArray());
+        if(textWidth<=displayWidth)return 0;
+        int cycle=textWidth+24; // Space between repeated labels.
+        return (int)((seconds*MarqueePixelsPerSecond)%cycle);
+    }
+
+    private static void DrawMarquee(bool[] framebuffer,string text,int left,int top,int scale)
+    {
+        string label=ToPixelAlphabet(text);
+        int advance=6*scale;
+        int displayWidth=Width-left;
+        if(label.Length*advance<=displayWidth)
+        {
+            DrawText(framebuffer,label,left,top,scale);
+            return;
+        }
+
+        int labelWidth=label.Length*advance;
+        int stride=labelWidth+24;
+        int offset=MarqueeOffset(labelWidth,displayWidth,
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        // Tile twice so the next copy enters after a short empty interval.
+        for(int copy=0;copy<2;copy++)
+        {
+            int baseX=left-offset+copy*stride;
+            for(int i=0;i<label.Length;i++)
+            {
+                int glyphX=baseX+i*advance;
+                if(glyphX+5*scale<left || glyphX>=Width)continue;
+                if(!Glyphs.TryGetValue(label[i],out var glyph))continue;
+                for(int gy=0;gy<7;gy++)
+                for(int gx=0;gx<5;gx++)
+                    if(glyph[gy][gx]=='1')
+                        for(int yy=0;yy<scale;yy++)
+                        for(int xx=0;xx<scale;xx++)
+                        {
+                            int pixelX=glyphX+gx*scale+xx;
+                            if(pixelX>=left && pixelX<Width)
+                                Dot(framebuffer,pixelX,top+gy*scale+yy);
+                        }
+            }
+        }
     }
 
     private static string ToPixelAlphabet(string input)

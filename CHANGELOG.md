@@ -1,25 +1,26 @@
 # Changelog
 
-## 0.9.6 — Live Windows media and 10-row OLED header
+## 0.9.7 — One-second OLED refresh and optional Android battery reader
 
-- Reduced the factory indicator reservation to **10 rows (Y=0..9)**, with only Y=10..63 writable in the physical dock.
-- Two patch updates: 128×48 at Y=10, then 128×8 at Y=56, never clear full screen.
-- Added Windows GSMTC active media status, Spotify source detection, actual song title/artist and progress.
-- Automatic media → clock/date fallback; refreshes metadata every three seconds.
-- Added a dedicated clock/date editor with independent 1–3 pixel stroke thickness and configurable formats.
-- Added an explicitly opt-in physical **live dock mode** that sends only changed OLED frames and restores the SteelSeries interface on stop.
-- Tested MSIX developer-mode package registration and launch; CrossDevice internal activation remained blocked (0x80040154). Temporary package removed.
-- Expanded self-tests for media source, track metadata, progress, separate clock/date thickness and precise 10-row protection.
-- Previous v0.9.5 source retained and public v0.9.3 GitHub baseline unchanged.
+- Changed physical live OLED timer from 4,000 ms to **1,000 ms**.
+- Replaced character-at-a-time song marquee with **3 native pixels per second**, clipped to the display region.
+- Refreshed Windows media session every second rather than every three seconds.
+- Added 1-second, lightweight laptop + SteelSeries GG battery sampling. Full phone/controller battery readings happen every five seconds.
+- Removed cached Windows PnP enumeration from normal live polling; old Bluetooth values are diagnostic only.
+- Kept hash-based skip-if-unchanged and in-flight USB write protection.
+- Added optional read-only Galaxy S24+ **ADB battery adapter**, with explicit user opt-in and Phone Link fallback.
+- Added Google Platform-Tools pairing assistant which does not store pairing codes or auto-accept any SDK license.
+- Added regression tests for per-second pixel scrolling and Android battery response parsing.
+- Previous versions remain untouched; v0.9.7 is a separate local development checkpoint.
 
-## 0.9.5 — Factory upper indicator preservation
-- Corrected reserved rows to 12; added cropped, reversible physical OLED updates.
+## 0.9.6 — Live media and 10-row OLED header
 
-## 0.9.4 — Experimental dock output
-- Added manual, ten-second physical dock test using pinned external ggoled and automatic restore.
+- Automatically switched Windows media playback / clock-date modes, with Spotify source logo and progress.
+- Added opt-in continuous physical dock output and 10-row factory indicator preservation.
+- Added independent clock/date stroke thickness controls.
 
-## 0.9.3 — Phone Link status
-- Read phone status from the accessible UI when Phone Link was open or minimized.
+## 0.9.5 — First partial physical OLED updates
+- Split custom frame into safe lower-screen segments to avoid original factory bar.
 
-## 0.9.2 — SteelSeries GG battery status
-- Read connected Aerox / Nova Pro battery values via local GG Engine status.
+## 0.9.4 — First physical display experiment
+- Added temporary ten-second physical OLED write and restore.

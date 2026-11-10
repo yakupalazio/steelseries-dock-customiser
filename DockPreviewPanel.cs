@@ -40,7 +40,7 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly Button _sendHardware = new() { Text="Gerçek dock'a gönder (10 sn)", Width=210,Height=31 };
     private readonly Button _restoreHardware = new() { Text="Dock ekranını geri yükle", Width=187,Height=31 };
     private readonly Button _liveToggle = new() { Text="Canlı dock modunu başlat", Width=191,Height=31 };
-    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=4000 };
+    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=1000 };
     private bool _liveEnabled,_liveSending;
     private string? _lastLiveFrame;
     private readonly Label _message = new() { Left=16,Top=725,Width=775,Height=42,
@@ -53,6 +53,7 @@ internal sealed class DockPreviewPanel : UserControl
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","dock-preview-v07.json");
     private Image? _photo;
+    private Color[]? _cachedGlassBackground;
     private PhotoSettings _settings = new();
     private bool _calibrating;
     private readonly List<PointF> _newCorners = [];
@@ -145,7 +146,7 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         if(MessageBox.Show(this,
-            "Canlı OLED modu, Windows'ta çalan şarkıyı; medya durduğunda saat ve tarihi gösterecek.\n"+
+            "Canlı OLED saniyede 1 kez kontrol edilir; medya durduğunda saat ve tarih gösterilir.\n"+
             "Yalnızca 10–63. satırlar güncellenir; ilk 10 satır aktarım dışında kalır.\n"+
             "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
             "OLED ömrü için değişmeyen kareler yeniden gönderilmez. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
@@ -323,6 +324,7 @@ internal sealed class DockPreviewPanel : UserControl
             var clone = new Bitmap(image);
             var old=_photo;
             _photo=clone;
+            _cachedGlassBackground=null;
             old?.Dispose();
             if(_settings.Corners.Count!=4 && _settings.ImagePath==null)
                 _settings.Corners=_factoryCorners.ToList();
@@ -354,6 +356,7 @@ internal sealed class DockPreviewPanel : UserControl
         if(save && _newCorners.Count==4)
         {
             _settings.Corners=_newCorners.ToList();
+            _cachedGlassBackground=null;
             SaveSettings();
             _message.Text="OLED perspektifi kaydedildi. Tasarım şimdi işaretlediğin alana yerleşiyor.";
         }
@@ -394,7 +397,15 @@ internal sealed class DockPreviewPanel : UserControl
         else
         {
             using var render=_frameFactory();
-            using var combined=ComposePhotograph(_photo,render,_settings.Corners,92);
+            // This dark-glass reference only depends on the photo/corners, not
+            // on the changing OLED framebuffer. Cache the expensive medians.
+            if(_cachedGlassBackground is null)
+            {
+                using var reference=new Bitmap(_photo);
+                _cachedGlassBackground=BuildSmoothBackground(reference,_settings.Corners);
+            }
+            using var combined=ComposePhotograph(_photo,render,
+                _settings.Corners,92,_cachedGlassBackground);
             g.DrawImage(combined,_imageRect);
         }
 
@@ -428,7 +439,7 @@ internal sealed class DockPreviewPanel : UserControl
     /// blends native-pixel glyphs in photo space. Never affects the actual dock.
     /// </summary>
     public static Bitmap ComposePhotograph(Image photo, Bitmap oled,
-        IReadOnlyList<PointF> corners,int brightness)
+        IReadOnlyList<PointF> corners,int brightness,Color[]? cachedBackground=null)
     {
         var output=new Bitmap(photo.Width,photo.Height,PixelFormat.Format32bppArgb);
         using(var g=Graphics.FromImage(output))g.DrawImage(photo,0,0,photo.Width,photo.Height);
@@ -441,6 +452,64 @@ internal sealed class DockPreviewPanel : UserControl
         int y0=Math.Max(0,(int)Math.Floor(corners.Min(p=>p.Y)));
         int y1=Math.Min(output.Height-1,(int)Math.Ceiling(corners.Max(p=>p.Y)));
         if(x1<=x0 || y1<=y0)return output;
+
+        var smooth=cachedBackground ?? BuildSmoothBackground(output,corners);
+        // OLED is only 128×64; cache its on/off pixels rather than calling
+        // Bitmap.GetPixel four times per source-photo pixel.
+        var sourcePixels=new bool[128*64];
+        for(int oy=10;oy<64;oy++)
+        for(int ox=0;ox<128;ox++)
+            sourcePixels[oy*128+ox]=oled.GetPixel(ox,oy).R>127;
+
+        double white=222.0 + 0.24*Math.Clamp(brightness,35,100);
+        for(int y=y0;y<=y1;y++)
+        for(int x=x0;x<=x1;x++)
+        {
+            if(!map.TryInverse(x+.5,y+.5,out var u,out var v))continue;
+            if(u<0 || u>=1 || v<0 || v>=1)continue;
+            double nx=u*128,ny=v*64;
+            if(ny<10)continue; // Factory battery icons remain photo pixels.
+
+            var old=output.GetPixel(x,y);
+            var bg=smooth[y];
+
+            // Sample in native pixel coordinates with fractional coverage:
+            // camera-like edges without inventing extra OLED resolution.
+            double a=NativeCoverage(sourcePixels,nx-.5,ny-.5);
+
+            double distance=Math.Min(
+                Math.Min(nx,128-nx),
+                Math.Min(ny-10,64-ny));
+            double edge=Math.Clamp(distance/3.0,0.0,1.0);
+            // Restrained photo texture, clamped so that original white text
+            // cannot leak through the new black pixels.
+            double noiseR=Math.Min(old.R,bg.R+7)*.08;
+            double noiseG=Math.Min(old.G,bg.G+7)*.08;
+            double noiseB=Math.Min(old.B,bg.B+7)*.08;
+            double offR=bg.R*.92+noiseR;
+            double offG=bg.G*.92+noiseG;
+            double offB=bg.B*.92+noiseB;
+            double r=offR + (white-offR)*a;
+            double g=offG + (white+3-offG)*a;
+            double b=offB + (white+4-offB)*a;
+
+            // Blend at screen boundaries so no pasted-on black rectangle is visible.
+            output.SetPixel(x,y,Color.FromArgb(255,
+                (int)Math.Clamp(old.R*(1-edge)+r*edge,0,255),
+                (int)Math.Clamp(old.G*(1-edge)+g*edge,0,255),
+                (int)Math.Clamp(old.B*(1-edge)+b*edge,0,255)));
+        }
+        return output;
+    }
+
+    private static Color[] BuildSmoothBackground(Bitmap output,
+        IReadOnlyList<PointF> corners)
+    {
+        int x0=Math.Max(0,(int)Math.Floor(corners.Min(p=>p.X)));
+        int x1=Math.Min(output.Width-1,(int)Math.Ceiling(corners.Max(p=>p.X)));
+        int y0=Math.Max(0,(int)Math.Floor(corners.Min(p=>p.Y)));
+        int y1=Math.Min(output.Height-1,(int)Math.Ceiling(corners.Max(p=>p.Y)));
+        if(x1<=x0||y1<=y0)return new Color[output.Height];
 
         // Compute a dark neutral background for every source-photo row. The
         // bright original screen characters are excluded from the estimation.
@@ -475,48 +544,10 @@ internal sealed class DockPreviewPanel : UserControl
             smooth[row]=Color.FromArgb(rr/count,gg/count,bb/count);
         }
 
-        double white=222.0 + 0.24*Math.Clamp(brightness,35,100);
-        for(int y=y0;y<=y1;y++)
-        for(int x=x0;x<=x1;x++)
-        {
-            if(!map.TryInverse(x+.5,y+.5,out var u,out var v))continue;
-            if(u<0 || u>=1 || v<0 || v>=1)continue;
-            double nx=u*128,ny=v*64;
-            if(ny<10)continue; // Factory battery icons remain photo pixels.
-
-            var old=output.GetPixel(x,y);
-            var bg=smooth[y];
-
-            // Sample in native pixel coordinates with fractional coverage:
-            // camera-like edges without inventing extra OLED resolution.
-            double a=NativeCoverage(oled,nx-.5,ny-.5);
-
-            double distance=Math.Min(
-                Math.Min(nx,128-nx),
-                Math.Min(ny-10,64-ny));
-            double edge=Math.Clamp(distance/3.0,0.0,1.0);
-            // Restrained photo texture, clamped so that original white text
-            // cannot leak through the new black pixels.
-            double noiseR=Math.Min(old.R,bg.R+7)*.08;
-            double noiseG=Math.Min(old.G,bg.G+7)*.08;
-            double noiseB=Math.Min(old.B,bg.B+7)*.08;
-            double offR=bg.R*.92+noiseR;
-            double offG=bg.G*.92+noiseG;
-            double offB=bg.B*.92+noiseB;
-            double r=offR + (white-offR)*a;
-            double g=offG + (white+3-offG)*a;
-            double b=offB + (white+4-offB)*a;
-
-            // Blend at screen boundaries so no pasted-on black rectangle is visible.
-            output.SetPixel(x,y,Color.FromArgb(255,
-                (int)Math.Clamp(old.R*(1-edge)+r*edge,0,255),
-                (int)Math.Clamp(old.G*(1-edge)+g*edge,0,255),
-                (int)Math.Clamp(old.B*(1-edge)+b*edge,0,255)));
-        }
-        return output;
+        return smooth;
     }
 
-    private static double NativeCoverage(Bitmap oled,double x,double y)
+    private static double NativeCoverage(bool[] oled,double x,double y)
     {
         int x0=(int)Math.Floor(x), y0=(int)Math.Floor(y);
         double fx=x-x0,fy=y-y0;
@@ -525,8 +556,8 @@ internal sealed class DockPreviewPanel : UserControl
         return a*(1-fy)+b*fy;
     }
 
-    private static int IsLit(Bitmap image,int x,int y) =>
-        x>=0 && x<128 && y>=12 && y<64 && image.GetPixel(x,y).R>127 ? 1 : 0;
+    private static int IsLit(bool[] image,int x,int y) =>
+        x>=0 && x<128 && y>=10 && y<64 && image[y*128+x] ? 1 : 0;
 
     protected override void Dispose(bool disposing)
     {

@@ -1,73 +1,65 @@
-# Steelseries Dock Customiser v0.9.6 — Live Media and Personalized Clock
+# Steelseries Dock Customiser v0.9.7 — 1 Hz OLED + Android ADB Option
 
-A lightweight Windows **.NET 10** app to design and preview a 128×64 monochrome OLED screen for the Arctis Nova Pro Wireless base station. Physical display writing is experimental and opt-in.
+Independent Windows .NET 10 128×64 OLED designer for the SteelSeries Arctis Nova Pro Wireless base station.
 
-## What's new in v0.9.6
+## Screen refresh: once per second
 
-### Preserved factory battery indicator strip: 10 rows
+- **Live dock mode checks the display once every 1,000 milliseconds**, not every four seconds.
+- Marquee text moves by **3 native OLED pixels per second** instead of skipping one full character. Text is clipped at the left boundary so it doesn't overwrite the source icon.
+- Media playback information is sampled from Windows GSMTC **every second**. Track title, artist, source logo and timeline progress are refreshed as Windows reports new data.
+- Windows laptop battery and SteelSeries GG (Aerox 3 Gen 2 / Nova Pro headset and spare battery) are queried on a lightweight **1-second cadence**.
+- Phone Link, optionally authorized Android ADB and experimental DualSense HID are sampled about **every 5 seconds**, avoiding frequent costly background UI scans and Bluetooth enumerations.
+- The **full OLED frame is rendered and compared every second**, but the app transmits USB updates **only if actual lower-screen pixels changed**, to reduce CPU, I/O and unnecessary OLED refreshing. It does not manufacture changes when a physical percentage has not changed.
+- The original SteelSeries factory indicator strip **Y=0..9 is never sent**. The custom area is Y=10..63, written as two partial patches (128×48 at Y=10; 128×8 at Y=56).
 
-The header exclusion is now exactly **Y = 0..9**, leaving **Y = 10..63** for custom OLED content. Both the editor and the physical writer use the same boundary. The hardware writer never transmits pixels from the reserved area and never uses full-screen clear (`-C`).
+### Live test controls
 
-The external ggoled CLI uses two partially overlapping, byte-block-compatible updates:
-- First image: **128×48 pixels at (0, 10)** — physical rows 10–57.
-- Second image: **128×8 pixels at (0, 56)** — physical rows 56–63.
+Use **Dock Preview → Canlı dock modunu başlat**. This is opt-in and off by default. It tries to return to the normal SteelSeries interface when stopped. Disable SteelSeries GG's own Now Playing overlay while using it, to avoid simultaneous screen writers. For safety, only the separately installed SHA-256-verified ggoled v0.3.0 executable is supported; it is not distributed with this project.
 
-The same source pixel positions are projected into Dock Preview. These writes can coexist with the dock's factory indicator line *provided SteelSeries does not concurrently overwrite that region*. The user should visually verify the final 10-row boundary on the actual dock.
+## Android phone: optional direct ADB battery source
 
-### Automatic media player
+The user wants a Samsung **Galaxy S24+** battery reading even when the Phone Link window is closed. Microsoft's internal CrossDevice interface remained unavailable to a packaged full-trust test app (HRESULT 0x80040154).
 
-Reads active media session metadata from Windows **GlobalSystemMediaTransportControlsSessionManager** (GSMTC). Tested with the actual Spotify session on the developer PC. The renderer switches automatically:
-- **Playing:** source icon (Spotify logo for Spotify; generic note for other players), track title, artist and timeline-based progress bar.
-- **Paused / stopped / no active playback:** customizable clock and date.
-- Song names that exceed available OLED width scroll horizontally.
-- The existing three battery widgets remain available in both modes.
+v0.9.7 adds a strictly opt-in, read-only **ADB battery adapter**:
+- It detects exactly one authorized ADB device and verifies the expected S24+ model ID (`SM-S926*` or S24+).
+- It runs only `adb devices`, `adb shell getprop ro.product.model` and `adb shell dumpsys battery`.
+- It parses `level`, `scale`, `status` and charging information; invalid numbers are rejected. **No hard-coded percent.**
+- It does not access files, photos, contacts, messages or other phone data, does not install apps or write settings.
+- If ADB is not available / authorized, Phone Link UI Automation remains a fallback, and its absence results in `--%`.
 
-The layout follows the familiar **Now Playing** icon / song / artist / progress visual pattern, but uses independently implemented 1-bit glyphs and sprites; no SteelSeries Now Playing program assets or artwork have been extracted or copied. The app never reads browser history or the user's media files and sends no media-control commands.
+**ADB grants broad debugging access to the authorized computer beyond what this app uses. Only enable it with a trusted PC and network.**
 
-**Otomatik medya** is enabled by default. Turn it off to switch to the existing manual demo mode.
+### Pairing with Wi-Fi (no USB cable needed)
 
-### Independent clock and date customization
+1. On Galaxy S24+, enable Developer Options: **Settings → About phone → Software information → Build number**, tap seven times (if not already enabled).
+2. Open **Settings → Developer options → Wireless debugging**, enable it. Ensure phone and PC are on the same trusted Wi-Fi.
+3. Open **Pair device with pairing code**.
+4. Download the official **SDK Platform-Tools for Windows** from https://developer.android.com/tools/releases/platform-tools and accept Google's license in the browser. Save the Windows ZIP in **Downloads** as `platform-tools-latest-windows.zip`.
+5. Run `Telefon_ADB_KUR_VE_ESLESTIR.cmd` inside this project. It extracts only your already-downloaded ZIP to `%LOCALAPPDATA%\SteelseriesDockCustomiser\platform-tools\`, asks for the temporary pairing IP:port, and invokes the official interactive pairing prompt locally. Do not post the pairing code in chat.
+6. When prompted, provide the **connection** IP:port shown on the Wireless debugging main screen (which may differ from the pairing port).
+7. In **Tasarım & Piksel Editörü → Cihaz pilleri**, enable **Android ADB ile telefon pilini oku**.
 
-Click **Saat / Tarih** from the Editor tab to choose:
-- Clock format: `HH:mm`, `HH:mm:ss`, or `hh:mm`.
-- Date format: `dd/MM/yyyy`, `dd.MM.yyyy`, `yyyy-MM-dd`, `dd.MM.yy`, or `MM/dd/yyyy`.
-- **Clock stroke thickness**: 1, 2, or 3 native pixels.
-- **Date stroke thickness**: independently 1, 2, or 3 native pixels.
+The helper never stores the pairing code. Windows ADB's own trusted keys are managed by Google's adb implementation. Wi-Fi debugging may require reconnection after a reboot or Wi-Fi change. Android 17 and recent ADB versions may improve reconnection behavior, but uninterrupted connection isn't guaranteed.
 
-A native-resolution OLED preview updates instantly. Press **Uygula** then **Kaydet** in the main editor to save the layout. Existing widget dragging and positioning are preserved. Formatting and stroke settings are stored with the layout's other widget properties.
+### Cable alternative
 
-### Physical OLED: one-shot and optional live mode
+Enable **USB debugging** under Developer options, connect by a USB data cable, unlock the phone and explicitly approve the computer's RSA debugging permission prompt. The same ADB battery reader works, with no Wi-Fi pairing required. You may disable debugging after testing; live ADB readings will then stop.
 
-In Dock Preview:
-- **Gerçek dock'a gönder (10 sn)** sends the current 128×64 framebuffer as bounded partial updates and returns to the normal SteelSeries screen after ten seconds.
-- **Canlı dock modunu başlat** starts a **user-confirmed**, reversible, live feed. The display updates approximately every four seconds **only if its native OLED pixels have changed**. The current media session is refreshed every three seconds; time/date updates when needed.
-- **Canlı modu durdur** or **Dock ekranını geri yükle** sends the ggoled `return` command. App shutdown also attempts to return the SteelSeries display.
+## Other functionality
 
-**Important:** Disable SteelSeries GG's own Now Playing screen app while using live mode; otherwise both programs may compete for the OLED. Live mode is **off by default**. A crash or USB disconnect can prevent automatic restoration; `Dock ekranını geri yükle` or the official SteelSeries GG UI should be used if necessary. Avoid very long static OLED content to mitigate burn-in.
+- Local native OLED pixel editor and icons, photo/perspective preview, 3 selectable external battery widgets, undo/redo, JSON layouts and PNG export
+- Automatic media source detection (Spotify logo for Spotify) and track scrolling
+- Independent clock/date formats and 1–3 pixel stroke thickness
+- GG device batteries from current read-only local status
+- Experimental DualSense read-only input decoder, off by default
 
-Physical writes use the separately installed, SHA-256 pinned [ggoled v0.3.0](https://github.com/JerwuQu/ggoled/releases/tag/v0.3.0) CLI, **not bundled with this repository**. Only `img` and `return` are used; no firmware change, brightness alteration or user-pairing change is performed. Do not distribute the locally retained official SteelSeries product photograph without appropriate permission.
-
-## Battery providers retained
-
-- Laptop: Windows PowerStatus
-- Aerox 3 Gen 2 + Nova Pro headset & spare battery: local read-only SteelSeries GG Engine status (undocumented vendor API)
-- Samsung phone: Phone Link UI accessibility reader (requires an open or minimized Phone Link UI)
-- DualSense: optional experimental read-only HID input battery reader (off by default)
-- Windows cached Bluetooth battery data is **not** displayed as live.
-
-## Phone Link background research update
-
-The user's Developer Mode is now on. A temporary **MSIX-loose registered full-trust test app** was successfully registered and launched. CrossDevice's undocumented `SettingsUXHostServer` still returned **0x80040154 (class not registered)** from the packaged process. The temporary package was then **uninstalled successfully**.
-
-Thus developer mode alone does **not** make the private CrossDevice battery status accessible. The normal Phone Link reader is unchanged, and phone battery remains unknown (`--%`) when no accessible status UI is available.
-
-## Build / verify
+## Build
 
 ```powershell
 dotnet build -c Release
 .\bin\Release\net10.0-windows10.0.19041.0\SteelseriesDockCustomiser.exe --self-test
 ```
 
-Run `ONIZLEMEYI_AC.cmd` in this directory. All tests, timestamps, photos and UI observations are local to the development PC.
+Run `ONIZLEMEYI_AC.cmd` to open the local application.
 
-**Independent personal prototype; not sponsored or endorsed by SteelSeries or Microsoft.**
+This independent personal prototype is not affiliated with SteelSeries, Microsoft or Google. The official SteelSeries dock product photo and third-party ggoled executable are not redistributed.

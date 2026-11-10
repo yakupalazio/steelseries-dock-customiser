@@ -22,11 +22,11 @@ internal sealed class PixelStudioForm : Form
     private BatterySnapshot batterySnapshot = new();
     private BatteryStatusDialog? batteryDialog;
     private bool batteryPolling;
+    private bool fastBatteryPolling;
     private int batteryRefreshCounter;
     private readonly CheckBox autoMedia = new(){Text="Otomatik medya",Checked=true,AutoSize=true};
     private MediaSnapshot mediaSnapshot = MediaSnapshot.Empty;
     private bool mediaPolling;
-    private int mediaRefreshCounter;
     private bool MediaActive => autoMedia.Checked ? mediaSnapshot.IsPlaying : media.Checked;
     private bool SpotifyActive => autoMedia.Checked ? mediaSnapshot.IsSpotify : source.SelectedIndex==0;
     private MediaSnapshot? LiveMedia => autoMedia.Checked && mediaSnapshot.IsPlaying ? mediaSnapshot : null;
@@ -59,7 +59,7 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.6 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser v0.9.7 | OLED Pixel Studio";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(830,795);
         MinimumSize = new Size(850,830);
@@ -177,17 +177,16 @@ internal sealed class PixelStudioForm : Form
         KeyDown += HandleKeys;
         ticker.Tick += (_,_) =>
         {
-            Redraw(); // Clock, scroll position and media playback progress.
-            if(++mediaRefreshCounter>=3)
-            {
-                mediaRefreshCounter=0;
-                _=RefreshMediaAsync();
-            }
-            if(++batteryRefreshCounter>=45)
+            // One frame deadline every 1,000 ms. Actual OLED writes are
+            // skipped when unchanged, and in-flight sends never overlap.
+            Redraw();
+            _=RefreshMediaAsync();
+            if(++batteryRefreshCounter>=5)
             {
                 batteryRefreshCounter=0;
-                _ = RefreshBatteriesAsync();
+                _=RefreshBatteriesAsync();
             }
+            else _=RefreshFastBatteriesAsync();
         };
         ticker.Start();
         FormClosed += (_,_) => ticker.Stop();
@@ -243,13 +242,30 @@ internal sealed class PixelStudioForm : Form
         dialog.ShowDialog(this);
     }
 
+    private async System.Threading.Tasks.Task RefreshFastBatteriesAsync()
+    {
+        if(batteryPolling||fastBatteryPolling||IsDisposed)return;
+        fastBatteryPolling=true;
+        try
+        {
+            var updated=await BatterySources.PollRealtimeAsync(batterySnapshot);
+            if(IsDisposed)return;
+            batterySnapshot=updated;
+            batteryDialog?.UpdateRows();
+            Redraw();
+        }
+        catch{}
+        finally {fastBatteryPolling=false;}
+    }
+
     private async System.Threading.Tasks.Task RefreshBatteriesAsync()
     {
-        if(batteryPolling||IsDisposed)return;
+        if(batteryPolling||fastBatteryPolling||IsDisposed)return;
         batteryPolling=true;
         try
         {
-            var newest=await BatterySources.PollAsync(batteryPreferences.ExperimentalControllerHid);
+            var newest=await BatterySources.PollAsync(batteryPreferences.ExperimentalControllerHid,
+                batteryPreferences.UseAdbPhoneBattery);
             if(IsDisposed)return;
             batterySnapshot=newest;
             Redraw();

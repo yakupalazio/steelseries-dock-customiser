@@ -63,6 +63,27 @@ internal static class SelfTests
                 PhoneLinkBatteryProvider.TryParseAccessibleBattery(
                 "Mesaj: %100 tamamlandı",out _,out _))
                 throw new Exception("Phone Link parser accepted non-battery or invalid data");
+            // Continuous OLED marquee must advance by real pixels each second.
+            if(OledRenderer.MarqueeOffset(210,80,0)!=0 ||
+                OledRenderer.MarqueeOffset(210,80,1)!=3 ||
+                OledRenderer.MarqueeOffset(210,80,2)!=6 ||
+                OledRenderer.MarqueeOffset(18,80,10)!=0)
+                throw new Exception("Per-second pixel marquee timing failed");
+            // Phone ADB provider parses only system battery output, not demo percentages.
+            string simulatedAdb="Current Battery Service state:\n"+
+                "  AC powered: false\n  USB powered: false\n"+
+                "  Wireless powered: false\n  status: 2\n"+
+                "  health: 2\n  level: 84\n  scale: 100\n";
+            if(!AdbPhoneBatteryProvider.TryParse(simulatedAdb,DateTimeOffset.Now,
+                    out var phoneAdb) ||
+                phoneAdb.Percent!=84 || phoneAdb.Kind!="Phone" ||
+                !phoneAdb.Detail.Contains("Şarj oluyor"))
+                throw new Exception("Read-only Android ADB battery parser failed");
+            if(AdbPhoneBatteryProvider.TryParse("level: 999\nscale: 100",
+                    DateTimeOffset.Now,out _) ||
+                AdbPhoneBatteryProvider.TryParse("some other status: 80",
+                    DateTimeOffset.Now,out _))
+                throw new Exception("ADB parser accepted invalid/non-battery data");
             // Cached Bluetooth percentages are never live. GG/Phone Link are fetched separately.
             var scan = BatterySources.PollNow();
             foreach(var unverified in new[]{"Mouse","Phone","Headset","DualSense"})

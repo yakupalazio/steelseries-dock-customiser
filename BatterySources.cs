@@ -27,16 +27,18 @@ internal static class BatterySources
 {
     public static readonly string[] Kinds = ["Laptop","Mouse","Headset","DualSense","Phone"];
     // Polling does not change GG, Bluetooth profiles, paired devices or HID.
-    public static async Task<BatterySnapshot> PollAsync(bool readDualSenseHid=false)
+    public static async Task<BatterySnapshot> PollAsync(bool readDualSenseHid=false,
+        bool enableAdbPhone=false)
     {
-        var snapshot=await Task.Run(PollNow);
-        // GG is the owner of the currently connected SteelSeries devices.
-        // Prefer its live loadout battery status over stale Windows Bluetooth PnP metadata.
-        foreach(var (kind,reading) in await GgBatteryProvider.ReadAsync())
-            snapshot.Values[kind]=reading;
+        // Live updates never enumerate all Windows PnP devices. That diagnostic
+        // path is expensive and carries no trustworthy live percentages.
+        // GG and laptop are read from their current sources instead.
+        var snapshot=await PollRealtimeAsync(new BatterySnapshot());
         // Phone Link's accessibility status is available while minimized.
         // Do not display old Bluetooth PnP percentages when UIA is unavailable.
-        var phone = await Task.Run(PhoneLinkBatteryProvider.TryRead);
+        BatteryReading? phone=null;
+        if(enableAdbPhone) phone=await AdbPhoneBatteryProvider.ReadAsync();
+        phone ??= await Task.Run(PhoneLinkBatteryProvider.TryRead);
         if(phone is not null)
             snapshot.Values["Phone"] = phone;
         if(readDualSenseHid && !snapshot["DualSense"].Available)
@@ -49,6 +51,41 @@ internal static class BatterySources
                     DateTimeOffset.Now);
         }
         return snapshot;
+    }
+
+    /// <summary>
+    /// Per-second lightweight refresh: Windows PowerStatus and local GG only.
+    /// The expensive Bluetooth device enumeration is never run in this loop.
+    /// Phone Link UIA, ADB and optional DualSense input are sampled separately
+    /// every five seconds. The OLED framebuffer may still refresh every second.
+    /// </summary>
+    public static async Task<BatterySnapshot> PollRealtimeAsync(BatterySnapshot previous)
+    {
+        var now=DateTimeOffset.Now;
+        var values=new Dictionary<string,BatteryReading>(previous.Values,
+            StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var p=SystemInformation.PowerStatus;
+            if((p.BatteryChargeStatus & BatteryChargeStatus.NoSystemBattery)==0 &&
+               p.BatteryLifePercent is >=0 and <=1f)
+                values["Laptop"]=new BatteryReading("Laptop",
+                    (int)Math.Round(p.BatteryLifePercent*100),
+                    "Windows PowerStatus",p.PowerLineStatus==PowerLineStatus.Online?
+                    "Prize bağlı":"Batarya",now);
+        }catch{}
+
+        var gg=await GgBatteryProvider.ReadAsync();
+        foreach(string kind in new[]{"Mouse","Headset"})
+        {
+            if(gg.TryGetValue(kind,out var current)) values[kind]=current;
+            else if(values.TryGetValue(kind,out var old) &&
+                    old.Source.StartsWith("SteelSeries GG Engine",StringComparison.Ordinal) &&
+                    (now-old.CheckedAt).TotalSeconds>10)
+                values[kind]=new BatteryReading(kind,null,
+                    "SteelSeries GG (bağlantı yok)","Son onaylı veri 10 saniyeyi aştı.",now);
+        }
+        return new BatterySnapshot{CheckedAt=now,Values=values};
     }
 
     public static BatterySnapshot PollNow()
