@@ -11,9 +11,13 @@ namespace SteelseriesDockCustomiser;
 
 // Do not replace a missing reading with an arbitrary 0%, 100%, or demo number.
 internal sealed record BatteryReading(string Kind,int? Percent,string Source,
-    string Detail, DateTimeOffset CheckedAt)
+    string Detail, DateTimeOffset CheckedAt,bool? Charging=null)
 {
+    // Explicit source-provided charging state: never infer it from a paired
+    // Bluetooth record or a spare-battery mention in another device's detail.
+    public bool IsCharging => Charging==true;
     public string Display => Percent is int p ? $"{p}%" : "--%";
+    public string DisplayWithCharge => Display+(IsCharging?" ⚡":"");
     public bool Available => Percent is >=0 and <=100;
 }
 internal sealed class BatterySnapshot
@@ -83,7 +87,9 @@ internal static class BatterySources
                 values["Laptop"]=new BatteryReading("Laptop",
                     (int)Math.Round(p.BatteryLifePercent*100),
                     "Windows PowerStatus",p.PowerLineStatus==PowerLineStatus.Online?
-                    "Prize bağlı":"Batarya",now);
+                    "Prize bağlı":"Batarya",now,
+                    p.PowerLineStatus==PowerLineStatus.Online &&
+                    (p.BatteryChargeStatus&BatteryChargeStatus.Charging)!=0);
         }catch{}
 
         var gg=await GgBatteryProvider.ReadAsync();
@@ -125,7 +131,9 @@ internal static class BatterySources
             {
                 int pct=(int)Math.Round(p.BatteryLifePercent*100);
                 values["Laptop"]=new("Laptop",pct,"Windows PowerStatus",
-                    p.PowerLineStatus==PowerLineStatus.Online?"Prize bağlı":"Batarya",now);
+                    p.PowerLineStatus==PowerLineStatus.Online?"Prize bağlı":"Batarya",now,
+                    p.PowerLineStatus==PowerLineStatus.Online &&
+                    (p.BatteryChargeStatus&BatteryChargeStatus.Charging)!=0);
             }
         } catch(Exception ex) {
             values["Laptop"]=new("Laptop",null,"Windows PowerStatus",ex.GetType().Name,now);

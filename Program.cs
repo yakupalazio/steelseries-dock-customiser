@@ -136,7 +136,7 @@ public sealed class DockWidget
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;
-    public override string ToString() => $"{(Kind=="GameMiniPlayer"?"Mini Player (Oyun)":Kind)}  ({X}, {Y})";
+    public override string ToString() => $"{WidgetLabels.Display(Kind)}  ({X}, {Y})";
 }
 
 public sealed class LayoutState

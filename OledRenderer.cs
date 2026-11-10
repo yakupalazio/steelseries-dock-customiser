@@ -240,8 +240,14 @@ internal static class OledRenderer
                     device=currentDevices[slot-1];
                 }
                 DrawIcon(px,device,x,y);
-                string pct=batteries?[device].Display ?? "--%";
-                DrawText(px,pct,x+15,y+2,1);
+                var reading=batteries?[device];
+                string pct=reading?.Display??"--%";
+                int labelX=x+13;
+                DrawText(px,pct,labelX,y+2,1);
+                int boltX=labelX+pct.Length*6+1;
+                if(reading?.IsCharging==true &&
+                    boltX+3<=Math.Min(Width,x+42))
+                    DrawChargeBolt(px,boltX,y+2);
                 break;
             case "Progress":
                 DrawProgress(px,x,y,Math.Min(98,Width-x),
@@ -336,6 +342,15 @@ internal static class OledRenderer
         int textY=y+(scale>1?1:3);
         DrawMarquee(px,name,textX,textY,scale,width,
             Math.Clamp(widget.StrokeWidth,1,3),8);
+    }
+
+    // Hand-drawn 3x7 native OLED lightning glyph shown only for confirmed charging.
+    private static void DrawChargeBolt(bool[] frame,int x,int y)
+    {
+        string[] rows=[".11","11.","111",".11",".1.","11.","1.."];
+        for(int row=0;row<rows.Length;row++)
+        for(int col=0;col<3;col++)
+            if(rows[row][col]=='1')Dot(frame,x+col,y+row);
     }
 
     private static void DrawProgress(bool[] px,int x,int y,int width,int percentage)

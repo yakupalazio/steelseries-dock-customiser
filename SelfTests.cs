@@ -9,6 +9,16 @@ namespace SteelseriesDockCustomiser;
 
 internal static class SelfTests
 {
+    private static System.Collections.Generic.IEnumerable<System.Windows.Forms.Control>
+        AllChildren(System.Windows.Forms.Control parent)
+    {
+        foreach(System.Windows.Forms.Control child in parent.Controls)
+        {
+            yield return child;
+            foreach(var nested in AllChildren(child)) yield return nested;
+        }
+    }
+
     public static int Run(string? exportDemo)
     {
         try
@@ -390,17 +400,57 @@ internal static class SelfTests
                 composite.Save(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(exportDemo))!,
                     "real-dock-photo-preview-local.png"),ImageFormat.Png);
             }
-            // UI regression: there must be only Editor + Dock Preview tabs.
+            // v1.0 UI regression: one responsive page, photo and native pixel
+            // editor visible in the same control hierarchy; no preview tab.
             using(var window=new PixelStudioForm())
             {
-                var tab=window.Controls.OfType<System.Windows.Forms.TabControl>().Single();
-                if(tab.TabPages.Count!=2 || tab.TabPages[1].Text!="Dock Preview")
-                    throw new Exception("An obsolete Live Preview tab remains");
-                if(!tab.TabPages[1].Controls.OfType<DockPreviewPanel>().Any())
-                    throw new Exception("Dock Preview panel was not attached");
+                if(window.Controls.OfType<System.Windows.Forms.TabControl>().Any())
+                    throw new Exception("The old separate Preview tab is still visible");
+                var root=window.Controls.OfType<System.Windows.Forms.TableLayoutPanel>().Single();
+                if(root.ColumnCount!=3 || root.RowCount!=3 ||
+                    !window.MaximizeBox || window.MinimumSize.Width<1100)
+                    throw new Exception("Responsive v1.0 layout was not constructed");
+                var children=AllChildren(root).ToArray();
+                if(children.Count(c=>c is DockPreviewPanel)!=1 ||
+                   children.Count(c=>c is System.Windows.Forms.PictureBox)==0)
+                    throw new Exception("Integrated dock photo and pixel editor are missing");
             }
-            Console.WriteLine("PASS: OLED renderer, factory indicators, perspective overlay, exactly two tabs");
-            Console.WriteLine("All preview-only self tests passed.");
+
+            // Charging bolt: only a provider-confirmed true value makes pixels.
+            var chargingBattery=new BatteryReading("Mouse",84,"GG","Şarj oluyor",
+                DateTimeOffset.Now,true);
+            var notCharging=chargingBattery with {Charging=false};
+            var chargingDesign=new LayoutState{
+                Widgets=[new DockWidget{Kind="BatterySlot1",X=0,Y=23}]
+            };
+            var chargingSnapshot=new BatterySnapshot{
+                Values=new(StringComparer.OrdinalIgnoreCase){
+                    ["Mouse"]=chargingBattery
+                }
+            };
+            var unpluggedSnapshot=new BatterySnapshot{
+                Values=new(StringComparer.OrdinalIgnoreCase){
+                    ["Mouse"]=notCharging
+                }
+            };
+            using(var chargeFrame=OledRenderer.Render(chargingDesign,false,true,false,
+                    chargingSnapshot,layoutMode:ScreenMode.Idle))
+            using(var noChargeFrame=OledRenderer.Render(chargingDesign,false,true,false,
+                    unpluggedSnapshot,layoutMode:ScreenMode.Idle))
+            {
+                bool diff=false;
+                for(int y=24;y<34;y++)
+                for(int x=30;x<43;x++)
+                    diff|=chargeFrame.GetPixel(x,y).R!=noChargeFrame.GetPixel(x,y).R;
+                if(!diff) throw new Exception("Confirmed charging bolt failed to render");
+            }
+            if(new BatteryReading("Headset",91,"GG",
+                "Yedek pil şarj oluyor",DateTimeOffset.Now,false).IsCharging)
+                throw new Exception("Charging inferred incorrectly from spare-battery detail");
+
+            Console.WriteLine("PASS: single-page v1.0 UI, responsive editor, native dock photo");
+            Console.WriteLine("PASS: charging icon appears only for confirmed charging");
+            Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }
         catch(Exception ex)

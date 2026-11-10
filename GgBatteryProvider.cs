@@ -141,7 +141,7 @@ internal static class GgBatteryProvider
         }
 
         reading=new BatteryReading(kind,pct,"SteelSeries GG Engine (canlı)",
-            detail,at);
+            detail,at,charging);
         return true;
     }
 
@@ -158,7 +158,7 @@ internal static class GgBatteryProvider
            known.ValueKind==JsonValueKind.False)return false;
         reading=new BatteryReading("SpareBattery",percent,
             "SteelSeries GG Engine (canlı)",
-            GetBool(b,"backupCharging")?"Dock'ta şarj oluyor":"Yedek pil takılı",at);
+            GetBool(b,"backupCharging")?"Dock'ta şarj oluyor":"Yedek pil takılı",at,GetBool(b,"backupCharging"));
         return true;
     }
 

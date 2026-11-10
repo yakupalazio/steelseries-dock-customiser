@@ -25,7 +25,10 @@ internal sealed class DockPreviewPanel : UserControl
     }
 
     private readonly Func<Bitmap> _frameFactory;
+    private readonly Func<Bitmap> _liveFrameFactory;
     private readonly Func<bool> _protectHeader;
+    private bool _embeddedStudio;
+    private Rectangle _visiblePhotoCrop;
     private readonly PictureBox _photoBox = new()
     {
         Left = 16, Top = 104, Width = 770, Height = 482,
@@ -63,9 +66,11 @@ internal sealed class DockPreviewPanel : UserControl
         new(346,301),new(589,302),new(589,420),new(346,419)
     ];
 
-    public DockPreviewPanel(Func<Bitmap> frameFactory,Func<bool>? protectHeader=null)
+    public DockPreviewPanel(Func<Bitmap> frameFactory,Func<bool>? protectHeader=null,
+        Func<Bitmap>? liveFrameFactory=null)
     {
         _frameFactory = frameFactory;
+        _liveFrameFactory=liveFrameFactory??frameFactory;
         _protectHeader=protectHeader??(()=>true);
         Dock = DockStyle.Fill;
         BackColor = Color.FromArgb(245,247,249);
@@ -128,6 +133,74 @@ internal sealed class DockPreviewPanel : UserControl
     }
 
     public void InvalidateFrame() => _photoBox.Invalidate();
+
+    public bool LiveOutputActive => _liveEnabled;
+    public string HardwareStatus => _message.Text;
+    public bool FactoryPreviewActive => _factory.Checked;
+
+    // Public actions for the integrated, single-page v1.0 toolbar.
+    public void SendTestFrame() => _sendHardware.PerformClick();
+    public void ToggleLiveOutput() => _liveToggle.PerformClick();
+    public void RestoreOriginalScreen() => _restoreHardware.PerformClick();
+    public void ChooseDockPhoto() => _choose.PerformClick();
+    public void ResetDockPhoto() => _restore.PerformClick();
+    public void CalibrateDockPhoto() => _calibrate.PerformClick();
+    public void ShowOriginalPhoto(bool original)
+    {
+        if(original)_factory.Checked=true;
+        else _custom.Checked=true;
+    }
+
+    public void EnableEmbeddedStudio()
+    {
+        if(_embeddedStudio)return;
+        _embeddedStudio=true;
+        SuspendLayout();
+        BackColor=Color.FromArgb(24,30,40);
+        foreach(Control child in Controls)
+            child.Visible=ReferenceEquals(child,_photoBox);
+        _photoBox.Dock=DockStyle.Fill;
+        _photoBox.BorderStyle=BorderStyle.None;
+        _photoBox.BackColor=BackColor;
+        _photoBox.Padding=new Padding(8);
+        ResumeLayout(true);
+        ComputeVisiblePhotoCrop();
+        InvalidateFrame();
+    }
+
+    // The official PNG has alpha margins. Crop them only in the on-screen
+    // compositing projection; source photo and saved screen corner
+    // coordinates remain unchanged.
+    private void ComputeVisiblePhotoCrop()
+    {
+        if(_photo is not Bitmap bitmap)
+        {
+            _visiblePhotoCrop=Rectangle.Empty;
+            return;
+        }
+        if(!_embeddedStudio || _settings.ImagePath!=null)
+        {
+            _visiblePhotoCrop=new Rectangle(0,0,bitmap.Width,bitmap.Height);
+            return;
+        }
+        int minX=bitmap.Width,minY=bitmap.Height,maxX=0,maxY=0;
+        for(int y=0;y<bitmap.Height;y+=3)
+        for(int x=0;x<bitmap.Width;x+=3)
+        {
+            if(bitmap.GetPixel(x,y).A<=12)continue;
+            minX=Math.Min(minX,x);minY=Math.Min(minY,y);
+            maxX=Math.Max(maxX,x);maxY=Math.Max(maxY,y);
+        }
+        if(minX>maxX || minY>maxY)
+        {
+            _visiblePhotoCrop=new Rectangle(0,0,bitmap.Width,bitmap.Height);
+            return;
+        }
+        int pad=20;
+        int l=Math.Max(0,minX-pad),t=Math.Max(0,minY-pad);
+        int r=Math.Min(bitmap.Width,maxX+pad),b=Math.Min(bitmap.Height,maxY+pad);
+        _visiblePhotoCrop=Rectangle.FromLTRB(l,t,r,b);
+    }
     public void OnProtectionChanged()
     {
         // Changing from protected to full-screen requires a fresh confirmation.
@@ -202,7 +275,7 @@ internal sealed class DockPreviewPanel : UserControl
         _liveSending=true;
         try
         {
-            using var bitmap=_frameFactory();
+            using var bitmap=_liveFrameFactory();
             var pixels=new byte[128*64];
             int ptr=0;
             for(int y=_protectHeader()?10:0;y<64;y++)
@@ -342,6 +415,7 @@ internal sealed class DockPreviewPanel : UserControl
             var clone = new Bitmap(image);
             var old=_photo;
             _photo=clone;
+            ComputeVisiblePhotoCrop();
             _cachedGlassBackground=null;
             old?.Dispose();
             if(_settings.Corners.Count!=4 && _settings.ImagePath==null)
@@ -386,8 +460,10 @@ internal sealed class DockPreviewPanel : UserControl
     private void PhotoClick(object? sender, MouseEventArgs e)
     {
         if(!_calibrating||_photo==null||!_imageRect.Contains(e.Location))return;
-        var x=(e.X-_imageRect.X)/_imageRect.Width*_photo.Width;
-        var y=(e.Y-_imageRect.Y)/_imageRect.Height*_photo.Height;
+        var x=_visiblePhotoCrop.X+
+            (e.X-_imageRect.X)/_imageRect.Width*_visiblePhotoCrop.Width;
+        var y=_visiblePhotoCrop.Y+
+            (e.Y-_imageRect.Y)/_imageRect.Height*_visiblePhotoCrop.Height;
         _newCorners.Add(new PointF(x,y));
         if(_newCorners.Count==4)EndCalibration(true);
         else _message.Text="Köşe "+_newCorners.Count+"/4 işaretlendi. Sonraki köşe: "+
@@ -397,20 +473,30 @@ internal sealed class DockPreviewPanel : UserControl
 
     private void PaintPhoto(Graphics g)
     {
-        g.Clear(Color.FromArgb(25,29,37));
+        g.Clear(_embeddedStudio?Color.FromArgb(24,30,40):
+            Color.FromArgb(25,29,37));
         if(_photo==null)return;
 
-        _imageRect=FitToBox(_photo.Size,_photoBox.ClientRectangle);
-        using var backgroundBrush = new LinearGradientBrush(
-            new Point(0,0),new Point(0,_photoBox.Height),
-            Color.FromArgb(49,52,61),Color.FromArgb(24,27,34));
-        g.FillRectangle(backgroundBrush,_photoBox.ClientRectangle);
+        var renderBox=_embeddedStudio
+            ?new Rectangle(18,15,Math.Max(1,_photoBox.Width-36),
+                Math.Max(1,_photoBox.Height-30))
+            :_photoBox.ClientRectangle;
+        var crop=_visiblePhotoCrop.IsEmpty
+            ?new Rectangle(Point.Empty,_photo.Size):_visiblePhotoCrop;
+        _imageRect=FitToBox(crop.Size,renderBox);
+        if(!_embeddedStudio)
+        {
+            using var backgroundBrush = new LinearGradientBrush(
+                new Point(0,0),new Point(0,_photoBox.Height),
+                Color.FromArgb(49,52,61),Color.FromArgb(24,27,34));
+            g.FillRectangle(backgroundBrush,_photoBox.ClientRectangle);
+        }
         g.SmoothingMode=SmoothingMode.HighQuality;
         g.InterpolationMode=InterpolationMode.HighQualityBicubic;
 
         if(_factory.Checked||_settings.Corners.Count!=4)
         {
-            g.DrawImage(_photo,_imageRect);
+            g.DrawImage(_photo,_imageRect,crop,GraphicsUnit.Pixel);
         }
         else
         {
@@ -424,7 +510,7 @@ internal sealed class DockPreviewPanel : UserControl
             }
             using var combined=ComposePhotograph(_photo,render,
                 _settings.Corners,92,_cachedGlassBackground,_protectHeader());
-            g.DrawImage(combined,_imageRect);
+            g.DrawImage(combined,_imageRect,crop,GraphicsUnit.Pixel);
         }
 
         if(_calibrating)
@@ -440,8 +526,10 @@ internal sealed class DockPreviewPanel : UserControl
     }
 
     private PointF ToScreen(PointF pt) =>
-        new(_imageRect.Left+pt.X/_photo!.Width*_imageRect.Width,
-            _imageRect.Top+pt.Y/_photo.Height*_imageRect.Height);
+        new(_imageRect.Left+(pt.X-_visiblePhotoCrop.X)/
+                _visiblePhotoCrop.Width*_imageRect.Width,
+            _imageRect.Top+(pt.Y-_visiblePhotoCrop.Y)/
+                _visiblePhotoCrop.Height*_imageRect.Height);
 
     private static RectangleF FitToBox(Size image,Rectangle box)
     {

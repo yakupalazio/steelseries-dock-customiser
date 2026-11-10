@@ -1,58 +1,79 @@
-# Steelseries Dock Customiser v0.9.9 — Game Mini Player
+# Steelseries Dock Customiser 1.0 — OLED Studio
 
-A Windows .NET 10 pixel editor and experimental physical OLED display companion for the SteelSeries Arctis Nova Pro Wireless dock, preserving all v0.9.8 modes and batteries.
+Independent Windows 11 desktop designer for the SteelSeries Arctis Nova Pro Wireless base station's **128×64 monochrome OLED**. This is a personal project and is not an official SteelSeries product.
 
-## New: Optional Mini Player in the Game screen
+## New in 1.0: one integrated, responsive workspace
 
-When you are gaming and listening to music at the same time, the **Game** screen remains active (priority **Game > Media > Idle**). You can now add a compact **Mini Player (Oyun)** widget to the **Oyun açıkken** layout:
+A completely redesigned GG-inspired dark UI replaces the old Editor and Dock Preview tabs with **one wide window**:
 
-1. Go to **Tasarım & Piksel Editörü → Oyun açıkken**.
-2. Choose **Mini Player (Oyun)** from the **Widget** selector and press **Ekle**.
-3. Adjust **X**, **Y**, **Boyut**, **Kalınlık (1–3 px)** and **Mini Player genişliği (35–128 px)**.
-4. Click **Kaydet** to save all three mode layouts. The mini player remains optional and can be removed with **Sil**.
+- **Left sidebar:** Media / Game / Idle layout selection; Battery Priority, Icon Studio and Clock/Date shortcuts; detected runtime game/media status.
+- **Middle, upper area:** Large, clean dock hardware photograph with **no photographic background** (the included development photo has transparency, automatically cropped to the device outline); the live simulated OLED is aligned to the physical screen.
+- **Middle, lower area:** Pixel-perfect **native 128×64** editing canvas, selection, pen/eraser, optional grid and undo/redo. The canvas automatically adjusts integer pixel zoom to available screen size and keeps pixel boundaries sharp.
+- **Right sidebar:** Human-friendly widget catalog and hierarchy, Add/Delete, and selected-widget properties (text, visibility, font size, stroke weight, X/Y and optional Mini Player width).
+- **Top toolbar:** Save, Load, export PNG.
+- **Bottom status bar:** Current data and header protection state.
 
-**What the hardware displays:**
-- If a Windows media session is actively playing: a compact Spotify (or generic media) source icon and **the real song title**, scrolling smoothly by **3 OLED pixels per second** when longer than the selected width.
-- If no media is playing, or playback is paused/stopped: **a fully black reserved rectangle**. No sample title, default text, timestamp or idle graphics is drawn there.
-- The entire mini player, including custom icons, is confined to the selected bounding rectangle. It never writes over the game title outside that rectangle. If placed on top of another widget, the player intentionally covers that overlap, keeping its own region legible.
-- Mini Player is **only available in Game mode**, never Media or Idle. It isn't included in the default Game layout. All existing game information and other optional widgets are unchanged.
+**Preview updates immediately with edits** to the selected design, whether or not that design is active on the physical device. Real live dock mode continues to follow runtime priority **Game > Playing media > Idle**. The "Custom / Original / 10-sec test / Live / Restore / Photo / Align" actions are directly beneath the dock photograph, not in a separate tab.
 
-It uses **the existing once-per-second Windows Global System Media Transport Controls polling**, without additional background services or extra Spotify API tokens. The live OLED retains skip-if-unchanged updates and your 10-pixel factory-battery-header setting.
+The photo is a **simulation**, not a capture from the hardware. Real device output only occurs after pressing the appropriate test/live control and confirming the dialog.
 
-### Design persistence and rollback
+### Modes and widgets preserved
 
-v0.9.9 stores design changes in:
-`%LOCALAPPDATA%\SteelseriesDockCustomiser\studio-v099.json`
+- **Media:** Spotify/generic source icon, song, artist, progress bar and customizable small clock.
+- **Game:** A required "NOW PLAYING:" label and game title, plus an optional Mini Player that shows the playing song while gaming and stays black when paused.
+- **Idle:** Completely customizable clock/date, optional text and battery widgets.
+- Three dynamic prioritized battery slots, Nova Pro spare battery source, optional DualSense override, pixel icon editor, per-mode saved layouts, image/photo calibration.
 
-If this file isn't present yet, v0.9.9 **loads the older studio-v098.json design as a migration source**. Saving creates the new file and leaves v0.9.8's saved design untouched. The Mini Player's width, position, text scale and thickness persist in the new JSON.
+### Charging lightning symbol
 
-## Existing features maintained
+When a device's **validated live source explicitly reports it is charging**, a **3×7 native-pixel lightning bolt** appears immediately next to the percentage. Sources currently capable of reporting this include:
+- SteelSeries GG: supported Aerox mouse, Nova Pro headset and dock spare battery.
+- Windows PowerStatus: laptop only when Windows reports actual **Charging**, not merely plugged in.
+- Microsoft Phone Link: when its accessible battery state explicitly reports charging.
+- Android ADB (optional): Android's battery status 2.
 
-- Independent **Media / Game / Idle** OLED layouts.
-- Automatic Game > Music > Clock priority. Active games are detected via SteelSeries GG's installed-game catalog and running Windows processes; they remain active across Alt+Tab.
-- Media screen source icon/title/artist/progress, optional small clock and independently editable date/time.
-- Battery priority menu including mouse, phone, laptop, DualSense, Nova Pro headset and dock spare battery.
-- Phone Link status via its accessibility battery Group; optional minimized Phone Link launch instead of Android debugging.
-- Three dynamic battery slots, per-pixel editing, saved layouts, sprite/icon editor, photographic dock preview.
-- Protection toggle: ON preserves original rows 0–9; OFF intentionally allows full 128×64 custom display, with confirmation before physical writes.
+A known percentage without charging status shows **only the percentage**. A missing reading shows **--%**, never a fabricated number. A headset detail mentioning a charging *spare* battery does not incorrectly cause a headset charging symbol.
 
-## Running and verification
+## Saved settings and rollback
 
-In the project's folder, open `ONIZLEMEYI_AC.cmd`, or:
+New layouts are saved to:
+`%LOCALAPPDATA%\SteelseriesDockCustomiser\studio-v100.json`
+
+On first launch, 1.0 reads the existing `studio-v099.json` (or `studio-v098.json`) if available. Clicking Save writes **only the new v1.0 file**. Old layout data and source folders are preserved, without automatic conversion in-place.
+
+Battery priority preferences, icon sprites and dock photo calibration remain in their existing user-local settings.
+
+## How to run
+
+On the development PC, open `ONIZLEMEYI_AC.cmd` in this project folder. Or run:
 
 ```powershell
 dotnet build -c Release
 .\bin\Release\net10.0-windows10.0.19041.0\SteelseriesDockCustomiser.exe --self-test
 ```
 
-To generate **sample images** without writing to the physical dock:
+The third-party [ggoled 0.3.0](https://github.com/JerwuQu/ggoled/releases/tag/v0.3.0) is kept **separately installed** for the experimental physical OLED writer, SHA-256-verified before output, and is never bundled into Git. The device's original top ten rows remain protected by default; the header protection switch can allow full OLED editing, only with explicit confirmation on physical writes.
 
-```powershell
-.\bin\Release\net10.0-windows10.0.19041.0\SteelseriesDockCustomiser.exe --mini-player-preview-file .\mini-playing.png
-```
+## SteelSeries GG integration — compatibility and next stage
 
-This produces `mini-playing.png` and `mini-playing-paused.png` at 128×64.
+The official [GameSense SDK](https://github.com/SteelSeries/gamesense-sdk) allows a developer's app to **register and appear in Engine's Apps list** without submitting it for approval. GameSense apps communicate with the Engine's REST API, but this does **not** embed an arbitrary Windows desktop GUI as a native GG page.
 
-**Physical dock output remains off by default.** Dock Preview's existing manually approved live mode is still required for an actual OLED transfer. The user-provided official dock photograph and separately installed ggoled executable remain private and excluded from Git.
+Our **full graphical editor remains standalone in 1.0**. For the physical Nova Pro Wireless OLED we currently use the separately tested ggoled path because official GameSense screen zones do not unambiguously document the newer Nova Pro Wireless **128×64** OLED:
 
-Not affiliated with SteelSeries, Microsoft or Spotify.
+- https://github.com/SteelSeries/gamesense-sdk/blob/master/doc/api/standard-zones.md
+
+A later opt-in GG GameSense registration could add an Apps entry / supported events **after checking Nova Pro Wireless zone compatibility and conflict behavior**. No undocumented GG app files are patched or injected, and no registration is performed without user consent.
+
+## Privacy and safety
+
+- GG battery status and Library catalog are inspected read-only; no game process injection.
+- Windows Media sessions provide playing song title/artist and timeline; no Spotify account token.
+- Phone Link battery reading uses its accessibility status while open/minimized, with an optional user-enabled open-and-minimize recovery. It does not read messages, photos or contact data.
+- No direct firmware modification or automatic full-screen OLED writes.
+- User-specific official product photo stays **local and excluded from Git**. If this project is built on another PC without the photo, the Dock Preview will ask for a locally selected reference photo.
+
+## Verification status
+
+- .NET 10 Release compilation and headless self-tests (renderer, photo alignment, mode priority, Game Mini Player, battery priority, charging indicators, integrated v1.0 workspace).
+- The photo-based preview and native edit canvas have been visually inspected in Windows.
+- **Physical dock appearance of this 1.0 build has not been independently confirmed yet**. Use the same on-demand test/restore buttons to validate on the user's own device before publishing a public release.

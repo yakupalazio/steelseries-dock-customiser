@@ -35,16 +35,21 @@ internal sealed class StudioProject
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","studio-v099.json");
+        "SteelseriesDockCustomiser","studio-v100.json");
 
     public static StudioProject Load()
     {
         try
         {
-            // Copy-on-first-load migration: do not rewrite v0.9.8 layouts.
-            string legacy=Path.Combine(Path.GetDirectoryName(FilePath)!,"studio-v098.json");
-            string source=File.Exists(FilePath)?FilePath:legacy;
-            if(File.Exists(source))
+            // Copy-on-first-load. Prefer the v1.0 layout, fall back to
+            // v0.9.9 and v0.9.8. Never overwrite the old file versions.
+            string folder=Path.GetDirectoryName(FilePath)!;
+            string? source=new[]{
+                FilePath,
+                Path.Combine(folder,"studio-v099.json"),
+                Path.Combine(folder,"studio-v098.json")
+            }.FirstOrDefault(File.Exists);
+            if(source!=null)
             {
                 var result=JsonSerializer.Deserialize<StudioProject>(File.ReadAllText(source));
                 if(result!=null)

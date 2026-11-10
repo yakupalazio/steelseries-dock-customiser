@@ -129,7 +129,7 @@ internal static class PhoneLinkBatteryProvider
                                         : "Phone Link ekranı (senkronizasyon güncelliği doğrulanmadı)";
                                 candidates.Add(new BatteryReading(
                                     "Phone", pct, "Microsoft Phone Link (UI Automation)",
-                                    detail, DateTimeOffset.Now));
+                                    detail, DateTimeOffset.Now,charging));
                             }
                         }
                         catch (ElementNotAvailableException) { }

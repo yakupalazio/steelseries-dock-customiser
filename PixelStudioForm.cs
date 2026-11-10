@@ -10,9 +10,10 @@ using System.Windows.Forms;
 
 namespace SteelseriesDockCustomiser;
 
-internal sealed class PixelStudioForm : Form
+internal sealed partial class PixelStudioForm : Form
 {
-    private const int Zoom=6, CanvasWidth=128, CanvasHeight=64;
+    private const int CanvasWidth=128, CanvasHeight=64;
+    private int Zoom=6;
     private int LockedRows=>project.ProtectHeader?10:0;
     private StudioProject project=StudioProject.Load();
     private ScreenMode editingMode=ScreenMode.Media;
@@ -51,7 +52,7 @@ internal sealed class PixelStudioForm : Form
 
     private readonly TabControl tabs = new() { Dock = DockStyle.Fill };
     private DockPreviewPanel? dockPreview;
-    private readonly PictureBox editor = new() { Left = 18, Top = 16, Width = CanvasWidth*Zoom, Height = CanvasHeight*Zoom, BackColor = Color.Black, BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Cross };
+    private readonly PictureBox editor = new() { Left = 18, Top = 16, Width = CanvasWidth*6, Height = CanvasHeight*6, BackColor = Color.Black, BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Cross };
     private readonly ComboBox tool = new() { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox kind = new() { Width = 134, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox source = new() { Width = 116, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -71,12 +72,13 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.9 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser 1.0 | OLED Studio";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(830,875);
-        MinimumSize = new Size(850,912);
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
+        ClientSize = new Size(1540,960);
+        MinimumSize = new Size(1120,730);
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
+        AutoScaleMode = AutoScaleMode.Dpi;
         KeyPreview = true;
         Font = new Font("Segoe UI",9f);
 
@@ -87,7 +89,8 @@ internal sealed class PixelStudioForm : Form
         tabs.TabPages.Add(editTab); tabs.TabPages.Add(dockTab);
         editTab.Controls.Add(editor);
         dockPreview=new DockPreviewPanel(
-            ()=>RenderScreen(ActiveMode),()=>project.ProtectHeader);
+            ()=>RenderScreen(editingMode),()=>project.ProtectHeader,
+            ()=>RenderScreen(ActiveMode));
         dockTab.Controls.Add(dockPreview);
         editor.Paint += (_,e) => PaintFrame(e.Graphics,true,Zoom);
 
@@ -99,8 +102,8 @@ internal sealed class PixelStudioForm : Form
         tool.SelectedIndex=2;
         kind.FormattingEnabled=true;
         kind.Format+=(_,e)=>{
-            if(e.ListItem is string name && name=="GameMiniPlayer")
-                e.Value="Mini Player (Oyun)";
+            if(e.ListItem is string name)
+                e.Value=WidgetLabels.Display(name);
         };
         kind.Items.AddRange(AllWidgetKinds);
         kind.SelectedIndex=0;
@@ -249,6 +252,8 @@ internal sealed class PixelStudioForm : Form
             }
             else _=RefreshFastBatteriesAsync();
         };
+        BuildModernShell(editTab,add,remove,save,load,reset,export,clear,
+            clockDateButton,batteryButton,iconButton);
         ticker.Start();
         FormClosed += (_,_) => ticker.Stop();
         Shown += async (_,_) =>
@@ -286,6 +291,7 @@ internal sealed class PixelStudioForm : Form
         state=project.For(next);
         selected=null;undo.Clear();redo.Clear();UpdateHistoryButtons();
         UpdateKindChoices();RefreshWidgetList();Redraw();
+        UpdateModernUi();
     }
 
     private void UpdateKindChoices()
@@ -438,7 +444,12 @@ internal sealed class PixelStudioForm : Form
     private static Button B(string text,int width) => new(){Text=text,Width=width,Height=30};
     private static Label L(string text) => new(){Text=text,AutoSize=true,Padding=new Padding(2,8,2,0)};
     private void SetStatus(string message) => status.Text=message;
-    private void Redraw(){editor.Invalidate();dockPreview?.InvalidateFrame();}
+    private void Redraw()
+    {
+        editor.Invalidate();
+        dockPreview?.InvalidateFrame();
+        UpdateModernUi();
+    }
     private void UpdateHistoryButtons(){undoButton.Enabled=undo.Count>0;redoButton.Enabled=redo.Count>0;}
     private void Record()
     {
@@ -465,6 +476,7 @@ internal sealed class PixelStudioForm : Form
         foreach(var w in state.Widgets)widgets.Items.Add(w);
         widgets.SelectedItem=selected;
         changeUi=false;UpdateEditorControls();
+        UpdateModernUi();
     }
     private void UpdateEditorControls()
     {
@@ -489,6 +501,7 @@ internal sealed class PixelStudioForm : Form
         }
         else { customText.Text="";widgetVisible.Checked=false; }
         changeUi=false;
+        UpdateModernUi();
     }
     private void ChangeText()
     {

@@ -87,7 +87,7 @@ internal static class AdbPhoneBatteryProvider
             _=>plugged?"Güç bağlı":"Pil"
         };
         reading=new BatteryReading("Phone",percent,"Android ADB (salt-okunur)",
-            state+" · USB/kablosuz hata ayıklama yetkilendirildi",time);
+            state+" · USB/kablosuz hata ayıklama yetkilendirildi",time,chargingStatus==2);
         return true;
     }
 
