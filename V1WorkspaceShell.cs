@@ -74,7 +74,7 @@ internal sealed partial class PixelStudioForm
         top.Controls.Add(brand);
         top.Controls.Add(new Label
         {
-            Text="OLED STUDIO    •    VERSION 1.0",
+            Text="OLED STUDIO    •    VERSION 1.1",
             ForeColor=UiMuted,Font=new Font("Segoe UI",8.1f,FontStyle.Bold),
             AutoSize=true,Left=21,Top=44
         });
@@ -88,7 +88,7 @@ internal sealed partial class PixelStudioForm
         Decorate(load);
         Decorate(export);
         save.Text="Kaydet";save.Width=105;save.Height=37;
-        load.Text="Yükle";load.Width=84;load.Height=37;
+        load.Text="Tasarımı aç";load.Width=106;load.Height=37;
         export.Text="PNG";export.Width=80;export.Height=37;
         headerButtons.Controls.AddRange([save,load,export]);
 
@@ -116,10 +116,9 @@ internal sealed partial class PixelStudioForm
 
         left.Controls.Add(Spacer(24,190));
         left.Controls.Add(Section("DÜZENLEME ARAÇLARI",190));
-        RefitToolButton(batteryButton,"◫   Pil ve öncelik");
         RefitToolButton(iconButton,"♢   İkon atölyesi");
         RefitToolButton(clockDateButton,"◷   Saat ve tarih");
-        left.Controls.Add(batteryButton);
+        // Device priority now lives in Settings > Pil ve öncelik.
         left.Controls.Add(iconButton);
         left.Controls.Add(clockDateButton);
 
@@ -189,18 +188,14 @@ internal sealed partial class PixelStudioForm
         var test=ModernButton("10 sn test",89);
         modernLive=ModernButton("▶ Canlı",105);
         var home=ModernButton("↶ Geri dön",98);
-        var photo=ModernButton("Fotoğraf",92);
-        var calibrate=ModernButton("Hizala",76);
         photoActions.Controls.AddRange([
-            modernCustom,modernOriginal,test,modernLive,home,photo,calibrate
+            modernCustom,modernOriginal,test,modernLive,home
         ]);
         modernCustom.Click+=(_,_)=>{dockPreview.ShowOriginalPhoto(false);UpdateModernUi();};
         modernOriginal.Click+=(_,_)=>{dockPreview.ShowOriginalPhoto(true);UpdateModernUi();};
         test.Click+=(_,_)=>dockPreview.SendTestFrame();
         modernLive.Click+=(_,_)=>{dockPreview.ToggleLiveOutput();UpdateModernUi();};
         home.Click+=(_,_)=>{dockPreview.RestoreOriginalScreen();UpdateModernUi();};
-        photo.Click+=(_,_)=>dockPreview.ChooseDockPhoto();
-        calibrate.Click+=(_,_)=>dockPreview.CalibrateDockPhoto();
 
         var canvasTitle=new Panel{Dock=DockStyle.Fill,BackColor=UiBg};
         canvasTitle.Controls.Add(new Label
@@ -294,7 +289,7 @@ internal sealed partial class PixelStudioForm
         inspector.Controls.Add(PropertyRow("Kalınlık",strokeWidth));
         inspector.Controls.Add(PropertyRow("X konumu",xPos));
         inspector.Controls.Add(PropertyRow("Y konumu",yPos));
-        inspector.Controls.Add(PropertyRow("Mini genişlik",miniWidth));
+        inspector.Controls.Add(PropertyRow("Widget eni",miniWidth));
         inspector.Controls.Add(Spacer(12,268));
         inspector.Controls.Add(Section("EKRAN KORUMASI",268));
         headerProtect.Text="Orijinal üst 10 pikseli koru";
@@ -337,8 +332,11 @@ internal sealed partial class PixelStudioForm
         left.Controls.Add(settingsButton);
         settingsButton.Click+=(_,_)=>{
             using var dialog=new SettingsDialog(
-                ()=>dockPreview?.LiveOutputActive==true);
-            dialog.ShowDialog(this);
+                ()=>dockPreview?.LiveOutputActive==true,
+                batteryPreferences,()=>batterySnapshot,RefreshBatteriesAsync,
+                ()=>{Redraw();_ = RefreshBatteriesAsync();});
+            settingsDialog=dialog;
+            try{dialog.ShowDialog(this);}finally{settingsDialog=null;}
         };
 
         var footer=new Panel{Dock=DockStyle.Fill,BackColor=UiSidebar};
@@ -395,6 +393,11 @@ internal sealed partial class PixelStudioForm
             b.FlatAppearance.BorderSize=active?1:0;
             b.FlatAppearance.BorderColor=active?UiAccent:UiSurface;
         }
+        if(modernHint!=null)
+            modernHint.Text=selected?.Kind=="VolumeChatMix"
+                ?"Salt-okunur tekerlek: "+dialMonitor.Snapshot.Status+
+                  " · Mod, ses veya ChatMix hareketi algılandığında değişir."
+                :"Seçili moddaki her değişiklik dock üzerinde anında görünür.";
         if(modernModeLabel!=null)
             modernModeLabel.Text=editingMode switch
             {

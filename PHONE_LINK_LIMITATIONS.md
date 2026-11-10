@@ -1,4 +1,8 @@
-# Phone Link battery research — v0.9.8
+# Phone Link battery research — v1.1.0 update
+
+11 Kasım 2026'da Galaxy S24+ bağlıyken Phone Link UI Automation üzerinde pil grup etiketi **`Piliniz şu anda %54`** olarak doğrulandı. Eski ayrıştırıcı yalnızca bağımsız `pil` kelimesini kabul ettiğinden Türkçe `Piliniz` ekini reddediyordu. Yeni sürüm bu kısa, doğrulanmış durum etiketini okuyarak **54%** döndürdü; mesaj içeriklerine erişilmez. Tamamen kapalı Phone Link uygulamasından veri alma hâlâ garanti edilmez.
+
+## Historical v0.9.8 findings
 
 ## What works
 

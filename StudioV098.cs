@@ -117,7 +117,7 @@ internal sealed class StudioProject
         "GameLabel" or "GameTitle" or "GameMiniPlayer"=>mode==ScreenMode.Game,
         "Clock" or "Date" or "Custom text" or
         "Mouse" or "Phone" or "DualSense" or "Headset" or "SpareBattery" or "Laptop" or
-        "BatterySlot1" or "BatterySlot2" or "BatterySlot3"=>true,
+        "BatterySlot1" or "BatterySlot2" or "BatterySlot3" or "VolumeChatMix"=>true,
         _=>false
     };
 

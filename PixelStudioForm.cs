@@ -34,6 +34,9 @@ internal sealed partial class PixelStudioForm : Form
     private BatteryPreferences batteryPreferences = BatteryPreferences.Load();
     private BatterySnapshot batterySnapshot = new();
     private BatteryStatusDialog? batteryDialog;
+    private SettingsDialog? settingsDialog;
+    private readonly ArctisDialMonitor dialMonitor = new();
+    private bool dialMonitorStarted;
     private bool batteryPolling;
     private bool fastBatteryPolling;
     private int batteryRefreshCounter;
@@ -72,7 +75,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.0 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1 | OLED Studio";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(1540,960);
         MinimumSize = new Size(1120,730);
@@ -231,6 +234,14 @@ internal sealed partial class PixelStudioForm : Form
         KeyDown += HandleKeys;
         ticker.Tick += (_,_) =>
         {
+            bool dialNeeded=Enum.GetValues<ScreenMode>().Any(m=>
+                project.For(m).Widgets.Any(w=>w.Kind=="VolumeChatMix"&&w.Visible));
+            if(dialNeeded!=dialMonitorStarted)
+            {
+                if(dialNeeded)dialMonitor.Start();
+                else dialMonitor.Stop();
+                dialMonitorStarted=dialNeeded;
+            }
             // One frame deadline every 1,000 ms. Actual OLED writes are
             // skipped when unchanged, and in-flight sends never overlap.
             Redraw();
@@ -255,7 +266,7 @@ internal sealed partial class PixelStudioForm : Form
         BuildModernShell(editTab,add,remove,save,load,reset,export,clear,
             clockDateButton,batteryButton,iconButton);
         ticker.Start();
-        FormClosed += (_,_) => ticker.Stop();
+        FormClosed += (_,_) => {ticker.Stop();dialMonitor.Dispose();};
         Shown += async (_,_) =>
         {
             await RefreshGameAsync();
@@ -270,7 +281,7 @@ internal sealed partial class PixelStudioForm : Form
         "BatterySlot1","BatterySlot2","BatterySlot3","Mouse","Phone",
         "DualSense","Laptop","Headset","SpareBattery","Source","Track",
         "Artist","Progress","MediaClock","GameLabel","GameTitle","GameMiniPlayer",
-        "Clock","Date","Custom text"
+        "Clock","Date","VolumeChatMix","Custom text"
     ];
 
     private ScreenMode ActiveMode =>
@@ -281,7 +292,7 @@ internal sealed partial class PixelStudioForm : Form
             SpotifyActive,batterySnapshot,
             mode==ScreenMode.Game ? (mediaSnapshot.IsPlaying ? mediaSnapshot : null) : LiveMedia,
             gameSnapshot,
-            batteryPreferences,project.ProtectHeader,mode);
+            batteryPreferences,project.ProtectHeader,mode,dialMonitor.Snapshot);
 
     private void SwitchEditingMode(ScreenMode next)
     {
@@ -326,7 +337,7 @@ internal sealed partial class PixelStudioForm : Form
                 CheckedAt=batterySnapshot.CheckedAt,Values=batterySnapshot.Values,
                 DualSenseConnected=connected
             };
-            Redraw();batteryDialog?.UpdateRows();
+            Redraw();batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
         }catch{}finally{controllerConnectionPolling=false;}
     }
 
@@ -394,7 +405,7 @@ internal sealed partial class PixelStudioForm : Form
             var updated=await BatterySources.PollRealtimeAsync(batterySnapshot);
             if(IsDisposed)return;
             batterySnapshot=updated;
-            batteryDialog?.UpdateRows();
+            batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
             Redraw();
         }
         catch{}
@@ -412,7 +423,7 @@ internal sealed partial class PixelStudioForm : Form
             if(IsDisposed)return;
             batterySnapshot=newest;
             Redraw();
-            batteryDialog?.UpdateRows();
+            batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
             SetStatus("Piller: "+
                 string.Join(" · ",BatteryPriority.SelectThree(newest,batteryPreferences)
                     .Select(k=>k+" "+newest[k].Display))+
@@ -487,7 +498,7 @@ internal sealed partial class PixelStudioForm : Form
             "Track" or "Artist" or "GameTitle" or "GameLabel" or
             "GameMiniPlayer" or "Custom text";
         strokeWidth.Enabled=fontSize.Enabled;
-        miniWidth.Enabled=has && selected!.Kind=="GameMiniPlayer";
+        miniWidth.Enabled=has && selected!.Kind is "GameMiniPlayer" or "VolumeChatMix";
         widgetVisible.Enabled=has && !StudioProject.IsLocked(editingMode,selected!.Kind);
         xPos.Enabled=has;yPos.Enabled=has;
         if(selected!=null)
@@ -495,11 +506,12 @@ internal sealed partial class PixelStudioForm : Form
             customText.Text=selected.Text;
             fontSize.Value=Math.Clamp(selected.FontSize,7,24);
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
-            miniWidth.Value=Math.Clamp(selected.MiniWidth,35,128);
+            miniWidth.Minimum=selected.Kind=="VolumeChatMix"?60:35;
+            miniWidth.Value=Math.Clamp(selected.MiniWidth,(int)miniWidth.Minimum,128);
             xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
         }
-        else { customText.Text="";widgetVisible.Checked=false; }
+        else { customText.Text="";widgetVisible.Checked=false;miniWidth.Minimum=35; }
         changeUi=false;
         UpdateModernUi();
     }
@@ -536,6 +548,10 @@ internal sealed partial class PixelStudioForm : Form
         if(type=="GameMiniPlayer")
         {
             w.X=4;w.Y=38;w.FontSize=7;w.MiniWidth=88;
+        }
+        if(type=="VolumeChatMix")
+        {
+            w.X=7;w.Y=23;w.MiniWidth=104;
         }
         if(type=="GameLabel")w.Text="NOW PLAYING:";
         state.Widgets.Add(w);selected=w;RefreshWidgetList();Redraw();tool.SelectedIndex=2;

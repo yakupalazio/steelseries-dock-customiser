@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace SteelseriesDockCustomiser;
@@ -9,6 +10,13 @@ internal sealed class SettingsDialog : Form
 {
     private readonly KonamiSequence secret = new();
     private readonly Func<bool> otherOledWriterActive;
+    private bool aboutActive = true;
+    private BatteryStatusDialog? batteryEditor;
+
+    public void UpdateBatteryRows()
+    {
+        if(batteryEditor is { IsDisposed:false })batteryEditor.UpdateRows();
+    }
     private static readonly Color Background = Color.FromArgb(13, 18, 26);
     private static readonly Color Sidebar = Color.FromArgb(19, 26, 37);
     private static readonly Color Surface = Color.FromArgb(23, 31, 43);
@@ -16,14 +24,18 @@ internal sealed class SettingsDialog : Form
     private static readonly Color Primary = Color.FromArgb(235, 242, 248);
     private static readonly Color Muted = Color.FromArgb(151, 169, 187);
 
-    public SettingsDialog(Func<bool>? otherOledWriterActive = null)
+    public SettingsDialog(Func<bool>? otherOledWriterActive = null,
+        BatteryPreferences? batteryPreferences = null,
+        Func<BatterySnapshot>? snapshotGetter = null,
+        Func<Task>? refresh = null,
+        Action? onApply = null)
     {
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
         Text = "Ayarlar | Dock Customiser";
         BackColor = Background;
         ForeColor = Primary;
         Font = new Font("Segoe UI", 9.5f);
-        ClientSize = new Size(735, 466);
+        ClientSize = new Size(1130, 746);
         MinimumSize = Size;
         MaximumSize = Size;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -38,7 +50,7 @@ internal sealed class SettingsDialog : Form
             Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
             BackColor = Background, Margin = Padding.Empty, Padding = Padding.Empty
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 205));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
@@ -51,7 +63,7 @@ internal sealed class SettingsDialog : Form
         });
         var aboutItem = new Button
         {
-            Text = "ⓘ   Hakkında", Left = 13, Top = 79, Width = 163, Height = 49,
+            Text = "ⓘ   Hakkında", Left = 13, Top = 79, Width = 178, Height = 49,
             TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(12, 0, 0, 0),
             FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(38, 68, 82),
             ForeColor = Accent, Cursor = Cursors.Hand,
@@ -61,13 +73,15 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(aboutItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO   •   1.0.0", Left = 18, Top = 422,
+            Text = "OLED STUDIO   •   1.1.0", Left = 18, Top = 704,
             Width = 160, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 8f)
         });
 
+        var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Background };
+        root.Controls.Add(contentHost, 1, 0);
         var content = new Panel { Dock = DockStyle.Fill, BackColor = Background };
-        root.Controls.Add(content, 1, 0);
+        contentHost.Controls.Add(content);
         content.Controls.Add(new Label
         {
             Text = "HAKKINDA", Left = 32, Top = 27, Width = 445, Height = 21,
@@ -93,7 +107,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.0.0\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.1.0\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });
@@ -127,11 +141,57 @@ internal sealed class SettingsDialog : Form
         close.FlatAppearance.BorderSize = 0;
         close.Click += (_, _) => Close();
         content.Controls.Add(close);
+
+        // Settings use the same dark palette as the workspace. The battery
+        // priority editor is hosted here, not in a separate top-level window.
+        if (batteryPreferences is not null && snapshotGetter is not null &&
+            refresh is not null && onApply is not null)
+        {
+            var batteryButton = new Button
+            {
+                Text = "◫   Pil ve öncelik", Left = 13, Top = 140,
+                Width = 178, Height = 49,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(12, 0, 0, 0),
+                FlatStyle = FlatStyle.Flat, BackColor = Surface,
+                ForeColor = Muted, Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold)
+            };
+            batteryButton.FlatAppearance.BorderSize = 0;
+            menu.Controls.Add(batteryButton);
+
+            var batteryPage = new Panel { Dock = DockStyle.Fill, BackColor = Background };
+            batteryEditor = new BatteryStatusDialog(
+                batteryPreferences, snapshotGetter, refresh, onApply)
+            {
+                TopLevel = false, FormBorderStyle = FormBorderStyle.None,
+                Dock = DockStyle.Fill, BackColor = Background
+            };
+            batteryPage.Controls.Add(batteryEditor);
+            contentHost.Controls.Add(batteryPage);
+            batteryEditor.Show();
+            batteryPage.Hide();
+            content.BringToFront();
+
+            void SwitchPage(bool showAbout)
+            {
+                aboutActive = showAbout;
+                content.Visible = showAbout;
+                batteryPage.Visible = !showAbout;
+                aboutItem.BackColor = showAbout ? Color.FromArgb(38, 68, 82) : Surface;
+                aboutItem.ForeColor = showAbout ? Accent : Muted;
+                batteryButton.BackColor = showAbout ? Surface : Color.FromArgb(38, 68, 82);
+                batteryButton.ForeColor = showAbout ? Muted : Accent;
+                if (!showAbout) batteryEditor.UpdateRows();
+            }
+            aboutItem.Click += (_, _) => SwitchPage(true);
+            batteryButton.Click += (_, _) => SwitchPage(false);
+        }
     }
 
     private void AdvanceSecret(Keys key)
     {
-        if (secret.Feed(key))
+        if (aboutActive && secret.Feed(key))
         {
             BeginInvoke(new Action(() =>
             {
@@ -145,7 +205,7 @@ internal sealed class SettingsDialog : Form
 
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
-        if ((keyData & Keys.Modifiers) == Keys.None)
+        if (aboutActive && (keyData & Keys.Modifiers) == Keys.None)
         {
             var key = keyData & Keys.KeyCode;
             if (key is Keys.Up or Keys.Down or Keys.Left or Keys.Right)
@@ -159,7 +219,7 @@ internal sealed class SettingsDialog : Form
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (!e.Alt && !e.Control && !e.Shift &&
+        if (aboutActive && !e.Alt && !e.Control && !e.Shift &&
             (e.KeyCode is Keys.B or Keys.A))
         {
             AdvanceSecret(e.KeyCode);

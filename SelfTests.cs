@@ -57,6 +57,9 @@ internal static class SelfTests
             }
             // Phone Link exposes a localized accessible battery status group.
             if(!PhoneLinkBatteryProvider.TryParseAccessibleBattery(
+                "Piliniz şu anda %54",out int currentPhone,out _)||currentPhone!=54)
+                throw new Exception("Phone Link current Turkish battery label failed");
+            if(!PhoneLinkBatteryProvider.TryParseAccessibleBattery(
                 "Cihazınız şarj oluyor ve pil şu anda %84 düzeyinde",
                 out int trPercent, out bool? trCharging) ||
                 trPercent!=84 || trCharging!=true)
@@ -116,6 +119,38 @@ internal static class SelfTests
                 if(state.Widgets.Any(w=>!StudioProject.IsAllowed(mode,w.Kind)))
                     throw new Exception("Forbidden widget slipped into "+mode);
             }
+            // Nova Pro Wireless dial reports are decoded from real-looking
+            // bytes in memory, without opening or writing a HID device.
+            if(!ArctisDialMonitor.TryDecode(new byte[]{7,0x25,0},out var maximum)||
+                maximum.Volume!=100||maximum.View!=DialView.Volume ||
+               !ArctisDialMonitor.TryDecode(new byte[]{0,7,0x25,56},out var minimum)||
+                minimum.Volume!=0 ||
+               !ArctisDialMonitor.TryDecode(new byte[]{7,0x45,75,25},out var mixed)||
+                mixed.View!=DialView.ChatMix||mixed.Game!=75||mixed.Chat!=25 ||
+               ArctisDialMonitor.TryDecode(new byte[]{7,0x25,99},out _)||
+               ArctisDialMonitor.TryDecode(new byte[]{7,0x45,99,155},out _))
+                throw new Exception("Nova Pro dial HID decoder regression");
+            var dialLayout=new LayoutState{
+                Widgets=[new DockWidget{Kind="VolumeChatMix",X=5,Y=21,MiniWidth=105}]
+            };
+            using(var unknownDial=OledRenderer.Render(dialLayout,false,true,false,
+                layoutMode:ScreenMode.Idle))
+            using(var knownDial=OledRenderer.Render(dialLayout,false,true,false,
+                layoutMode:ScreenMode.Idle,
+                dial:new DialSnapshot(DialView.Volume,75,null,null,
+                    DateTimeOffset.UtcNow,"test")))
+            {
+                int different=0;
+                for(int y=21;y<46;y++)
+                for(int x=5;x<110;x++)
+                    if(unknownDial.GetPixel(x,y).ToArgb()!=
+                       knownDial.GetPixel(x,y).ToArgb())different++;
+                if(different<5)
+                    throw new Exception("Optional volume widget failed to render live data");
+            }
+            foreach(var mode in Enum.GetValues<ScreenMode>())
+                if(!StudioProject.IsAllowed(mode,"VolumeChatMix"))
+                    throw new Exception("Dial widget unavailable in "+mode);
             var trios=new BatterySnapshot{
                 Values=new(System.StringComparer.OrdinalIgnoreCase)
                 {
@@ -414,6 +449,11 @@ internal static class SelfTests
                 if(children.Count(c=>c is DockPreviewPanel)!=1 ||
                    children.Count(c=>c is System.Windows.Forms.PictureBox)==0)
                     throw new Exception("Integrated dock photo and pixel editor are missing");
+                var buttons=children.OfType<System.Windows.Forms.Button>().ToArray();
+                if(buttons.Any(b=>b.Text is "Fotoğraf" or "Hizala") ||
+                   !buttons.Any(b=>b.Text=="10 sn test") ||
+                   !buttons.Any(b=>b.Text.Contains("Canlı")))
+                    throw new Exception("Studio toolbar still has obsolete photo controls");
             }
 
             // An illuminated factory OLED has a slightly grey glass shade;
@@ -450,6 +490,14 @@ internal static class SelfTests
             for(int i=0;i<sequence.Length;i++)
                 if(konami.Feed(sequence[i])!=(i==sequence.Length-1))
                     throw new Exception("Konami-code unlock regression");
+            using(var options=new SettingsDialog(()=>false,
+                new BatteryPreferences(),()=>new BatterySnapshot(),
+                ()=>System.Threading.Tasks.Task.CompletedTask,()=>{}))
+            {
+                if(!AllChildren(options).OfType<System.Windows.Forms.Button>()
+                    .Any(b=>b.Text.Contains("Pil ve öncelik")))
+                    throw new Exception("Battery preferences missing from Settings");
+            }
             using(var about=new SettingsDialog())
             {
                 if(!AllChildren(about).OfType<Label>().Any(
@@ -525,6 +573,7 @@ internal static class SelfTests
                 throw new Exception("Charging inferred incorrectly from spare-battery detail");
 
             Console.WriteLine("PASS: single-page v1.0 UI, responsive editor, native dock photo");
+            Console.WriteLine("PASS: Phone Link battery parser, optional read-only dial widget");
             Console.WriteLine("PASS: charging icon appears only for confirmed charging");
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;

@@ -119,7 +119,7 @@ internal static class OledRenderer
     public static Bitmap Render(LayoutState layout,bool media,bool showDate,bool spotify,
         BatterySnapshot? batteries=null,MediaSnapshot? playback=null,
         GameSnapshot? game=null,BatteryPreferences? preferences=null,
-        bool protectHeader=true,ScreenMode? layoutMode=null)
+        bool protectHeader=true,ScreenMode? layoutMode=null,DialSnapshot? dial=null)
     {
         bool wasEditable=EditableHeader.Value;
         EditableHeader.Value=!protectHeader;
@@ -144,8 +144,8 @@ internal static class OledRenderer
             (layoutMode is null?ShouldShow(w,media,showDate):
                 StudioProject.IsAllowed(mode,w.Kind) &&
                     (w.Kind!="Date"||showDate)))
-            .OrderBy(w=>w.Kind=="GameMiniPlayer"?1:0))
-            DrawWidget(frame,w,spotify,batteries,playback,game,kinds);
+            .OrderBy(w=>w.Kind is "GameMiniPlayer" or "VolumeChatMix"?1:0))
+            DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
         for(int y=0;y<Height;y++)
@@ -187,6 +187,8 @@ internal static class OledRenderer
         "GameMiniPlayer" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,35,128)),Math.Max(14,
             7*Scale(w.FontSize)+Math.Clamp(w.StrokeWidth,1,3)+2)),
+        "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
+            Math.Clamp(w.MiniWidth,60,128)),25),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
     };
 
@@ -215,7 +217,7 @@ internal static class OledRenderer
 
     private static void DrawWidget(bool[] px,DockWidget w,bool spotify,
         BatterySnapshot? batteries,MediaSnapshot? playback,
-        GameSnapshot? game,string[] currentDevices)
+        GameSnapshot? game,string[] currentDevices,DialSnapshot? dial)
     {
         int x=w.X,y=w.Y;
         switch(w.Kind)
@@ -274,6 +276,9 @@ internal static class OledRenderer
                 break;
             case "GameMiniPlayer":
                 DrawGameMiniPlayer(px,w,playback);
+                break;
+            case "VolumeChatMix":
+                DrawDialWidget(px,w,dial);
                 break;
             case "Track":
             case "Artist":
@@ -342,6 +347,47 @@ internal static class OledRenderer
         int textY=y+(scale>1?1:3);
         DrawMarquee(px,name,textX,textY,scale,width,
             Math.Clamp(widget.StrokeWidth,1,3),8);
+    }
+
+    /// <summary>
+    /// Optional OLED widget driven by the read-only dock wheel notifications.
+    /// Values stay unknown until a real event arrives; it never changes audio.
+    /// Draw into an isolated tile and clip to the widget bounds.
+    /// </summary>
+    private static void DrawDialWidget(bool[] px,DockWidget widget,DialSnapshot? current)
+    {
+        var bounds=GetBounds(widget);
+        var tile=new bool[Width*Height];
+        int x=widget.X,y=widget.Y;
+        var snapshot=current??new DialSnapshot(DialView.Volume,null,null,null,
+            DateTimeOffset.MinValue,"Veri yok");
+        bool fresh=snapshot.UpdatedAt!=DateTimeOffset.MinValue &&
+            DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromMinutes(10);
+        int width=Math.Max(3,bounds.Width-2);
+
+        if(snapshot.View==DialView.ChatMix)
+        {
+            DrawText(tile,"CHATMIX",x+1,y+1,1);
+            var left=fresh?snapshot.Game:null;
+            var right=fresh?snapshot.Chat:null;
+            DrawText(tile,left.HasValue&&right.HasValue
+                ?$"G{left.Value} C{right.Value}":"G-- C--",x+1,y+10,1);
+            int sum=(left??0)+(right??0);
+            DrawProgress(tile,x+1,y+19,width,
+                sum>0?(int)Math.Round((left??0)*100d/sum):0);
+        }
+        else
+        {
+            DrawText(tile,"VOLUME",x+1,y+1,1);
+            int? volume=fresh?snapshot.Volume:null;
+            DrawText(tile,volume.HasValue?$"{volume.Value}%":"--%",
+                x+49,y+1,1);
+            DrawProgress(tile,x+1,y+14,width,volume??0);
+        }
+        for(int yy=Math.Max(0,bounds.Top);yy<Math.Min(Height,bounds.Bottom);yy++)
+        for(int xx=Math.Max(0,bounds.Left);xx<Math.Min(Width,bounds.Right);xx++)
+            if(EditableHeader.Value||yy>=ReservedTop)
+                px[yy*Width+xx]=tile[yy*Width+xx];
     }
 
     // Hand-drawn 3x7 native OLED lightning glyph shown only for confirmed charging.

@@ -119,6 +119,12 @@ internal static class PhoneLinkBatteryProvider
                     {
                         try
                         {
+                            // On current Phone Link, the battery group is a
+                            // direct child of PaneRoot. Message previews live
+                            // deeper in the UIA tree. Never read their names.
+                            var parent=TreeWalker.ControlViewWalker.GetParent(group);
+                            if(parent is null || parent.Current.AutomationId!="PaneRoot")
+                                continue;
                             var name = group.Current.Name;
                             if (TryParseAccessibleBattery(name, out var pct, out var charging))
                             {
@@ -162,10 +168,12 @@ internal static class PhoneLinkBatteryProvider
     {
         percent = 0;
         charging = null;
-        if (string.IsNullOrWhiteSpace(label) || label.Length > 260) return false;
+        // Battery status is a short accessibility label. Reject long message
+        // previews and non-battery UI strings without inspecting their content.
+        if (string.IsNullOrWhiteSpace(label) || label.Length > 100) return false;
 
         string normal = Normalize(label);
-        if (!Regex.IsMatch(normal, @"\b(pil|battery)\b",
+        if (!Regex.IsMatch(normal, @"\b(pil|pili|piliniz|battery|batarya)\b",
             RegexOptions.CultureInvariant)) return false;
 
         var match = PercentBefore.Match(normal);

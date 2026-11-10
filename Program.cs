@@ -113,6 +113,16 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--dial-hid-open-test"))
+        {
+            Console.WriteLine(ArctisDialMonitor.ReadOnlyOpenCheck());
+            return;
+        }
+        if(args.Contains("--dial-hid-check"))
+        {
+            Console.WriteLine(ArctisDialMonitor.ReadOnlyDeviceCheck());
+            return;
+        }
         if(args.Contains("--oled-hid-check"))
         {
             var error=FastOledTransport.ValidateAvailable();

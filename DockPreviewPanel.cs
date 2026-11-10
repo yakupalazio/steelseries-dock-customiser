@@ -139,9 +139,20 @@ internal sealed class DockPreviewPanel : UserControl
     public bool FactoryPreviewActive => _factory.Checked;
 
     // Public actions for the integrated, single-page v1.0 toolbar.
-    public void SendTestFrame() => _sendHardware.PerformClick();
-    public void ToggleLiveOutput() => _liveToggle.PerformClick();
-    public void RestoreOriginalScreen() => _restoreHardware.PerformClick();
+    // The legacy buttons are hidden in the integrated studio. PerformClick()
+    // silently ignores an invisible control; invoke the handlers directly.
+    public void SendTestFrame() => _ = SendHardwareTest();
+    public void ToggleLiveOutput() => _ = ToggleLiveMode();
+    public void RestoreOriginalScreen()
+    {
+        if (_liveEnabled) StopLiveMode();
+        else if (_hardware.Active)
+        {
+            _hardware.Stop();
+            _message.Text = "Test sonlandırılıyor; SteelSeries ekranına geri dönülüyor.";
+        }
+        else _message.Text = _hardware.RestoreNow();
+    }
     public void ChooseDockPhoto() => _choose.PerformClick();
     public void ResetDockPhoto() => _restore.PerformClick();
     public void CalibrateDockPhoto() => _calibrate.PerformClick();
@@ -407,7 +418,11 @@ internal sealed class DockPreviewPanel : UserControl
 
     private void LoadImage()
     {
-        var path = _settings.ImagePath ?? _assetDefault;
+        // v1.0.1 uses the original dock photograph exclusively. Legacy
+        // photo overrides remain untouched on disk but are not loaded.
+        _settings.ImagePath=null;
+        _settings.Corners=_factoryCorners.ToList();
+        var path = _assetDefault;
         try
         {
             if(!File.Exists(path))throw new FileNotFoundException("Fotoğraf bulunamadı.",path);
@@ -424,8 +439,7 @@ internal sealed class DockPreviewPanel : UserControl
         }
         catch(Exception ex)
         {
-            _message.Text="Dock fotoğrafı yüklenemedi: "+ex.Message+
-                "  'Fotoğraf seç' ile kendi fotoğrafını yükleyebilirsin.";
+            _message.Text="Orijinal dock fotoğrafı bulunamadı: "+ex.Message;
         }
     }
 

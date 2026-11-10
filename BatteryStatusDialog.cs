@@ -98,8 +98,9 @@ internal sealed class BatteryStatusDialog : Form
         prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
         Text="Pil cihazları — öncelik sıralaması";
         StartPosition=FormStartPosition.CenterParent;
-        ClientSize=new Size(875,665);
-        MinimumSize=new Size(885,700);
+        ClientSize=new Size(900,728);
+        MinimumSize=new Size(900,728);
+        AutoScroll=true;
         Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
         grid.Columns.Add("device","Cihaz");
@@ -164,12 +165,61 @@ internal sealed class BatteryStatusDialog : Form
             prefs.AutoMinimizePhoneLink=minimizePhoneLink.Checked;
             prefs.Save();
             onApply();
-            Close();
+            if(TopLevel)Close();
+            else lastUpdated.Text="Ayarlar kaydedildi · Pil verileri yenileniyor";
         };
         Controls.Add(applyButton);
         priority.SelectedIndexChanged+=(_,_)=>ShowActive();
         dualSense.CheckedChanged+=(_,_)=>ShowActive();
         UpdateRows();
+
+        // Embedded Settings page: maintain the studio's dark visual language.
+        BackColor=Color.FromArgb(13,18,26);
+        ForeColor=Color.FromArgb(235,242,248);
+        foreach(Control control in Controls)
+        {
+            control.Top+=45;
+            if(control is Label label)
+            {
+                label.ForeColor=Color.FromArgb(151,169,187);
+                label.BackColor=BackColor;
+            }
+            else if(control is Button button)
+            {
+                button.FlatStyle=FlatStyle.Flat;
+                button.FlatAppearance.BorderSize=0;
+                button.BackColor=button.Text=="Öncelikleri uygula"
+                    ?Color.FromArgb(72,194,238):Color.FromArgb(35,47,62);
+                button.ForeColor=button.Text=="Öncelikleri uygula"
+                    ?Color.FromArgb(13,18,26):Color.FromArgb(235,242,248);
+                button.Cursor=Cursors.Hand;
+            }
+            else if(control is CheckBox box)
+            {
+                box.ForeColor=Color.FromArgb(235,242,248);
+                box.BackColor=BackColor;
+            }
+        }
+        grid.BackgroundColor=Color.FromArgb(23,31,43);
+        grid.BorderStyle=BorderStyle.None;
+        grid.GridColor=Color.FromArgb(45,59,74);
+        grid.EnableHeadersVisualStyles=false;
+        grid.ColumnHeadersDefaultCellStyle.BackColor=Color.FromArgb(35,47,62);
+        grid.ColumnHeadersDefaultCellStyle.ForeColor=Color.FromArgb(235,242,248);
+        grid.DefaultCellStyle.BackColor=Color.FromArgb(23,31,43);
+        grid.DefaultCellStyle.ForeColor=Color.FromArgb(235,242,248);
+        grid.DefaultCellStyle.SelectionBackColor=Color.FromArgb(38,68,82);
+        grid.DefaultCellStyle.SelectionForeColor=Color.White;
+        grid.RowsDefaultCellStyle.BackColor=Color.FromArgb(23,31,43);
+        grid.AlternatingRowsDefaultCellStyle.BackColor=Color.FromArgb(28,38,51);
+        priority.BackColor=Color.FromArgb(23,31,43);
+        priority.ForeColor=Color.FromArgb(235,242,248);
+        priority.BorderStyle=BorderStyle.None;
+        Controls.Add(new Label{
+            Text="PİL VE ÖNCELİK",Left=18,Top=13,Width=850,Height=31,
+            Font=new Font("Segoe UI Semibold",18f,FontStyle.Bold),
+            ForeColor=Color.FromArgb(235,242,248),BackColor=BackColor
+        });
     }
 
     private void MovePriority(int delta)

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — Wheel widget and integration fixes
+
+- Corrected Live, 10-second physical test and Return buttons: old hidden controls no longer swallow clicks; separate device confirmation is unchanged.
+- Removed Photo and Align buttons and stopped loading photo overrides; the original product photograph can be included in the private Windows package but is excluded from Git.
+- Moved Battery & Priority into a GG-style dark Settings page next to About; preserved author signature and About-only Konami unlock.
+- Fixed Phone Link Turkish `Piliniz şu anda %54` accessibility label; actual connected device returned 54% without ADB.
+- Added an optional read-only Volume/ChatMix OLED widget for Media/Game/Idle, decoding `07 25` and `07 45` HID events; no audio/device configuration writes.
+- Added synthetic HID decode/render and interface discovery tests. Read-only interface open/close passed while GG was running. Physical wheel event streaming requires acceptance testing.
+
 ## 1.0.0 — GG-inspired widescreen OLED Studio
 
 - Rebuilt the app as a responsive, resizable **single-page editor and dock preview**. No separate preview tab.

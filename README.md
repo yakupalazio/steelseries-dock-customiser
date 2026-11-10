@@ -1,4 +1,13 @@
-# Steelseries Dock Customiser 1.0 — OLED Studio
+# Steelseries Dock Customiser 1.1 — OLED Studio
+
+## New in 1.1: reliability, Phone Link and the dock wheel
+
+- Fixed the integrated **Live / 10-second Test / Return** buttons: they now invoke the real guarded hardware actions instead of clicking invisible legacy controls.
+- Removed **Photo** and **Align** controls. The original product photo stays in the user's **local Windows build**, while the GitHub source still excludes that user-provided binary asset. A vector fallback is shown on fresh source builds without it.
+- Moved **Battery & Priority** into the dark-styled **Settings → Pil ve öncelik** page; the separate left-sidebar shortcut is gone.
+- Fixed the Turkish Microsoft Phone Link accessibility label **“Piliniz şu anda %54”** by recognizing localized suffixes. Verified on the connected Galaxy S24+ without ADB. A phone's displayed status may still lag real battery sync.
+- Added an **optional Volume / ChatMix wheel widget** in each design mode. It decodes the Nova Pro Wireless HID **read-only** notifications: `07 25 raw` for hardware volume, `07 45 game chat` for ChatMix balance. It never writes mixer settings. It shows `--` until a wheel event and labels an inaccessible device rather than guessing data. A button press itself does not supply a guaranteed standalone event; the view changes with the first volume/ChatMix dial movement.
+- Wheel HID detection and read-only open/close succeeded on the actual Windows PC while SteelSeries GG was running. **Physical wheel-turn event behavior still needs on-device acceptance testing.**
 
 Independent Windows 11 desktop designer for the SteelSeries Arctis Nova Pro Wireless base station's **128×64 monochrome OLED**. This is a personal project and is not an official SteelSeries product.
 
@@ -6,14 +15,14 @@ Independent Windows 11 desktop designer for the SteelSeries Arctis Nova Pro Wire
 
 A completely redesigned GG-inspired dark UI replaces the old Editor and Dock Preview tabs with **one wide window**:
 
-- **Left sidebar:** Media / Game / Idle layout selection; Battery Priority, Icon Studio and Clock/Date shortcuts; detected runtime game/media status.
+- **Left sidebar:** Media / Game / Idle layout selection, Icon Studio and Clock/Date shortcuts, runtime game/media status, and Settings (including Battery Priority).
 - **Middle, upper area:** Large, clean dock hardware photograph with **no photographic background** (the included development photo has transparency, automatically cropped to the device outline); the live simulated OLED is aligned to the physical screen.
 - **Middle, lower area:** Pixel-perfect **native 128×64** editing canvas, selection, pen/eraser, optional grid and undo/redo. The canvas automatically adjusts integer pixel zoom to available screen size and keeps pixel boundaries sharp.
 - **Right sidebar:** Human-friendly widget catalog and hierarchy, Add/Delete, and selected-widget properties (text, visibility, font size, stroke weight, X/Y and optional Mini Player width).
 - **Top toolbar:** Save, Load, export PNG.
 - **Bottom status bar:** Current data and header protection state.
 
-**Preview updates immediately with edits** to the selected design, whether or not that design is active on the physical device. Real live dock mode continues to follow runtime priority **Game > Playing media > Idle**. The "Custom / Original / 10-sec test / Live / Restore / Photo / Align" actions are directly beneath the dock photograph, not in a separate tab.
+**Preview updates immediately with edits** to the selected design, whether or not that design is active on the physical device. Real live dock mode continues to follow runtime priority **Game > Playing media > Idle**. The "Custom / Original / 10-sec test / Live / Restore" actions are directly beneath the dock photograph, not in a separate tab.
 
 The photo is a **simulation**, not a capture from the hardware. Real device output only occurs after pressing the appropriate test/live control and confirming the dialog.
 
@@ -22,7 +31,7 @@ The photo is a **simulation**, not a capture from the hardware. Real device outp
 - **Media:** Spotify/generic source icon, song, artist, progress bar and customizable small clock.
 - **Game:** A required "NOW PLAYING:" label and game title, plus an optional Mini Player that shows the playing song while gaming and stays black when paused.
 - **Idle:** Completely customizable clock/date, optional text and battery widgets.
-- Three dynamic prioritized battery slots, Nova Pro spare battery source, optional DualSense override, pixel icon editor, per-mode saved layouts, image/photo calibration.
+- Three dynamic prioritized battery slots, Nova Pro spare battery source, optional DualSense override, an optional read-only volume/ChatMix wheel widget, pixel icon editor and per-mode saved layouts.
 
 ### Charging lightning symbol
 
@@ -41,7 +50,7 @@ New layouts are saved to:
 
 On first launch, 1.0 reads the existing `studio-v099.json` (or `studio-v098.json`) if available. Clicking Save writes **only the new v1.0 file**. Old layout data and source folders are preserved, without automatic conversion in-place.
 
-Battery priority preferences, icon sprites and dock photo calibration remain in their existing user-local settings.
+Battery priority preferences and icon sprites remain in their existing user-local settings. Legacy photo calibration data is preserved but no longer used in the v1.1 interface.
 
 ## How to run
 
@@ -80,7 +89,7 @@ This launches **DOOM MODE**, an original monochrome 128×64 ray-casting mini FPS
 - It refuses to start while the in-app normal live OLED writer is active, if the USB OLED collection cannot be verified, or if the validated restore utility is unavailable.
 - **High-frame-rate physical streaming has not yet been visually verified on the user's dock.** Check on the actual device before marking the Easter egg hardware path release-ready.
 
-Developer read-only diagnostics: `SteelseriesDockCustomiser.exe --oled-hid-check` checks the supported OLED interface; `--oled-hid-open-test` additionally opens and closes the same interface without sending a frame. Neither writes an image.
+Developer read-only diagnostics: `--oled-hid-check` / `--oled-hid-open-test` check the OLED interface without sending a frame; `--dial-hid-check` / `--dial-hid-open-test` check the separate knob notification interface without changing audio. Neither writes a device command.
 
 See `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES/` for HidSharp (Apache 2.0) and external ggoled notices.
 
@@ -90,10 +99,10 @@ See `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES/` for HidSharp (Apache 2.
 - Windows Media sessions provide playing song title/artist and timeline; no Spotify account token.
 - Phone Link battery reading uses its accessibility status while open/minimized, with an optional user-enabled open-and-minimize recovery. It does not read messages, photos or contact data.
 - No direct firmware modification or automatic full-screen OLED writes.
-- The user-specific product photograph stays **local and excluded from Git and release packages**. On another PC the integrated preview draws a dark original vector dock instead, and the user can choose and calibrate a local product photo when desired.
+- The user-provided SteelSeries product photograph stays **excluded from Git**. Local Windows packages built on the development PC contain the photo for personal use or direct review by SteelSeries; fresh source builds without the asset draw a vector dock. Redistribution permission for someone else's product photograph is not implied by owning the device.
 
 ## Verification status
 
 - .NET 10 Release compilation and headless self-tests (renderer, photo alignment, mode priority, Game Mini Player, battery priority, charging indicators, integrated v1.0 workspace).
 - The photo-based preview and native edit canvas have been visually inspected in Windows.
-- **Physical dock appearance of this 1.0 build has not been independently confirmed yet**. Use the same on-demand test/restore buttons to validate on the user's own device before publishing a public release.
+- **Physical OLED appearance, 1.1 wheel-event delivery and live/test interactions still need hands-on confirmation.** The read-only wheel interface could be opened while GG was running, but no actual wheel-turn event was captured during automated validation. Use on-demand test/restore with your own device before publishing a stable public release.

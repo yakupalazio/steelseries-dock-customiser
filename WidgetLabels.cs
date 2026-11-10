@@ -24,6 +24,7 @@ internal static class WidgetLabels
         "Headset"=>"Kulaklık bataryası",
         "SpareBattery"=>"Yedek batarya",
         "DualSense"=>"DualSense bataryası",
+        "VolumeChatMix"=>"Ses / ChatMix tekerleği",
         _=>kind
     };
 }
