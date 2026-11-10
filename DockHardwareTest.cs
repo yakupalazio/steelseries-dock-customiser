@@ -25,6 +25,23 @@ internal sealed class DockHardwareTest
         "Documents","Codex","DockHardwareResearch","ggoled-v0.3.0.exe");
     private CancellationTokenSource? active;
     public bool Active=>active!=null;
+    public const int EditableY=12;
+    public const int EditableHeight=52;
+    // HID packet heights are padded to a multiple of eight pixels.
+    // Main patch: rows 12..59 (48 high). Final patch: 56..63 (8 high).
+    // Overlap on rows 56..59 is intentional; no header row is transmitted.
+    public const int MainY=12, MainHeight=48;
+    public const int TailY=56, TailHeight=8;
+    public static Bitmap ExtractEditableArea(Bitmap full) =>
+        CropPatch(full,MainY,MainHeight);
+    public static Bitmap ExtractBottomTail(Bitmap full) =>
+        CropPatch(full,TailY,TailHeight);
+    private static Bitmap CropPatch(Bitmap full,int y,int h)
+    {
+        if(full.Width!=128||full.Height!=64)
+            throw new InvalidDataException("Only full 128×64 native frames are accepted.");
+        return full.Clone(new Rectangle(0,y,128,h),PixelFormat.Format24bppRgb);
+    }
     public string Validate()
     {
         if(!File.Exists(cliPath))
@@ -45,12 +62,18 @@ internal sealed class DockHardwareTest
         active=cts;
         string folder=Path.Combine(Path.GetTempPath(),"SteelseriesDockCustomiser");
         Directory.CreateDirectory(folder);
-        string file=Path.Combine(folder,"one-shot-physical-dock-test.png");
-        image.Save(file,ImageFormat.Png);
-        string result="10 saniyelik test tamamlandı.";
+        string file=Path.Combine(folder,"one-shot-dock-main-128x48.png");
+        string tailFile=Path.Combine(folder,"one-shot-dock-tail-128x8.png");
+        using(var editable=ExtractEditableArea(image))
+            editable.Save(file,ImageFormat.Png);
+        using(var tail=ExtractBottomTail(image))
+            tail.Save(tailFile,ImageFormat.Png);
+        string result="12–63. satırlar için 10 saniyelik test tamamlandı.";
         try
         {
-            await Task.Run(()=>RunCli("img","-C",file));
+            // Never '-C': only these two bounded areas are changed.
+            await Task.Run(()=>RunCli("img","-x","0","-y","12",file));
+            await Task.Run(()=>RunCli("img","-x","0","-y","56",tailFile));
             await Task.Delay(TimeSpan.FromSeconds(10),cts.Token);
         }
         catch(OperationCanceledException) {result="Test erken sonlandırıldı.";}
@@ -61,6 +84,7 @@ internal sealed class DockHardwareTest
             catch(Exception ex) {result+=" EKRANA DÖNÜŞ HATASI: "+ex.Message;}
             active=null; cts.Dispose();
             try{File.Delete(file);}catch{}
+            try{File.Delete(tailFile);}catch{}
         }
         return result;
     }

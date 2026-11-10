@@ -52,7 +52,7 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.4 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser v0.9.5 | OLED Pixel Studio";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(830,795);
         MinimumSize = new Size(850,830);
@@ -71,7 +71,7 @@ internal sealed class PixelStudioForm : Form
         editor.Paint += (_,e) => PaintFrame(e.Graphics,true,Zoom);
 
         var subtitle = new Label { Left=18,Top=405,Width=780,Height=39,
-            Text="OLED: 128 × 64 gerçek piksel. Üstteki sabit batarya bölgesi yalnızca temsili gösterilir; çizilemez.\nÖğeleri sürüklemek için 'Taşı / Seç' aracını kullan." };
+            Text="OLED: 128 × 64 piksel. İlk 12 satır SteelSeries pil göstergelerine ayrıldı; fiziksel dock’a gönderilmez.\nÖğeleri sürüklemek için 'Taşı / Seç' aracını kullan." };
         editTab.Controls.Add(subtitle);
 
         tool.Items.AddRange(["Kalem","Silgi","Taşı / Seç"]);
@@ -264,7 +264,7 @@ internal sealed class PixelStudioForm : Form
         {
             customText.Text=selected.Text;
             fontSize.Value=Math.Clamp(selected.FontSize,7,24);
-            xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,12,63);
+            xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
         }
         else { customText.Text="";widgetVisible.Checked=false; }

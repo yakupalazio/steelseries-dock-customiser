@@ -77,7 +77,7 @@ internal sealed class DockPreviewPanel : UserControl
         hardwareRow.Controls.AddRange([_sendHardware,_restoreHardware]);
         Controls.Add(hardwareRow);
         Controls.Add(new Label { Left=16,Top=686,Width=770,Height=37,
-            Text="Deneysel fiziksel OLED testi: üst pil göstergeleri 10 saniyeliğine değişebilir; cihaz ayarları kaydedilmez. Sadece elle başlatılır.",
+            Text="Deneysel test: 12–63 satırları iki parçada güncellenir; üst 12 satır korunur.",
             ForeColor=Color.FromArgb(137,72,30) });
         Controls.Add(_message);
 
@@ -123,8 +123,8 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         var answer=MessageBox.Show(this,
-            "Mevcut 128×64 tasarım gerçek OLED'e 10 saniyeliğine gönderilecek.\n"+
-            "Bu süre boyunca dock üzerindeki fabrika pil göstergeleri de değişebilir.\n"+
+            "Tasarımın yalnızca 12–63. satırları iki parçada dock OLED'ine 10 saniyeliğine gönderilecek.\n"+
+            "İlk 12 satıra dokunulmayacak; orijinal göstergelerin korunup korunmadığını gözle kontrol et.\n"+
             "Sonunda normal SteelSeries ekranına dönüş komutu gönderilecek.\n"+
             "Devam edilsin mi?",
             "Gerçek dock ekranı — geçici test",

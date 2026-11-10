@@ -104,11 +104,32 @@ internal static class SelfTests
             if(layout.Pixels[63*128+127] || layout.Widgets[0].X==66)
                 throw new Exception("Undo/redo history snapshot is not deep cloned");
 
+            // User-painted pixels are blocked in all 16 reserved physical rows.
+            using(var cropped=DockHardwareTest.ExtractEditableArea(media))
+            using(var tail=DockHardwareTest.ExtractBottomTail(media))
+            {
+                if(cropped.Width!=128||cropped.Height!=48||tail.Width!=128||tail.Height!=8)
+                    throw new Exception("OLED hardware patch size mismatch.");
+                bool[] covered=new bool[64];
+                foreach(var section in new[]{(image:cropped,physicalY:12),(image:tail,physicalY:56)})
+                for(int y=0;y<section.image.Height;y++)
+                {
+                    int yy=section.physicalY+y;
+                    if(yy<12||yy>=64)throw new Exception("Header or screen boundary modified!");
+                    covered[yy]=true;
+                    for(int x=0;x<128;x++)
+                        if(section.image.GetPixel(x,y).ToArgb()!=media.GetPixel(x,yy).ToArgb())
+                            throw new Exception("Pixel mismatch on physical row "+yy);
+                }
+                for(int y=0;y<64;y++)
+                    if(covered[y]!=(y>=12))
+                        throw new Exception("Bad OLED segment coverage at row "+y);
+            }
             // User-painted pixels are blocked in the simulated firmware strip.
             modified=layout.DeepClone();
-            modified.Pixels[0]=true;
+            modified.Pixels[11*128]=true;
             using(var changed=OledRenderer.Render(modified,true,true,true))
-            if(changed.GetPixel(0,0).ToArgb()!=media.GetPixel(0,0).ToArgb())
+            if(changed.GetPixel(0,11).ToArgb()!=media.GetPixel(0,11).ToArgb())
                 throw new Exception("Reserved factory region accepted user pixel");
 
             // Perspective overlay is a photo simulation only. The factory

@@ -1,42 +1,44 @@
-# Steelseries Dock Customiser — v0.9.4 (Experimental Physical OLED Test)
+# Steelseries Dock Customiser v0.9.5 — Preserved Factory Battery Bar
 
-Windows .NET 10 desktop project for designing **128×64 monochrome OLED** layouts, previewing them on a dock photo, and reading live battery statuses from supported sources.
+Independent Windows/.NET 10 128×64 monochrome OLED pixel editor with a photographic dock preview, customizable 1-bit icons, and real device-battery sources.
 
-## New: send a test image to the physical dock
+## v0.9.5 hardware test — preserve top 12 rows
 
-**Dock Preview → Gerçek dock'a gönder (10 sn)**
+The user confirmed with photos of the Nova Pro Wireless base station and SteelSeries Now Playing app that the **original headset, spare battery and connection indicators occupy approximately the first 12 rows**. Reserving 16 rows wasted usable space.
 
-This is a deliberately limited experiment: select Custom and manually click the button. A confirmation explains that the full 128×64 physical display, including factory battery indicators, may be replaced for 10 seconds. The software then calls **return to SteelSeries UI**. You can click **Dock ekranını geri yükle** earlier.
+The **editor now reserves Y=0..11 (12 rows)**. Only **Y=12..63 (52 rows)** are editable and sent to the actual physical OLED. The upper factory bar is *not copied from our simulated source frame*.
 
-**This is not a persistent wallpaper or a firmware change.** The physical OLED is not read back, so a successful CLI return code is not independent proof that the visual appeared; the owner must confirm by looking at the base station. **Factory battery indicators are not guaranteed to remain on the screen during these temporary tests.**
+The open-source [ggoled](https://github.com/JerwuQu/ggoled) command pads HID report height to a multiple of 8 pixels. One 128×52 patch starting at y=12 could therefore pad outside the physical 64-row screen. To avoid this, the client uses two overlapping patches:
 
-The experiment uses the separately installed open-source tool [ggoled v0.3.0](https://github.com/JerwuQu/ggoled/releases/tag/v0.3.0), which explicitly supports Arctis Nova Pro Wireless and its 128×64 OLED. It delegates only to the tool's **img** and **return** commands. It never invokes brightness, firmware updates, headset settings, or arbitrary USB packets.
+| Patch | OLED location | Image size | Physical rows written |
+|---|---|---|---|
+| A | x=0, y=12 | 128×48 | 12..59 |
+| B | x=0, y=56 | 128×8 | 56..63 |
 
-- A ggoled CLI downloaded from the official release is required locally at `%USERPROFILE%\Documents\Codex\DockHardwareResearch\ggoled-v0.3.0.exe` for this private experimental build.
-- The application checks the exact SHA-256 for the tested official v0.3.0 executable before invoking it. If absent or different, sending is disabled.
-- The third-party executable is **not redistributed** in this repository.
-- A successful temporary test followed by `return` is not a substitute for user visual confirmation.
-- ggoled is a third-party project, not an official SteelSeries driver. The software is provided for testing only.
-- Do not leave static high-contrast OLED images on screen for extended periods, to reduce burn-in risk.
+The overlap on rows 56..59 is intentional. Neither patch contains or transmits a pixel in rows 0..11; both have heights divisible by 8, with no padding beyond row 63. **The application never passes `-C` (clear screen)**. After ten seconds, it issues `return` to the original SteelSeries OLED interface.
 
-**Existing functions are preserved:** icon editor, personal photo calibration, undo/redo, 1-bit text, real SteelSeries GG batteries, phone battery via Phone Link UI Automation (when the UI is open/minimized), and opt-in experimental DualSense read-only HID.
+The two-patch write and return were each checked locally: all three ggoled commands exited **0**. Unit tests verify the exact pixel coverage, reserved rows, and output dimensions. **Physical visual preservation still requires the owner to look at the device and confirm it.**
 
-## Why not GameSense?
+## Using the optional physical test
 
-The documented [SteelSeries GameSense screen list](https://github.com/SteelSeries/gamesense-sdk/blob/master/doc/api/standard-zones.md) does not identify Nova Pro Wireless's 128×64 display. A successful GameSense API request therefore does not establish hardware OLED compatibility. The independently tested ggoled device-specific path is used for this small experiment instead.
+Open Dock Preview and select Custom. Click **Gerçek dock'a gönder (10 sn)** and approve the warning. The custom OLED image is displayed for 10 seconds and then returned to the SteelSeries UI. **Dock ekranını geri yükle** can end a test earlier.
 
-## Phone background + MSIX research
+The third-party **ggoled v0.3.0** executable must have been downloaded separately from its official release. The app verifies its pinned SHA-256 before sending a test. No device settings, brightness, firmware or pairing changes occur. This version is a limited *one-shot* test, not an always-running OLED app.
 
-A dedicated isolated `PhoneBatteryResearch` folder includes a temporary **Windows package-identity probe**. We built a full-trust app manifest and attempted developer loose-file registration without changing machine settings:
+The dock photograph is a simulation and cannot verify the physical display. Unmodified factory indicators may still be replaced by other apps or vendor firmware events while this third-party interface is in use.
 
-- Windows returned **0x80073CFF**: Developer Mode or sideloading must be enabled.
-- No package was installed.
-- The installed CrossDevice package contains `ISettingsDeviceStatus.BatteryPercent`, but unpackaged COM/WinRT activation returned **0x80040154**.
-- **No supported background battery provider has yet been validated** for use without the Phone Link UI. The existing UI Automation reader remains in place; no stale Bluetooth values are used.
+## Other functions
 
-Developer Mode is a machine-wide security policy. This experiment **did not enable it** or install a locally trusted developer certificate without authorization. Whether packaged identity would provide access to Microsoft's private interface remains **unverified**.
+- Native 1-bit OLED renderer, 5×7 pixel text, icon drawing/persistence, custom widgets, undo/redo, save/load, PNG export and perspective photo preview.
+- Read-only SteelSeries GG battery data for Aerox 3 Gen 2 and Nova Pro Wireless (including spare battery).
+- Windows laptop battery.
+- Phone Link battery through accessibility UI only when the Phone Link window is open or minimized. Closed-window background battery access not yet established.
+- Optional experimental input-only DualSense HID battery reader, disabled by default.
+- Three user-selectable battery widgets.
 
-## Commands
+## Run
+
+Open `ONIZLEMEYI_AC.cmd`, or:
 
 ```powershell
 dotnet build -c Release
@@ -44,8 +46,8 @@ dotnet run -c Release
 .\bin\Release\net10.0-windows\SteelseriesDockCustomiser.exe --self-test
 ```
 
-## Safety and distribution
+The earlier v0.9.4 (16-row test) and v0.9.3 sources remain available. The v0.9.5 local development build is **not** a GitHub release yet.
 
-The local official dock product photo is ignored by Git and may not be redistributed without permission. Third-party ggoled is downloaded separately and is not bundled.
+## Privacy and licensing
 
-This prototype is **not affiliated with or endorsed by SteelSeries or Microsoft**.
+The hardware interface is intentionally limited to ggoled `img` and `return` commands. GG status uses loopback-only read-only HTTP. Phone Link reads accessible battery status only; it does not read messages, contacts, photos or notifications. The official SteelSeries product photo and any third-party executable are **not redistributed** in the Git project. This tool is not affiliated with SteelSeries or Microsoft.
