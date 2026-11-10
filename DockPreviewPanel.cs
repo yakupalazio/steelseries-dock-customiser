@@ -11,8 +11,8 @@ using System.Windows.Forms;
 namespace SteelseriesDockCustomiser;
 
 /// <summary>
-/// Photo-based simulation only. Does not enumerate USB devices, use GameSense,
-/// or attempt to read the dock's physical framebuffer.
+/// Photo-based simulation with a separate, explicitly user-initiated,
+/// time-limited ggoled physical display test. Does not read the dock frame.
 /// </summary>
 internal sealed class DockPreviewPanel : UserControl
 {
@@ -35,8 +35,11 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly Button _restore = new() { Text = "Örnek fotoğrafa dön", Width = 154, Height = 31 };
     private readonly Button _calibrate = new() { Text = "Ekranı hizala", Width = 119, Height = 31 };
     private readonly Button _cancelCalibration = new() { Text = "İptal", Width = 70, Height = 31, Enabled = false };
-    private readonly Label _message = new() { Left=16,Top=642,Width=775,Height=76,
-        Text = "Bu sekme tasarımın fotoğraf üzerindeki ANLIK simülasyonudur. Gerçek dock ekranını okumaz veya değiştirmez.",
+    private readonly DockHardwareTest _hardware = new();
+    private readonly Button _sendHardware = new() { Text="Gerçek dock'a gönder (10 sn)", Width=210,Height=31 };
+    private readonly Button _restoreHardware = new() { Text="Dock ekranını geri yükle", Width=187,Height=31 };
+    private readonly Label _message = new() { Left=16,Top=725,Width=775,Height=42,
+        Text = "Dock fotoğrafı simülasyondur. Fiziksel OLED'e yalnızca yukarıdaki düğmeyle geçici test görüntüsü gönderilir.",
         ForeColor=Color.FromArgb(42,90,75)
     };
 
@@ -69,11 +72,29 @@ internal sealed class DockPreviewPanel : UserControl
         var options = new FlowLayoutPanel { Left=16,Top=592,Width=770,Height=46,WrapContents=false,AutoScroll=true };
         options.Controls.AddRange([_choose,_restore,_calibrate,_cancelCalibration]);
         Controls.Add(options);
+
+        var hardwareRow = new FlowLayoutPanel { Left=16,Top=641,Width=770,Height=43,WrapContents=false };
+        hardwareRow.Controls.AddRange([_sendHardware,_restoreHardware]);
+        Controls.Add(hardwareRow);
+        Controls.Add(new Label { Left=16,Top=686,Width=770,Height=37,
+            Text="Deneysel fiziksel OLED testi: üst pil göstergeleri 10 saniyeliğine değişebilir; cihaz ayarları kaydedilmez. Sadece elle başlatılır.",
+            ForeColor=Color.FromArgb(137,72,30) });
         Controls.Add(_message);
 
+        _sendHardware.Click += async (_,_) => await SendHardwareTest();
+        _restoreHardware.Click += (_,_) =>
+        {
+            if(_hardware.Active)
+            {
+                _hardware.Stop();
+                _message.Text="Test sonlandırılıyor; SteelSeries ekranına geri dönülüyor.";
+            }
+            else _message.Text=_hardware.RestoreNow();
+        };
+        Disposed += (_,_) => { if(_hardware.Active)_hardware.RestoreNow(); };
         _photoBox.Paint += (_,e) => PaintPhoto(e.Graphics);
         _photoBox.MouseClick += PhotoClick;
-        _custom.CheckedChanged += (_,_) => InvalidateFrame();
+        _custom.CheckedChanged += (_,_) => { _sendHardware.Enabled=_custom.Checked&&!_hardware.Active; InvalidateFrame(); };
         _factory.CheckedChanged += (_,_) => InvalidateFrame();
         _choose.Click += (_,_) => ChoosePhoto();
         _restore.Click += (_,_) => RestoreExample();
@@ -85,6 +106,48 @@ internal sealed class DockPreviewPanel : UserControl
     }
 
     public void InvalidateFrame() => _photoBox.Invalidate();
+
+    private async System.Threading.Tasks.Task SendHardwareTest()
+    {
+        if(_hardware.Active)return;
+        if(!_custom.Checked)
+        {
+            _message.Text="Önce Custom (canlı tasarım) seç.";
+            return;
+        }
+
+        string validation=_hardware.Validate();
+        if(validation!="")
+        {
+            _message.Text=validation;
+            return;
+        }
+        var answer=MessageBox.Show(this,
+            "Mevcut 128×64 tasarım gerçek OLED'e 10 saniyeliğine gönderilecek.\n"+
+            "Bu süre boyunca dock üzerindeki fabrika pil göstergeleri de değişebilir.\n"+
+            "Sonunda normal SteelSeries ekranına dönüş komutu gönderilecek.\n"+
+            "Devam edilsin mi?",
+            "Gerçek dock ekranı — geçici test",
+            MessageBoxButtons.YesNo,MessageBoxIcon.Information);
+        if(answer!=DialogResult.Yes)return;
+
+        _sendHardware.Enabled=false;
+        _message.Text="Görüntü cihaza gönderiliyor; 10 saniyelik test başlayacak.";
+        try
+        {
+            using var frame=_frameFactory();
+            string result=await _hardware.ShowForTenSecondsAsync(frame);
+            if(!IsDisposed)_message.Text=result;
+        }
+        catch(Exception ex)
+        {
+            if(!IsDisposed)_message.Text="Dock test hatası: "+ex.Message;
+        }
+        finally
+        {
+            if(!IsDisposed)_sendHardware.Enabled=_custom.Checked;
+        }
+    }
 
     private void RestoreExample()
     {

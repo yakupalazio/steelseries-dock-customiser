@@ -52,7 +52,7 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.3 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser v0.9.4 | OLED Pixel Studio";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(830,795);
         MinimumSize = new Size(850,830);
@@ -115,7 +115,7 @@ internal sealed class PixelStudioForm : Form
         iconButton.Left=467;iconButton.Top=674;
         editTab.Controls.Add(iconButton);
         iconButton.Click+=(_,_)=>new IconEditorDialog(Redraw).ShowDialog(this);
-        status.Text = "Yalnızca önizleme. Dock'a USB/HID/GameSense komutu gönderilmez.";
+        status.Text = "Fiziksel dock testi yalnızca Dock Preview sekmesindeki onaylı düğmeyle yapılır.";
         undoButton.Click += (_,_) => Undo();
         redoButton.Click += (_,_) => Redo();
         add.Click += (_,_) => AddWidget();

@@ -1,13 +1,8 @@
-# Technical references and third-party notices
+# Third-party notices
 
-This v0.9 renderer, sprite shapes, icon editor, and Windows battery discovery are independently implemented. No third-party software library was copied into this project.
+- **ggoled v0.3.0**, <https://github.com/JerwuQu/ggoled>: external, independently downloaded command-line utility for the experimental OLED physical display test. It is **not bundled**, copied into Git, or statically linked. A known SHA-256 protects against accidental substitution of the tested release binary.
+- **SteelSeries GameSense SDK**, <https://github.com/SteelSeries/gamesense-sdk>: research reference for the documented GameSense API, not used by the physical dock test.
+- **Microsoft Win32 / Phone Link / CrossDevice**: Windows APIs and system metadata used for phone and laptop battery status, with the documented limitations of unofficial internal integration.
+- The SteelSeries product photograph used only on the development machine is excluded from public distribution.
 
-- [Microsoft System.Devices.BatteryLife](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-batterylife) and Windows PowerStatus
-- [Microsoft Windows device and Bluetooth documentation](https://learn.microsoft.com/en-us/windows/uwp/devices-sensors/get-battery-info)
-- [SteelSeries GameSense SDK](https://github.com/SteelSeries/gamesense-sdk) for future outbound events; not called in v0.9.
-- [BatteryTray](https://github.com/qu1ncky/BatteryTray), [BT Device Battery Info](https://github.com/borferkic/BT-Device-Battery-Info) and Windows PnP battery property documentation as research references.
-- [ggoled](https://github.com/JerwuQu/ggoled) and [OmniLED](https://github.com/llMBQll/OmniLED) for OLED layout research; their code and font assets are not included.
-
-The photograph of the Arctis Nova Pro Wireless base station used in private tests was downloaded from SteelSeries' official product pages. It is **not included in this repository** and must not be redistributed without appropriate permission.
-
-Optional DualSense experimental input-report reader is read-only. No device commands, no firmware changes and no SteelSeries GG data scraping occur in this version.
+This application is not endorsed by these companies. Always check licenses before distributing third-party files.
