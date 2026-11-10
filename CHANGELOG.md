@@ -2,6 +2,9 @@
 
 ## 1.1.0 — Wheel widget and integration fixes
 
+- **In-place refinement (no version bump):** replaced the timed 10-second test with persistent, separately confirmed **Uygula**; relabeled restore to **Dock Reset**. Static output is restored on normal shutdown or explicit Reset, and Reset is available after relaunch if the app crashed.
+- Removed the DOOM 20-second cutoff; after explicit confirmation, the PC shows a dock-facing instruction rather than the gameplay. The physical OLED alone receives game frames until Stop/ESC/close/focus loss. Restore and OLED burn-in warnings remain.
+
 - Corrected Live, 10-second physical test and Return buttons: old hidden controls no longer swallow clicks; separate device confirmation is unchanged.
 - Removed Photo and Align buttons and stopped loading photo overrides; the original product photograph can be included in the private Windows package but is excluded from Git.
 - Moved Battery & Priority into a GG-style dark Settings page next to About; preserved author signature and About-only Konami unlock.

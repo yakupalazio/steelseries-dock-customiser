@@ -185,15 +185,15 @@ internal sealed partial class PixelStudioForm
         workspace.Controls.Add(photoActions,0,2);
         modernCustom=ModernButton("Özel tasarım",105);
         modernOriginal=ModernButton("Orijinal",82);
-        var test=ModernButton("10 sn test",89);
+        var apply=ModernButton("✓ Uygula",105);
         modernLive=ModernButton("▶ Canlı",105);
-        var home=ModernButton("↶ Geri dön",98);
+        var home=ModernButton("↻ Dock Reset",112);
         photoActions.Controls.AddRange([
-            modernCustom,modernOriginal,test,modernLive,home
+            modernCustom,modernOriginal,apply,modernLive,home
         ]);
         modernCustom.Click+=(_,_)=>{dockPreview.ShowOriginalPhoto(false);UpdateModernUi();};
         modernOriginal.Click+=(_,_)=>{dockPreview.ShowOriginalPhoto(true);UpdateModernUi();};
-        test.Click+=(_,_)=>dockPreview.SendTestFrame();
+        apply.Click+=(_,_)=>dockPreview.ApplyDesign();
         modernLive.Click+=(_,_)=>{dockPreview.ToggleLiveOutput();UpdateModernUi();};
         home.Click+=(_,_)=>{dockPreview.RestoreOriginalScreen();UpdateModernUi();};
 

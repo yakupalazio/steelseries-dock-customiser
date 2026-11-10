@@ -10,10 +10,9 @@ using System.Threading.Tasks;
 namespace SteelseriesDockCustomiser;
 
 /// <summary>
-/// Explicit user-initiated, time-limited physical OLED test.
-/// Delegates to the independently released ggoled v0.3.0 CLI. Only 'img'
-/// and 'return' commands are permitted. No persistent service, firmware,
-/// brightness setting, unverified raw USB command, or background loop.
+/// Explicit user-initiated physical OLED output.
+/// Delegates to independently released, SHA-verified ggoled v0.3.0.
+/// Only 'img' and 'return' commands; no firmware or brightness change.
 /// </summary>
 internal sealed class DockHardwareTest
 {
@@ -23,9 +22,9 @@ internal sealed class DockHardwareTest
     private readonly string cliPath=Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Documents","Codex","DockHardwareResearch","ggoled-v0.3.0.exe");
-    private CancellationTokenSource? active;
+    private volatile bool staticApplied,staticApplying;
     private readonly SemaphoreSlim liveGate=new(1,1);
-    public bool Active=>active!=null;
+    public bool Active=>staticApplied||staticApplying;
     public const int EditableY=10;
     public const int EditableHeight=54;
     // HID packet heights are padded to a multiple of eight pixels.
@@ -52,49 +51,61 @@ internal sealed class DockHardwareTest
             ? "" : "ggoled dosyasının SHA-256 kimliği doğrulanamadı. Donanım testi engellendi.";
     }
 
-    public async Task<string> ShowForTenSecondsAsync(Bitmap image,bool protectHeader=true)
+    /// <summary>
+    /// Applies the chosen 128x64 design once and leaves it on the OLED until
+    /// Reset/Restore. No ten-second timer and no background writer.
+    /// All hardware writes still require confirmation at the UI layer.
+    /// </summary>
+    public async Task<string> ApplyStaticAsync(Bitmap image,bool protectHeader=true)
     {
-        if(Active)return "Zaten çalışan bir dock testi var.";
+        if(staticApplying)return "Dock uygulama işlemi zaten sürüyor.";
         if(image.Width!=128||image.Height!=64)
-            return "Test görüntüsü tam 128×64 piksel olmalı.";
+            return "Tasarım tam 128×64 piksel olmalı.";
         string problem=Validate();
         if(problem!="")return problem;
-        var cts=new CancellationTokenSource();
-        active=cts;
+        staticApplying=true;
+        await liveGate.WaitAsync().ConfigureAwait(false);
         string folder=Path.Combine(Path.GetTempPath(),"SteelseriesDockCustomiser");
         Directory.CreateDirectory(folder);
-        string file=Path.Combine(folder,"one-shot-dock-main-128x48.png");
-        string tailFile=Path.Combine(folder,"one-shot-dock-tail-128x8.png");
-        using(var editable=ExtractEditableArea(image))
-            editable.Save(file,ImageFormat.Png);
-        using(var tail=ExtractBottomTail(image))
-            tail.Save(tailFile,ImageFormat.Png);
-        string full=Path.Combine(folder,"one-shot-dock-full-128x64.png");
-        if(!protectHeader)image.Save(full,ImageFormat.Png);
-        string result="10–63. satırlar için 10 saniyelik test tamamlandı.";
+        string main=Path.Combine(folder,"applied-dock-main-128x48.png");
+        string tail=Path.Combine(folder,"applied-dock-tail-128x8.png");
+        string full=Path.Combine(folder,"applied-dock-full-128x64.png");
         try
         {
-            // Never '-C': only these two bounded areas are changed.
+            using(var editable=ExtractEditableArea(image))
+                editable.Save(main,ImageFormat.Png);
+            using(var remainder=ExtractBottomTail(image))
+                remainder.Save(tail,ImageFormat.Png);
             if(protectHeader)
             {
-                await Task.Run(()=>RunCli("img","-x","0","-y","10",file));
-                await Task.Run(()=>RunCli("img","-x","0","-y","56",tailFile));
+                await Task.Run(()=>
+                {
+                    RunCli("img","-x","0","-y","10",main);
+                    RunCli("img","-x","0","-y","56",tail);
+                }).ConfigureAwait(false);
             }
-            else await Task.Run(()=>RunCli("img","-C",full));
-            await Task.Delay(TimeSpan.FromSeconds(10),cts.Token);
+            else
+            {
+                image.Save(full,ImageFormat.Png);
+                await Task.Run(()=>RunCli("img","-C",full)).ConfigureAwait(false);
+            }
+            staticApplied=true;
+            return "Tasarım dock'a uygulandı. Orijinal ekrana dönmek için Reset'i kullan.";
         }
-        catch(OperationCanceledException) {result="Test erken sonlandırıldı.";}
-        catch(Exception ex) {result="Görüntü gönderilemedi: "+ex.Message;}
+        catch(Exception ex)
+        {
+            staticApplied=false;
+            try {RunCli("return");}catch { /* Reset remains available. */ }
+            return "Uygulama hatası: "+ex.Message+"; orijinal ekrana dönüş denendi.";
+        }
         finally
         {
-            try {await Task.Run(()=>RunCli("return"));result+=" SteelSeries ekranına dönüş komutu gönderildi.";}
-            catch(Exception ex) {result+=" EKRANA DÖNÜŞ HATASI: "+ex.Message;}
-            active=null; cts.Dispose();
-            try{File.Delete(file);}catch{}
-            try{File.Delete(tailFile);}catch{}
+            try{File.Delete(main);}catch{}
+            try{File.Delete(tail);}catch{}
             try{File.Delete(full);}catch{}
+            staticApplying=false;
+            liveGate.Release();
         }
-        return result;
     }
 
     /// <summary>
@@ -103,7 +114,7 @@ internal sealed class DockHardwareTest
     /// </summary>
     public async Task SendLiveFrameAsync(Bitmap frame,bool protectHeader=true)
     {
-        if(Active)throw new InvalidOperationException("A timed dock test is active.");
+        if(Active)throw new InvalidOperationException("Sabit tasarım uygulanmış. Önce Reset yap.");
         string validation=Validate();
         if(validation!="")throw new InvalidOperationException(validation);
         await liveGate.WaitAsync().ConfigureAwait(false);
@@ -137,11 +148,8 @@ internal sealed class DockHardwareTest
         }
     }
 
-    public void Stop()=>active?.Cancel();
-
     public string RestoreNow()
     {
-        Stop();
         string validation=Validate();
         if(validation!="")return validation;
         if(!liveGate.Wait(TimeSpan.FromSeconds(16)))
@@ -149,6 +157,7 @@ internal sealed class DockHardwareTest
         try
         {
             RunCli("return");
+            staticApplied=false;
             return "SteelSeries varsayılan OLED ekranına dönüş komutu başarılı.";
         }
         catch(Exception ex){return "Dock'a dönüş hatası: "+ex.Message;}
@@ -158,7 +167,7 @@ internal sealed class DockHardwareTest
     private void RunCli(params string[] arguments)
     {
         if(arguments.Length==0||arguments[0] is not ("img" or "return"))
-            throw new InvalidOperationException("Only temporary image/return commands allowed.");
+            throw new InvalidOperationException("Only image/return commands allowed.");
         using var process=new Process();
         process.StartInfo=new ProcessStartInfo(cliPath)
         {

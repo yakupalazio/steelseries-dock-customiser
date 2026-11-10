@@ -12,8 +12,8 @@ using System.Windows.Forms;
 namespace SteelseriesDockCustomiser;
 
 /// <summary>
-/// Photo-based simulation with a separate, explicitly user-initiated,
-/// time-limited ggoled physical display test. Does not read the dock frame.
+/// Photo-based simulation with user-confirmed Apply / Live / Reset controls.
+/// Does not capture or read the physical OLED framebuffer.
 /// </summary>
 internal sealed class DockPreviewPanel : UserControl
 {
@@ -41,14 +41,14 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly Button _calibrate = new() { Text = "Ekranı hizala", Width = 119, Height = 31 };
     private readonly Button _cancelCalibration = new() { Text = "İptal", Width = 70, Height = 31, Enabled = false };
     private readonly DockHardwareTest _hardware = new();
-    private readonly Button _sendHardware = new() { Text="Gerçek dock'a gönder (10 sn)", Width=210,Height=31 };
-    private readonly Button _restoreHardware = new() { Text="Dock ekranını geri yükle", Width=187,Height=31 };
+    private readonly Button _sendHardware = new() { Text="Uygula", Width=110,Height=31 };
+    private readonly Button _restoreHardware = new() { Text="Dock Reset", Width=120,Height=31 };
     private readonly Button _liveToggle = new() { Text="Canlı dock modunu başlat", Width=191,Height=31 };
     private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=1000 };
     private bool _liveEnabled,_liveSending;
     private string? _lastLiveFrame;
     private readonly Label _message = new() { Left=16,Top=725,Width=775,Height=42,
-        Text = "Dock fotoğrafı simülasyondur. Fiziksel OLED'e yalnızca yukarıdaki düğmeyle geçici test görüntüsü gönderilir.",
+        Text = "Önizleme simülasyondur. Uygula sabit görüntüyü gönderir; Reset orijinal ekranı geri yükler.",
         ForeColor=Color.FromArgb(42,90,75)
     };
 
@@ -94,19 +94,10 @@ internal sealed class DockPreviewPanel : UserControl
             ForeColor=Color.FromArgb(137,72,30) });
         Controls.Add(_message);
 
-        _sendHardware.Click += async (_,_) => await SendHardwareTest();
+        _sendHardware.Click += async (_,_) => await ApplyDesignAsync();
         _liveToggle.Click += async (_,_) => await ToggleLiveMode();
         _liveTimer.Tick += async (_,_) => await RefreshLiveDock();
-        _restoreHardware.Click += (_,_) =>
-        {
-            if(_liveEnabled) StopLiveMode();
-            else if(_hardware.Active)
-            {
-                _hardware.Stop();
-                _message.Text="Test sonlandırılıyor; SteelSeries ekranına geri dönülüyor.";
-            }
-            else _message.Text=_hardware.RestoreNow();
-        };
+        _restoreHardware.Click += (_,_) => ResetDock();
         Disposed += (_,_) =>
         {
             _liveTimer.Stop();
@@ -119,7 +110,7 @@ internal sealed class DockPreviewPanel : UserControl
         _custom.CheckedChanged += (_,_) =>
         {
             if(!_custom.Checked && _liveEnabled)StopLiveMode();
-            _sendHardware.Enabled=_custom.Checked&&!_hardware.Active&&!_liveEnabled;
+            _sendHardware.Enabled=_custom.Checked&&!_liveEnabled;
             InvalidateFrame();
         };
         _factory.CheckedChanged += (_,_) => InvalidateFrame();
@@ -141,17 +132,14 @@ internal sealed class DockPreviewPanel : UserControl
     // Public actions for the integrated, single-page v1.0 toolbar.
     // The legacy buttons are hidden in the integrated studio. PerformClick()
     // silently ignores an invisible control; invoke the handlers directly.
-    public void SendTestFrame() => _ = SendHardwareTest();
+    public void ApplyDesign() => _ = ApplyDesignAsync();
     public void ToggleLiveOutput() => _ = ToggleLiveMode();
-    public void RestoreOriginalScreen()
+    public void RestoreOriginalScreen() => ResetDock();
+
+    private void ResetDock()
     {
-        if (_liveEnabled) StopLiveMode();
-        else if (_hardware.Active)
-        {
-            _hardware.Stop();
-            _message.Text = "Test sonlandırılıyor; SteelSeries ekranına geri dönülüyor.";
-        }
-        else _message.Text = _hardware.RestoreNow();
+        if(_liveEnabled)StopLiveMode();
+        else _message.Text=_hardware.RestoreNow();
     }
     public void ChooseDockPhoto() => _choose.PerformClick();
     public void ResetDockPhoto() => _restore.PerformClick();
@@ -232,7 +220,7 @@ internal sealed class DockPreviewPanel : UserControl
         }
         if(!_custom.Checked || _hardware.Active)
         {
-            _message.Text="Önce Custom modunu seç ve varsa 10 saniyelik testi bitir.";
+            _message.Text="Önce Özel tasarım modunu seç; uygulanmış görüntü varsa Reset'e bas.";
             return;
         }
         string validation=_hardware.Validate();
@@ -315,9 +303,9 @@ internal sealed class DockPreviewPanel : UserControl
         finally { _liveSending=false; }
     }
 
-    private async System.Threading.Tasks.Task SendHardwareTest()
+    private async System.Threading.Tasks.Task ApplyDesignAsync()
     {
-        if(_hardware.Active||_liveEnabled)return;
+        if(_liveEnabled)return;
         if(!_custom.Checked)
         {
             _message.Text="Önce Custom (canlı tasarım) seç.";
@@ -334,18 +322,20 @@ internal sealed class DockPreviewPanel : UserControl
             (_protectHeader()
                 ?"Yalnızca Y=10–63. Orijinal pil göstergeleri aktarım dışında.\n"
                 :"UYARI: 128×64 tam ekran modu. OEM pil göstergeleri geçici olarak silinir.\n")+
-            "Sonunda normal SteelSeries ekranına dönüş komutu gönderilecek.\n"+
-            "Devam edilsin mi?",
-            "Gerçek dock ekranı — geçici test",
+            "Tasarım Reset'e basana veya uygulamayı kapatana kadar ekranda kalır.\n"+
+            "Uygulama çökerse yeniden açıp Dock Reset'i kullanabilirsin.\n"+
+            "OLED yanığı riskini azaltmak için statik görüntüyü uzun süre bırakma.\n"+
+            "Uygulansın mı?",
+            "Gerçek dock ekranı — Uygula",
             MessageBoxButtons.YesNo,MessageBoxIcon.Information);
         if(answer!=DialogResult.Yes)return;
 
         _sendHardware.Enabled=false;
-        _message.Text="Görüntü cihaza gönderiliyor; 10 saniyelik test başlayacak.";
+        _message.Text="Tasarım dock'a gönderiliyor; Reset'e kadar görüntü korunacak.";
         try
         {
             using var frame=_frameFactory();
-            string result=await _hardware.ShowForTenSecondsAsync(frame,_protectHeader());
+            string result=await _hardware.ApplyStaticAsync(frame,_protectHeader());
             if(!IsDisposed)_message.Text=result;
         }
         catch(Exception ex)

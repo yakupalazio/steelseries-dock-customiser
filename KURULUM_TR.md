@@ -14,10 +14,10 @@ Bu paket .NET 10 çalışma zamanını içinde taşır; ayrıca .NET yüklemen g
 ## Gerçek OLED'e yazma
 
 - Normal düzenleme ve fotoğraf üzerindeki önizleme **yalnızca bilgisayarda** çalışır.
-- **10 sn test** veya **Canlı** düğmeleri fiziksel OLED'e yazmayı ancak açık kullanıcı onayıyla başlatır.
+- **Uygula** tasarımı dock'a bir kez gönderir ve Reset'e kadar bırakır. **Canlı** düzeni aktif verilerle günceller. İkisi de açık kullanıcı onayı gerektirir.
 - Bu yollar için proje belgelerinde belirtilen, SHA-256 değeri doğrulanmış ayrı `ggoled v0.3.0` aracı gerekir. Yardımcı aracı bilinmeyen sitelerden indirme.
 - Varsayılan olarak OLED'in üst 10 satırı korunur. Bu korumayı kapatmak tam ekranı geçici değiştirebilir.
-- OLED yanığını azaltmak için uzun süre aynı yüksek parlaklıklı kareleri açık bırakma. Görünüm bozulursa **Geri dön** ile SteelSeries ekranını yüklemeyi dene.
+- OLED yanığını azaltmak için uzun süre aynı yüksek parlaklıklı kareleri açık bırakma. **Dock Reset** ile SteelSeries ekranına dön. Uygulama çökerse yeniden açıp **Dock Reset**'e basabilirsin; otomatik kurtarma bir işletim sistemi çökmesinde garanti edilemez.
 
 ## Pil ve öncelik
 
@@ -31,11 +31,11 @@ Sağdaki **Öğe ekle** listesinden **Ses / ChatMix tekerleği** seç. Widget, d
 
 1. Soldan **Ayarlar → Hakkında** bölümüne gir.
 2. `↑ ↑ ↓ ↓ ← → ← → B A` tuşlarına sırayla bas.
-3. Gizli 128×64 mini FPS açılır. `W/S` ileri/geri; `A/D` dön; `Space` ateş; `R` sıfırla; `ESC` çıkış.
+3. Bilgisayarda yalnızca **Dock ekranına bak** mesajını görürsün. **DOCK'TA CANLI OYNA** tuşuna basıp onay ver; oyun görüntüsü sadece dock'a aktarılır. `W/S` ileri/geri; `A/D` dön; `Space` ateş; `R` oyunu sıfırla; `ESC` çıkış.
 
 Bu oyun DOOM'un kendisi değildir; telifli oyun varlıkları kullanılmadan hazırlanmış özgün bir retro FPS Easter egg'idir.
 
-**Gerçek OLED'de dene (20 sn)** isteğe bağlı deneysel moddur: yalnızca Nova Pro Wireless OLED koleksiyonu ve güvenli geri-dönüş aracı doğrulandıktan sonra ayrıca onay ister. Üst pil satırları dâhil 128×64 ekranı en fazla 20 saniye değiştirir, sonra varsayılan ekrana döndürmeye çalışır. Donanım üzerinde yüksek FPS testi henüz tamamlanmadığı için sorunla karşılaşırsan kullanmayı durdur.
+**DOCK'TA CANLI OYNA** isteğe bağlı deneysel moddur: yalnızca Nova Pro Wireless OLED koleksiyonu ve güvenli geri-dönüş aracı doğrulandıktan sonra ayrıca onay ister. Üst pil satırları dâhil 128×64 ekranı değiştirir; **süre sınırı yoktur**. Durdur, `ESC`, pencereyi kapat veya odağı değiştirerek aktarımı sonlandırıp varsayılan ekrana dönersin. OLED yanığına karşı sabit görüntüyü uzun süre bırakma. Donanımda hızlı akış testi henüz tamamlanmadı.
 
 ## Sorun giderme
 

@@ -450,10 +450,14 @@ internal static class SelfTests
                    children.Count(c=>c is System.Windows.Forms.PictureBox)==0)
                     throw new Exception("Integrated dock photo and pixel editor are missing");
                 var buttons=children.OfType<System.Windows.Forms.Button>().ToArray();
-                if(buttons.Any(b=>b.Text is "Fotoğraf" or "Hizala") ||
-                   !buttons.Any(b=>b.Text=="10 sn test") ||
+                if(buttons.Any(b=>b.Text is "Fotoğraf" or "Hizala" or "10 sn test") ||
+                   !buttons.Any(b=>b.Text.Contains("Uygula")) ||
+                   !buttons.Any(b=>b.Text.Contains("Reset")) ||
                    !buttons.Any(b=>b.Text.Contains("Canlı")))
-                    throw new Exception("Studio toolbar still has obsolete photo controls");
+                    throw new Exception("Studio Apply/Reset toolbar regression");
+                if(typeof(DockHardwareTest).GetMethod("ApplyStaticAsync")==null ||
+                   typeof(DockHardwareTest).GetMethod("ShowForTenSecondsAsync")!=null)
+                    throw new Exception("Timed hardware test remains in the API");
             }
 
             // An illuminated factory OLED has a slightly grey glass shade;
@@ -510,6 +514,10 @@ internal static class SelfTests
             {
                 if(preview.Width!=128 || preview.Height!=64)
                     throw new Exception("Secret mini FPS has wrong native OLED size");
+                var gameButtons=AllChildren(game).OfType<System.Windows.Forms.Button>().ToArray();
+                if(gameButtons.Any(b=>b.Text.Contains("20 sn")) ||
+                   !gameButtons.Any(b=>b.Text.Contains("CANLI OYNA")))
+                    throw new Exception("Timed DOOM OLED button was not removed");
                 int lit=0;
                 for(int y=0;y<64;y++)
                     for(int x=0;x<128;x++)

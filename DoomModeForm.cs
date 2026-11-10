@@ -11,9 +11,9 @@ using System.Windows.Forms;
 namespace SteelseriesDockCustomiser;
 
 /// <summary>
-/// Secret original 128x64 monochrome ray-casting mini FPS. This preview makes
-/// no USB/HID calls; experimental high-frame-rate physical output is a separate
-/// opt-in hardware milestone. No DOOM engine or copyrighted game assets are used.
+/// Secret original 128x64 monochrome ray-casting mini FPS. The PC window shows
+/// instructions only; gameplay frames are streamed solely to the dock after
+/// explicit consent. No DOOM engine or copyrighted assets are used.
 /// </summary>
 internal sealed class DoomModeForm : Form
 {
@@ -44,7 +44,7 @@ internal sealed class DoomModeForm : Form
     private readonly Bitmap frame = new(OledWidth, OledHeight);
     private readonly Button hardwareButton = new()
     {
-        Text = "▶ Gerçek OLED'de dene (20 sn)",
+        Text = "▶ DOCK'TA CANLI OYNA",
         Width = 254, Height = 33,
         FlatStyle = FlatStyle.Flat,
         BackColor = Color.FromArgb(38, 68, 82),
@@ -54,7 +54,6 @@ internal sealed class DoomModeForm : Form
     private readonly Func<bool> otherOledWriterActive;
     private readonly DockHardwareTest restore = new();
     private FastOledTransport? physicalTransport;
-    private DateTime physicalDeadline;
     private bool physicalActive;
     private int sendingFrame, frameCounter;
     private readonly Label status = new()
@@ -93,7 +92,7 @@ internal sealed class DoomModeForm : Form
         var disclaimer = new Label
         {
             Dock = DockStyle.Bottom, Height = 32,
-            Text = "Özgün mini FPS önizlemesi · Gerçek OLED'de hızlı akış henüz doğrulanmadı",
+            Text = "Oyun görüntüsü yalnızca dock üzerinde görünür · ESC güvenli çıkış",
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.FromArgb(19, 26, 37),
             ForeColor = Color.FromArgb(113, 169, 184),
@@ -116,16 +115,13 @@ internal sealed class DoomModeForm : Form
         view.Paint += PaintView;
         timer.Tick += (_, _) =>
         {
-            UpdateGame(); DrawGame(); view.Invalidate();
-            if (physicalActive)
-            {
-                if (DateTime.UtcNow >= physicalDeadline) StopPhysical();
-                else if (++frameCounter % 2 == 0) QueuePhysicalFrame();
-                if (physicalActive) status.Text =
-                    "Gerçek OLED aktif · kalan " +
-                    Math.Ceiling((physicalDeadline - DateTime.UtcNow).TotalSeconds) +
-                    " sn   |   ESC: güvenli çıkış";
-            }
+            // Never render game frames onto the PC screen.
+            // Simulation pauses when the physical OLED stream is stopped.
+            if(!physicalActive)return;
+            UpdateGame();
+            DrawGame();
+            if(++frameCounter % 2 == 0)QueuePhysicalFrame();
+            status.Text="DOCK CANLI · W/S hareket  A/D dön  SPACE ateş  R yeniden başla  ESC çıkış";
         };
         hardwareButton.Click += (_, _) =>
         {
@@ -135,7 +131,13 @@ internal sealed class DoomModeForm : Form
         };
         KeyDown += HandleKeyDown;
         KeyUp += (_, e) => held.Remove(e.KeyCode);
-        Deactivate += (_, _) => held.Clear();
+        Deactivate += (_, _) =>
+        {
+            held.Clear();
+            // An unfocused window cannot receive game controls. Prevent a
+            // stale OLED frame by restoring the factory screen.
+            if(physicalActive)StopPhysical();
+        };
         Shown += (_, _) => { ActiveControl = null; Focus(); timer.Start(); };
         FormClosing += (_, _) => StopPhysical();
         FormClosed += (_, _) => timer.Stop();
@@ -170,9 +172,9 @@ internal sealed class DoomModeForm : Form
             "Deneysel 128×64 oyun aktarımı Nova Pro Wireless OLED'in TÜM ekranını " +
             "geçici olarak değiştirecek (orijinal üst pil şeridi dahil).\n\n" +
             "Yalnızca doğrulanan HID çizim komutları gönderilir; firmware ve " +
-            "parlaklık değiştirilmez. Görüntü hızlı güncelleneceği için " +
-            "OLED yanığına karşı süre 20 saniyeyle sınırlıdır.\n\n" +
-            "ESC, Durdur veya zaman aşımı ardından doğrulanmış ggoled aracı " +
+            "parlaklık değiştirilmez. Otomatik süre sınırı yoktur; " +
+            "OLED yanığına karşı uzun süre aynı görüntüde bırakma.\n\n" +
+            "ESC, Durdur veya pencereyi kapatma ardından doğrulanmış ggoled aracı " +
             "ile SteelSeries'in orijinal ekranına dönüş komutu gönderilir. " +
             "GG Now Playing açıkken çakışabilir.\n\n" +
             "Gerçek cihaza gönderilsin mi?",
@@ -185,10 +187,9 @@ internal sealed class DoomModeForm : Form
             var transport = new FastOledTransport();
             transport.Open();
             physicalTransport = transport;
-            physicalDeadline = DateTime.UtcNow.AddSeconds(20);
             physicalActive = true;
             frameCounter = 0;
-            hardwareButton.Text = "■ OLED'i durdur";
+            hardwareButton.Text = "■ DURDUR / OLED RESET";
             QueuePhysicalFrame();
         }
         catch (Exception ex)
@@ -232,7 +233,7 @@ internal sealed class DoomModeForm : Form
     {
         if (!physicalActive && physicalTransport is null) return;
         physicalActive = false;
-        hardwareButton.Text = "▶ Gerçek OLED'de dene (20 sn)";
+        hardwareButton.Text = "▶ DOCK'TA CANLI OYNA";
         try { physicalTransport?.Dispose(); }
         catch (Exception ex) { error ??= ex.Message; }
         finally { physicalTransport = null; }
@@ -420,16 +421,27 @@ internal sealed class DoomModeForm : Form
 
     private void PaintView(object? sender, PaintEventArgs e)
     {
-        var bounds = view.ClientRectangle;
-        int scale = Math.Max(1, Math.Min(bounds.Width / OledWidth,
-            bounds.Height / OledHeight));
-        int width = OledWidth * scale, height = OledHeight * scale;
-        int left = (bounds.Width - width) / 2, top = (bounds.Height - height) / 2;
-        e.Graphics.Clear(Color.FromArgb(13, 18, 26));
-        e.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
-        e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
-        e.Graphics.DrawImage(frame, new Rectangle(left, top, width, height),
-            new Rectangle(0, 0, OledWidth, OledHeight), GraphicsUnit.Pixel);
+        // Intentionally do NOT draw the raycaster frame on the PC.
+        e.Graphics.Clear(Color.FromArgb(13,18,26));
+        var bounds=view.ClientRectangle;
+        using var headingFont=new Font("Segoe UI Semibold",23f,FontStyle.Bold);
+        using var smallFont=new Font("Segoe UI",12f);
+        var accent=Color.FromArgb(106,211,244);
+        var titleBox=new Rectangle(bounds.X+20,bounds.Y+bounds.Height/2-95,
+            Math.Max(1,bounds.Width-40),78);
+        var helpBox=new Rectangle(bounds.X+20,bounds.Y+bounds.Height/2-3,
+            Math.Max(1,bounds.Width-40),108);
+        TextRenderer.DrawText(e.Graphics,"DOCK EKRANINA BAK 👀",
+            headingFont,titleBox,accent,
+            TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|
+            TextFormatFlags.WordBreak);
+        TextRenderer.DrawText(e.Graphics,
+            "Oyun yalnızca Nova Pro Wireless OLED ekranında görünecek.\n"+
+            "Yukarıdan Canlı Oyna'ya bas, sonra W / A / S / D ve SPACE kullan.\n"+
+            "ESC ile çıkıp SteelSeries ekranına dönebilirsin.",
+            smallFont,helpBox,Color.FromArgb(190,209,224),
+            TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|
+            TextFormatFlags.WordBreak);
     }
 
     protected override void Dispose(bool disposing)

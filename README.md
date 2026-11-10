@@ -2,7 +2,7 @@
 
 ## New in 1.1: reliability, Phone Link and the dock wheel
 
-- Fixed the integrated **Live / 10-second Test / Return** buttons: they now invoke the real guarded hardware actions instead of clicking invisible legacy controls.
+- Repaired the integrated hardware actions. **Uygula** now applies a static design without an automatic timeout; **Canlı** streams updates; **Dock Reset** restores the original screen, including after reopening the app following a crash.
 - Removed **Photo** and **Align** controls. The original product photo stays in the user's **local Windows build**, while the GitHub source still excludes that user-provided binary asset. A vector fallback is shown on fresh source builds without it.
 - Moved **Battery & Priority** into the dark-styled **Settings → Pil ve öncelik** page; the separate left-sidebar shortcut is gone.
 - Fixed the Turkish Microsoft Phone Link accessibility label **“Piliniz şu anda %54”** by recognizing localized suffixes. Verified on the connected Galaxy S24+ without ADB. A phone's displayed status may still lag real battery sync.
@@ -22,9 +22,9 @@ A completely redesigned GG-inspired dark UI replaces the old Editor and Dock Pre
 - **Top toolbar:** Save, Load, export PNG.
 - **Bottom status bar:** Current data and header protection state.
 
-**Preview updates immediately with edits** to the selected design, whether or not that design is active on the physical device. Real live dock mode continues to follow runtime priority **Game > Playing media > Idle**. The "Custom / Original / 10-sec test / Live / Restore" actions are directly beneath the dock photograph, not in a separate tab.
+**Preview updates immediately with edits** to the selected design, whether or not that design is active on the physical device. Real live dock mode continues to follow runtime priority **Game > Playing media > Idle**. The "Özel tasarım / Orijinal / Uygula / Canlı / Dock Reset" actions are directly beneath the dock photograph, not in a separate tab.
 
-The photo is a **simulation**, not a capture from the hardware. Real device output only occurs after pressing the appropriate test/live control and confirming the dialog.
+The photo is a **simulation**, not a capture from the hardware. Real OLED writes require pressing **Uygula** or **Canlı** and explicitly confirming. An applied static design remains until **Dock Reset** or normal app exit; if the app crashes, reopen it and use **Dock Reset**. Avoid leaving fixed white graphics on an OLED for long periods.
 
 ### Modes and widgets preserved
 
@@ -83,8 +83,8 @@ This launches **DOOM MODE**, an original monochrome 128×64 ray-casting mini FPS
 
 - `W/S` or `↑/↓`: forward/back, `A/D` or `←/→`: turn, `Space`: fire, `R`: reset.
 - `ESC`: close the game and return to the normal OLED Studio.
-- The game first runs **only in the Windows preview**. No hardware command is sent by unlocking it.
-- **Gerçek OLED'de dene (20 sn)** is an optional, explicitly confirmed *experimental* test on the Nova Pro Wireless base station. It replaces the entire 128×64 OLED image for at most 20 seconds, including the factory battery strip. The user can stop it at any time and the SHA-verified separate `ggoled` utility sends `return` afterward.
+- The Konami code opens a **PC control window that shows only a 'Look at the dock' instruction**. Game graphics are never rendered in that PC window. Unlocking the Easter egg sends no hardware commands.
+- **DOCK'TA CANLI OYNA** starts optional, explicitly confirmed live gameplay on the Nova Pro Wireless OLED with **no automatic duration limit**. It replaces the entire 128×64 image, including the factory battery strip. Use the stop button, `ESC`, or close/unfocus the control window to restore the SteelSeries screen with the SHA-verified separate `ggoled` utility. Continuous static graphics can cause OLED burn-in.
 - Fast output uses the restricted OLED collection only, with HidSharp feature reports; no firmware modifications, brightness changes, device settings edits or unattended automatic starts.
 - It refuses to start while the in-app normal live OLED writer is active, if the USB OLED collection cannot be verified, or if the validated restore utility is unavailable.
 - **High-frame-rate physical streaming has not yet been visually verified on the user's dock.** Check on the actual device before marking the Easter egg hardware path release-ready.
@@ -105,4 +105,4 @@ See `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES/` for HidSharp (Apache 2.
 
 - .NET 10 Release compilation and headless self-tests (renderer, photo alignment, mode priority, Game Mini Player, battery priority, charging indicators, integrated v1.0 workspace).
 - The photo-based preview and native edit canvas have been visually inspected in Windows.
-- **Physical OLED appearance, 1.1 wheel-event delivery and live/test interactions still need hands-on confirmation.** The read-only wheel interface could be opened while GG was running, but no actual wheel-turn event was captured during automated validation. Use on-demand test/restore with your own device before publishing a stable public release.
+- **Physical OLED appearance, 1.1 wheel-event delivery and Apply/Live/Reset interactions still need hands-on confirmation.** The wheel HID interface could be opened while GG was running, but no actual wheel-turn event was captured. DOOM gameplay no longer has a time limit, so stop it manually to protect the OLED before publishing a stable public release.
