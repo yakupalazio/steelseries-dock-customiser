@@ -52,7 +52,7 @@ internal sealed class DockHardwareTest
             ? "" : "ggoled dosyasının SHA-256 kimliği doğrulanamadı. Donanım testi engellendi.";
     }
 
-    public async Task<string> ShowForTenSecondsAsync(Bitmap image)
+    public async Task<string> ShowForTenSecondsAsync(Bitmap image,bool preserveHeader=true)
     {
         if(Active)return "Zaten çalışan bir dock testi var.";
         if(image.Width!=128||image.Height!=64)
@@ -65,16 +65,26 @@ internal sealed class DockHardwareTest
         Directory.CreateDirectory(folder);
         string file=Path.Combine(folder,"one-shot-dock-main-128x48.png");
         string tailFile=Path.Combine(folder,"one-shot-dock-tail-128x8.png");
-        using(var editable=ExtractEditableArea(image))
-            editable.Save(file,ImageFormat.Png);
-        using(var tail=ExtractBottomTail(image))
-            tail.Save(tailFile,ImageFormat.Png);
-        string result="10–63. satırlar için 10 saniyelik test tamamlandı.";
+        if(preserveHeader)
+        {
+            using(var editable=ExtractEditableArea(image))
+                editable.Save(file,ImageFormat.Png);
+            using(var tail=ExtractBottomTail(image))
+                tail.Save(tailFile,ImageFormat.Png);
+        }
+        else image.Save(file,ImageFormat.Png);
+        string result=preserveHeader ?
+            "10–63. satırlar için 10 saniyelik test tamamlandı." :
+            "Tüm 64 satır için 10 saniyelik test tamamlandı.";
         try
         {
             // Never '-C': only these two bounded areas are changed.
-            await Task.Run(()=>RunCli("img","-x","0","-y","10",file));
-            await Task.Run(()=>RunCli("img","-x","0","-y","56",tailFile));
+            if(preserveHeader)
+            {
+                await Task.Run(()=>RunCli("img","-x","0","-y","10",file));
+                await Task.Run(()=>RunCli("img","-x","0","-y","56",tailFile));
+            }
+            else await Task.Run(()=>RunCli("img","-x","0","-y","0",file));
             await Task.Delay(TimeSpan.FromSeconds(10),cts.Token);
         }
         catch(OperationCanceledException) {result="Test erken sonlandırıldı.";}
@@ -94,7 +104,7 @@ internal sealed class DockHardwareTest
     /// Sends exactly two bounded patches; caller must explicitly opt in and
     /// throttle calls. Never clears the full screen or alters the factory header.
     /// </summary>
-    public async Task SendLiveFrameAsync(Bitmap frame)
+    public async Task SendLiveFrameAsync(Bitmap frame,bool preserveHeader=true)
     {
         if(Active)throw new InvalidOperationException("A timed dock test is active.");
         string validation=Validate();
@@ -106,13 +116,23 @@ internal sealed class DockHardwareTest
         string tail=Path.Combine(folder,"live-dock-tail-128x8.png");
         try
         {
-            using(var top=ExtractEditableArea(frame))top.Save(main,ImageFormat.Png);
-            using(var end=ExtractBottomTail(frame))end.Save(tail,ImageFormat.Png);
-            await Task.Run(()=>
+            if(preserveHeader)
             {
-                RunCli("img","-x","0","-y","10",main);
-                RunCli("img","-x","0","-y","56",tail);
-            }).ConfigureAwait(false);
+                using(var top=ExtractEditableArea(frame))top.Save(main,ImageFormat.Png);
+                using(var end=ExtractBottomTail(frame))end.Save(tail,ImageFormat.Png);
+                await Task.Run(()=>
+                {
+                    RunCli("img","-x","0","-y","10",main);
+                    RunCli("img","-x","0","-y","56",tail);
+                }).ConfigureAwait(false);
+            }
+            else
+            {
+                frame.Save(main,ImageFormat.Png);
+                // Full area includes original SteelSeries battery indicators by user choice.
+                await Task.Run(()=>RunCli("img","-x","0","-y","0",main))
+                    .ConfigureAwait(false);
+            }
         }
         finally
         {

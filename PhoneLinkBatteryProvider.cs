@@ -46,10 +46,9 @@ internal static class PhoneLinkBatteryProvider
                 try
                 {
                     if (!pids.Contains(window.Current.ProcessId)) continue;
-                    // Avoid reading any other top-level windows or unrelated app UI.
-                    if (!string.Equals(window.Current.ClassName,
-                        "WinUIDesktopWin32WindowClass",
-                        StringComparison.OrdinalIgnoreCase)) continue;
+                    // Use owning process rather than a hard-coded WinUI class.
+                    // Phone Link can change its native window class after updates.
+                    if(window.Current.NativeWindowHandle==0) continue;
 
                     // Restrict reads to Group control names: the phone battery
                     // is a Group. This deliberately avoids messages/notifications.
@@ -82,7 +81,8 @@ internal static class PhoneLinkBatteryProvider
 
             // If there are multiple distinct phone batteries, do not guess
             // which one belongs to the configured phone.
-            return candidates.Count == 1 ? candidates[0] : null;
+            return candidates.Count>0 && candidates.Select(c=>c.Percent).Distinct().Count()==1
+                ? candidates[0] : null;
         }
         catch (ElementNotAvailableException) { }
         catch (InvalidOperationException) { }

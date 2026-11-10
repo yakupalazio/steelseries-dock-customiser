@@ -84,6 +84,87 @@ internal static class SelfTests
                 AdbPhoneBatteryProvider.TryParse("some other status: 80",
                     DateTimeOffset.Now,out _))
                 throw new Exception("ADB parser accepted invalid/non-battery data");
+            // Multi-mode isolation and mandatory widgets.
+            var workspace=StudioWorkspace.Create();
+            if(!workspace.Media.Widgets.Any(w=>w.Kind=="SmallClock") ||
+               !workspace.Game.Widgets.Any(w=>w.Kind=="GameTitle") ||
+               !workspace.Game.Widgets.Any(w=>w.Kind=="GameLabel") ||
+               workspace.Idle.Widgets.Any(w=>w.Kind=="GameTitle"))
+                throw new Exception("Media/Game/Idle profiles are not independent");
+            workspace.Game.Widgets.RemoveAll(w=>w.Kind=="GameTitle");
+            StudioWorkspace.EnsureMandatory(DockMode.Game,workspace.Game);
+            if(workspace.Game.Widgets.Count(w=>w.Kind=="GameTitle")!=1 ||
+               !StudioWorkspace.Mandatory(DockMode.Media,"Track") ||
+               StudioWorkspace.Mandatory(DockMode.Idle,"Track"))
+                throw new Exception("Mandatory widgets are not enforced");
+            var testGame=new GameSnapshot(true,"VALORANT","VALORANT-Win64-Shipping.exe",
+                DateTimeOffset.Now);
+            using(var gameImage=OledRenderer.Render(workspace.Game,false,true,false,
+                null,null,DockMode.Game,testGame))
+            using(var idleImage=OledRenderer.Render(workspace.Idle,false,true,false,
+                null,null,DockMode.Idle))
+            {
+                if(gameImage.Width!=128 || idleImage.Height!=64)
+                    throw new Exception("Game/idle render output dimensions invalid");
+                bool differs=false;
+                for(int y=10;y<52;y++)for(int x=0;x<128;x++)
+                    differs|=gameImage.GetPixel(x,y).ToArgb()!=idleImage.GetPixel(x,y).ToArgb();
+                if(!differs)throw new Exception("Game now-playing never renders differently");
+            }
+            string? detected=GameDetector.MatchGame(
+                [("VALORANT-Win64-Shipping",@"C:\Games\VALORANT\VALORANT-Win64-Shipping.exe")],
+                [("VALORANT",@"C:\Games\VALORANT\VALORANT-Win64-Shipping.exe")]);
+            if(detected!="VALORANT" || GameDetector.MatchGame(
+                [("launcher",(string?)null)],[("Unrelated",@"C:\Games\Unrelated\launcher.exe")])!=null)
+                throw new Exception("GG game process identification failed");
+
+            // Battery precedence and DualSense replacing laptop.
+            var now=DateTimeOffset.Now;
+            var batteries=new BatterySnapshot{CheckedAt=now,Values=new(){
+                ["Mouse"]=new("Mouse",88,"GG","Bağlı",now),
+                ["Laptop"]=new("Laptop",100,"Windows","Bağlı",now),
+                ["Phone"]=new("Phone",null,"Phone Link","Bulunamadı",now),
+                ["Headset"]=new("Headset",92,"GG","Bağlı",now),
+                ["SpareBattery"]=new("SpareBattery",79,"GG","Dock",now)
+            }};
+            var first=BatteryPriority.Resolve(batteries,BatteryPriority.Defaults,true);
+            if(!first.SequenceEqual(new[]{"Mouse","Laptop","Phone"}))
+                throw new Exception("Default 3 battery slots mismatch");
+            batteries.Values["DualSense"]=new("DualSense",60,"Bluetooth HID","Bağlı",now);
+            var dual=BatteryPriority.Resolve(batteries,BatteryPriority.Defaults,true);
+            if(!dual.SequenceEqual(new[]{"Mouse","DualSense","Phone"}))
+                throw new Exception("DualSense did not replace Laptop");
+            batteries.Values["DualSense"]=new("DualSense",null,
+                "DualSense HID (bağlı)","Bağlı; pil doğrulanmadı",now);
+            if(!BatteryPriority.Resolve(batteries,BatteryPriority.Defaults,true)
+                .SequenceEqual(new[]{"Mouse","DualSense","Phone"}))
+                throw new Exception("Connected DualSense with unknown battery must replace Laptop");
+            var workspaceCopy=JsonSerializer.Deserialize<StudioWorkspace>(
+                JsonSerializer.Serialize(workspace));
+            if(workspaceCopy is null || workspaceCopy.Media.Widgets.Count==0 ||
+               workspaceCopy.Game.Widgets.Count==0 || workspaceCopy.Idle.Widgets.Count==0)
+                throw new Exception("Multi-mode workspace JSON roundtrip failed");
+            using(var spareJson=JsonDocument.Parse(
+                "{\"type\":\"primary_and_backup_battery\",\"backupPercent\":87,\"backupCharging\":true}"))
+            {
+                if(!GgBatteryProvider.TryParseSpareBattery("arctis_nova_pro_wireless_tx",
+                     spareJson.RootElement,now,out var spare) ||
+                     spare.Percent!=87 || spare.Kind!="SpareBattery")
+                    throw new Exception("GG dock spare battery could not be parsed");
+            }
+
+            // Header preservation switch must truly change the generated OLED pixels.
+            var upper=StudioWorkspace.MakeIdle();
+            upper.Pixels[2*128+3]=true;
+            using(var protectedFrame=OledRenderer.Render(upper,false,true,false,
+                null,null,DockMode.Idle,null,null,true))
+            using(var fullFrame=OledRenderer.Render(upper,false,true,false,
+                null,null,DockMode.Idle,null,null,false))
+            {
+                if(protectedFrame.GetPixel(3,2).R!=0 || fullFrame.GetPixel(3,2).R!=255)
+                    throw new Exception("Factory-header switch did not affect OLED pixels");
+            }
+
             // Cached Bluetooth percentages are never live. GG/Phone Link are fetched separately.
             var scan = BatterySources.PollNow();
             foreach(var unverified in new[]{"Mouse","Phone","Headset","DualSense"})

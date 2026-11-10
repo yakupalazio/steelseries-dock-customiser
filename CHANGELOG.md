@@ -1,26 +1,26 @@
 # Changelog
 
-## 0.9.7 — One-second OLED refresh and optional Android battery reader
+## 0.9.8 — Three OLED modes, read-only GG game detection, battery priorities
 
-- Changed physical live OLED timer from 4,000 ms to **1,000 ms**.
-- Replaced character-at-a-time song marquee with **3 native pixels per second**, clipped to the display region.
-- Refreshed Windows media session every second rather than every three seconds.
-- Added 1-second, lightweight laptop + SteelSeries GG battery sampling. Full phone/controller battery readings happen every five seconds.
-- Removed cached Windows PnP enumeration from normal live polling; old Bluetooth values are diagnostic only.
-- Kept hash-based skip-if-unchanged and in-flight USB write protection.
-- Added optional read-only Galaxy S24+ **ADB battery adapter**, with explicit user opt-in and Phone Link fallback.
-- Added Google Platform-Tools pairing assistant which does not store pairing codes or auto-accept any SDK license.
-- Added regression tests for per-second pixel scrolling and Android battery response parsing.
-- Previous versions remain untouched; v0.9.7 is a separate local development checkpoint.
+- Added three independent editable profiles (**Medya çalarken / Oyun açıkken / Idle**) with mandatory media-player and game-title widgets, optional battery/clock/date/text.
+- Added **SmallClock** with independent size, pixel thickness, placement and clock format in media mode.
+- Added persistent v0.9.8 workspace JSON with non-destructive migration from the older single-layout save file.
+- Added priority-based mode selection: active GG-detected game process > Windows media > idle; game mode persists while process is open.
+- Reads the GG Moments detected-game library with read-only Microsoft.Data.Sqlite; never modifies GG settings or game processes.
+- Added optional full-screen 128×64 OLED mode, with a default-ON 10-row factory indicator protection switch and matching photographic preview.
+- Added GG **SpareBattery** as a separate live device source, and a six-device, user-sortable battery priority list.
+- Connected DualSense automatically replaces laptop in the default three battery positions; battery remains unknown without a trustworthy HID input report.
+- Changed Phone Link and DualSense polling to once every 60 seconds, leaving GG and laptop on the lightweight 1-second loop.
+- Improved Phone Link UI Automation window detection, and added an explicit user-triggered **Open and minimize Phone Link** workaround; no ADB is required.
+- Replaced stale Bluetooth percentages with unknown values, never fabricated numbers.
+- Added self-tests for all three layouts, GG battery parsing, controller priority, game matching and OLED header state.
+- Local build and automated tests passed. Real game/connected DualSense/full-header physical screen behavior still require owner verification.
 
-## 0.9.6 — Live media and 10-row OLED header
+## 0.9.7 — 1 Hz screen and ADB experiment
+- Smooth 3-pixel-per-second scrolling and opt-in Android ADB (no longer used automatically).
 
-- Automatically switched Windows media playback / clock-date modes, with Spotify source logo and progress.
-- Added opt-in continuous physical dock output and 10-row factory indicator preservation.
-- Added independent clock/date stroke thickness controls.
+## 0.9.6 — Live media
+- Dynamic Windows GSMTC playback and optional live physical OLED.
 
-## 0.9.5 — First partial physical OLED updates
-- Split custom frame into safe lower-screen segments to avoid original factory bar.
-
-## 0.9.4 — First physical display experiment
-- Added temporary ten-second physical OLED write and restore.
+## 0.9.5 — Protected battery area
+- Two overlapping lower-area updates preserving the original SteelSeries OLED indicators.

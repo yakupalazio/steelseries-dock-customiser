@@ -12,6 +12,17 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if(args.Contains("--game-scan-file"))
+        {
+            int i=Array.IndexOf(args,"--game-scan-file");
+            if(i>=0 && i+1<args.Length)
+            {
+                var game=GameDetector.PollAsync().GetAwaiter().GetResult();
+                System.IO.File.WriteAllText(args[i+1],
+                    $"GameActive={game.Active}; GameName={game.Name}; MatchedExe={game.Executable}");
+            }
+            return;
+        }
         if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();

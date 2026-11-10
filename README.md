@@ -1,65 +1,70 @@
-# Steelseries Dock Customiser v0.9.7 — 1 Hz OLED + Android ADB Option
+# Steelseries Dock Customiser v0.9.8 — Three OLED Modes & Battery Priority
 
-Independent Windows .NET 10 128×64 OLED designer for the SteelSeries Arctis Nova Pro Wireless base station.
+A Windows/.NET 10 OLED pixel studio for the SteelSeries Arctis Nova Pro Wireless base station, with optional physical OLED updates through a separately installed, verified ggoled v0.3.0 CLI.
 
-## Screen refresh: once per second
+## What's new
 
-- **Live dock mode checks the display once every 1,000 milliseconds**, not every four seconds.
-- Marquee text moves by **3 native OLED pixels per second** instead of skipping one full character. Text is clipped at the left boundary so it doesn't overwrite the source icon.
-- Media playback information is sampled from Windows GSMTC **every second**. Track title, artist, source logo and timeline progress are refreshed as Windows reports new data.
-- Windows laptop battery and SteelSeries GG (Aerox 3 Gen 2 / Nova Pro headset and spare battery) are queried on a lightweight **1-second cadence**.
-- Phone Link, optionally authorized Android ADB and experimental DualSense HID are sampled about **every 5 seconds**, avoiding frequent costly background UI scans and Bluetooth enumerations.
-- The **full OLED frame is rendered and compared every second**, but the app transmits USB updates **only if actual lower-screen pixels changed**, to reduce CPU, I/O and unnecessary OLED refreshing. It does not manufacture changes when a physical percentage has not changed.
-- The original SteelSeries factory indicator strip **Y=0..9 is never sent**. The custom area is Y=10..63, written as two partial patches (128×48 at Y=10; 128×8 at Y=56).
+### Three independent modes
 
-### Live test controls
+The editor now has **Medya çalarken**, **Oyun açıkken**, and **Idle** tabs. Each mode has independent editable pixels, widget positions, formatting and visibility. Old v0.9.7 single-layout data are imported non-destructively if no v0.9.8 file exists. New layouts are stored in `%LOCALAPPDATA%\SteelseriesDockCustomiser\studio-v098.json` and do **not** overwrite the old file.
 
-Use **Dock Preview → Canlı dock modunu başlat**. This is opt-in and off by default. It tries to return to the normal SteelSeries interface when stopped. Disable SteelSeries GG's own Now Playing overlay while using it, to avoid simultaneous screen writers. For safety, only the separately installed SHA-256-verified ggoled v0.3.0 executable is supported; it is not distributed with this project.
+| Mode | Must remain | Optional and movable |
+|---|---|---|
+| Media playing | Source icon, track, artist, progress | Small clock, clock, date, custom text, battery slots and device widgets |
+| Game running | NOW PLAYING: label and detected game name | All other non-media widgets |
+| Idle | Nothing required | Clock, date, custom text, three battery slots and device widgets |
 
-## Android phone: optional direct ADB battery source
+Use the **Öğe** picker, **Ekle**, **Sil**, 128×64 canvas drag and coordinate controls to arrange elements. Mandatory widgets cannot be removed or hidden. Widgets and pixels are independent per mode; Undo/Redo applies to the currently selected mode.
 
-The user wants a Samsung **Galaxy S24+** battery reading even when the Phone Link window is closed. Microsoft's internal CrossDevice interface remained unavailable to a packaged full-trust test app (HRESULT 0x80040154).
+**Mode switching priority: Game > Media > Idle.** A game detected from GG Moments' installed-game catalog stays on screen while its game process is active, even if Spotify plays in the background. Once the game closes, the OLED falls back to active media or idle. GG's own [Moments game detection](https://support.steelseries.com/hc/en-us/articles/360060113892-Moments-isn-t-detecting-your-game) should list the game. If it doesn't, use GG's **Settings → Game Detection → Scan now / Add game**. This reader matches the GG game library to running Windows processes every five seconds. It does not alter profiles, install hooks or inspect game memory. The GG local database is opened **read-only**, and results are checked against actual process executable names/paths.
 
-v0.9.7 adds a strictly opt-in, read-only **ADB battery adapter**:
-- It detects exactly one authorized ADB device and verifies the expected S24+ model ID (`SM-S926*` or S24+).
-- It runs only `adb devices`, `adb shell getprop ro.product.model` and `adb shell dumpsys battery`.
-- It parses `level`, `scale`, `status` and charging information; invalid numbers are rejected. **No hard-coded percent.**
-- It does not access files, photos, contacts, messages or other phone data, does not install apps or write settings.
-- If ADB is not available / authorized, Phone Link UI Automation remains a fallback, and its absence results in `--%`.
+**Not yet physically validated:** A specific active game must be launched to test a live automatic transition. Synthetic game detection and rendering tests pass.
 
-**ADB grants broad debugging access to the authorized computer beyond what this app uses. Only enable it with a trusted PC and network.**
+### Custom clocks and text
 
-### Pairing with Wi-Fi (no USB cable needed)
+A smaller **SmallClock** widget is part of the default media layout, positioned above the song title. Choose it in the list and independently edit its pixel X/Y, **font size**, and **1–3-pixel thickness**. The same controls apply to date and optional custom text. The existing Saat/Tarih dialog retains format options.
 
-1. On Galaxy S24+, enable Developer Options: **Settings → About phone → Software information → Build number**, tap seven times (if not already enabled).
-2. Open **Settings → Developer options → Wireless debugging**, enable it. Ensure phone and PC are on the same trusted Wi-Fi.
-3. Open **Pair device with pairing code**.
-4. Download the official **SDK Platform-Tools for Windows** from https://developer.android.com/tools/releases/platform-tools and accept Google's license in the browser. Save the Windows ZIP in **Downloads** as `platform-tools-latest-windows.zip`.
-5. Run `Telefon_ADB_KUR_VE_ESLESTIR.cmd` inside this project. It extracts only your already-downloaded ZIP to `%LOCALAPPDATA%\SteelseriesDockCustomiser\platform-tools\`, asks for the temporary pairing IP:port, and invokes the official interactive pairing prompt locally. Do not post the pairing code in chat.
-6. When prompted, provide the **connection** IP:port shown on the Wireless debugging main screen (which may differ from the pairing port).
-7. In **Tasarım & Piksel Editörü → Cihaz pilleri**, enable **Android ADB ile telefon pilini oku**.
+When media stops and no game runs, the Idle profile appears. Add **Custom text** to show your own editable line without forcing a message into the default layout.
 
-The helper never stores the pairing code. Windows ADB's own trusted keys are managed by Google's adb implementation. Wi-Fi debugging may require reconnection after a reboot or Wi-Fi change. Android 17 and recent ADB versions may improve reconnection behavior, but uninterrupted connection isn't guaranteed.
+### Protect 10 pixels: optional
 
-### Cable alternative
+The **Üst 10 px koru** checkbox is ON by default. When ON, the physical OLED writer sends only rows **10–63**, in two safe partial updates (128×48 at y=10 and 128×8 at y=56), leaving the original SteelSeries status row untouched.
 
-Enable **USB debugging** under Developer options, connect by a USB data cable, unlock the phone and explicitly approve the computer's RSA debugging permission prompt. The same ADB battery reader works, with no Wi-Fi pairing required. You may disable debugging after testing; live ADB readings will then stop.
+When OFF, the entire **128×64** can be drawn. The physical writer sends a full-height image at y=0, and the photo preview overlays the top status bar too. **This hides/replaces the original SteelSeries battery indicators on the physical screen while active**. The temporary and live modes request confirmation; changing this setting alone does not write to hardware.
 
-## Other functionality
+### Battery priority and spare Nova Pro battery
 
-- Local native OLED pixel editor and icons, photo/perspective preview, 3 selectable external battery widgets, undo/redo, JSON layouts and PNG export
-- Automatic media source detection (Spotify logo for Spotify) and track scrolling
-- Independent clock/date formats and 1–3 pixel stroke thickness
-- GG device batteries from current read-only local status
-- Experimental DualSense read-only input decoder, off by default
+There are six available battery sources: **Mouse, Laptop, Phone, DualSense, Headset, SpareBattery** (dock's removable headset battery).
 
-## Build
+The GG Engine reader now gives `SpareBattery` its **own percentage and charging status**, not merely a mention in the headset detail.
+
+Select **Cihaz pilleri** to reorder them with **Yukarı** and **Aşağı**. The three most appropriate priority slots are shown in each mode only if that mode has battery-slot widgets.
+
+Default: **Mouse, Laptop, Phone**. **DualSense replaces Laptop** when connected (rule ON by default), and the default order is restored after disconnect. The connected DualSense status can be detected without an exact battery percentage. Optional experimental **read-only HID** is needed for an estimated percentage (in ~10% bands); enabling it can conflict with other controller software.
+
+Phone and DualSense are sampled about **once per minute**. GG mouse, headset, spare battery and Windows laptop battery are refreshed on the lightweight per-second loop. Pixels are compared each second and unchanged physical frames are skipped.
+
+### Phone Link: no Android debugging needed
+
+The user does not want persistent USB/Wi-Fi debugging. **ADB is not required or automatically used** in v0.9.8.
+
+Phone Link can expose its current displayed battery status through Windows UI Automation while the **Phone Link window is open or minimized**. The reader now identifies windows by owning process rather than a single hard-coded WinUI class, which helps after Phone Link updates.
+
+If Phone Link is fully closed, Windows can still show battery in the Start menu, **but no supported third-party background battery API was found**. Attempts to activate Microsoft's internal CrossDevice class from both ordinary and MSIX-packaged apps returned `0x80040154`. Developer Mode alone does not grant access. No Windows setting can be guaranteed to unlock this undocumented API.
+
+To avoid manually opening Phone Link, the battery dialog offers **Phone Link'i aç ve küçült (ADB gerekmez)**. Clicking it explicitly opens the official Phone Link UI, minimizes it and refreshes the battery. The window remains minimized; this is a workaround, *not* direct background-service access, and the last-synchronization age cannot be independently verified. No private app database, contacts, messages or photos are read. When unavailable, display `--%` instead of stale Bluetooth cache.
+
+### Safety
+
+Physical OLED updates are **opt-in** from Dock Preview; do not run GG's own Now Playing in parallel. Only verified ggoled `img` and `return` commands are executed. No firmware changes, USB settings writes or global TLS exceptions. The official SteelSeries photo and separate ggoled utility are not included in the Git project.
+
+The GG integration reads undocumented local vendor status and game databases and may need updating if the vendor changes formats. The app is independent of SteelSeries, Microsoft and Google.
+
+## Build and run
 
 ```powershell
 dotnet build -c Release
 .\bin\Release\net10.0-windows10.0.19041.0\SteelseriesDockCustomiser.exe --self-test
 ```
 
-Run `ONIZLEMEYI_AC.cmd` to open the local application.
-
-This independent personal prototype is not affiliated with SteelSeries, Microsoft or Google. The official SteelSeries dock product photo and third-party ggoled executable are not redistributed.
+Double-click `ONIZLEMEYI_AC.cmd` to start the program. All previous v0.9.x folders are retained; this v0.9.8 build is a local test version until you verify the new screen layouts.

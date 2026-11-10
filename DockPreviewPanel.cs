@@ -25,6 +25,7 @@ internal sealed class DockPreviewPanel : UserControl
     }
 
     private readonly Func<Bitmap> _frameFactory;
+    private readonly Func<bool> _preserveHeader;
     private readonly PictureBox _photoBox = new()
     {
         Left = 16, Top = 104, Width = 770, Height = 482,
@@ -62,9 +63,10 @@ internal sealed class DockPreviewPanel : UserControl
         new(346,301),new(589,302),new(589,420),new(346,419)
     ];
 
-    public DockPreviewPanel(Func<Bitmap> frameFactory)
+    public DockPreviewPanel(Func<Bitmap> frameFactory,Func<bool>? preserveHeader=null)
     {
         _frameFactory = frameFactory;
+        _preserveHeader=preserveHeader??(()=>true);
         Dock = DockStyle.Fill;
         BackColor = Color.FromArgb(245,247,249);
 
@@ -146,8 +148,9 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         if(MessageBox.Show(this,
-            "Canlı OLED saniyede 1 kez kontrol edilir; medya durduğunda saat ve tarih gösterilir.\n"+
-            "Yalnızca 10–63. satırlar güncellenir; ilk 10 satır aktarım dışında kalır.\n"+
+            "Canlı OLED saniyede 1 kez kontrol edilir; oyun > medya > idle geçişi yapılır.\n"+
+            (_preserveHeader() ? "Yalnızca 10–63. satırlar güncellenir; üst 10 satır korunur.\n" :
+                 "TÜM 64 SATIR yazılır; orijinal SteelSeries pil göstergeleri gizlenebilir.\n")+
             "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
             "OLED ömrü için değişmeyen kareler yeniden gönderilmez. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
             "Canlı moda geçilsin mi?",
@@ -158,7 +161,9 @@ internal sealed class DockPreviewPanel : UserControl
         _lastLiveFrame=null;
         _sendHardware.Enabled=false;
         _liveToggle.Text="Canlı modu durdur";
-        _message.Text="Canlı dock modu etkin. Medya otomatik; üst 10 satır korunuyor.";
+        _message.Text=_preserveHeader() ?
+            "Canlı OLED: üst 10 satır korunuyor." :
+            "Canlı OLED: tüm 64 satır özelleştiriliyor; fabrika göstergeleri gizlenecek.";
         _liveTimer.Start();
         await RefreshLiveDock();
     }
@@ -187,15 +192,16 @@ internal sealed class DockPreviewPanel : UserControl
         try
         {
             using var bitmap=_frameFactory();
-            var pixels=new byte[128*54];
+            bool keepHeader=_preserveHeader();
+            var pixels=new byte[128*(keepHeader?54:64)];
             int ptr=0;
-            for(int y=10;y<64;y++)
+            for(int y=keepHeader?10:0;y<64;y++)
             for(int x=0;x<128;x++)
                 pixels[ptr++]=bitmap.GetPixel(x,y).R>127?(byte)1:(byte)0;
             string stamp=Convert.ToHexString(SHA256.HashData(pixels));
             if(stamp!=_lastLiveFrame)
             {
-                await _hardware.SendLiveFrameAsync(bitmap);
+                await _hardware.SendLiveFrameAsync(bitmap,keepHeader);
                 _lastLiveFrame=stamp;
             }
         }
@@ -230,8 +236,9 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         var answer=MessageBox.Show(this,
-            "Tasarımın yalnızca 10–63. satırları iki parçada dock OLED'ine 10 saniyeliğine gönderilecek.\n"+
-            "İlk 10 satıra dokunulmayacak; orijinal göstergelerin korunup korunmadığını gözle kontrol et.\n"+
+            (_preserveHeader() ?
+                "Yalnızca 10–63. satırlar iki parçada gönderilecek.\nÜst 10 satır korunacak.\n" :
+                "UYARI: 128×64 ekranın tamamı gönderilecek; fabrika pil göstergeleri gizlenebilir.\n")+
             "Sonunda normal SteelSeries ekranına dönüş komutu gönderilecek.\n"+
             "Devam edilsin mi?",
             "Gerçek dock ekranı — geçici test",
@@ -243,7 +250,7 @@ internal sealed class DockPreviewPanel : UserControl
         try
         {
             using var frame=_frameFactory();
-            string result=await _hardware.ShowForTenSecondsAsync(frame);
+            string result=await _hardware.ShowForTenSecondsAsync(frame,_preserveHeader());
             if(!IsDisposed)_message.Text=result;
         }
         catch(Exception ex)
@@ -405,7 +412,7 @@ internal sealed class DockPreviewPanel : UserControl
                 _cachedGlassBackground=BuildSmoothBackground(reference,_settings.Corners);
             }
             using var combined=ComposePhotograph(_photo,render,
-                _settings.Corners,92,_cachedGlassBackground);
+                _settings.Corners,92,_cachedGlassBackground,_preserveHeader());
             g.DrawImage(combined,_imageRect);
         }
 
@@ -439,7 +446,8 @@ internal sealed class DockPreviewPanel : UserControl
     /// blends native-pixel glyphs in photo space. Never affects the actual dock.
     /// </summary>
     public static Bitmap ComposePhotograph(Image photo, Bitmap oled,
-        IReadOnlyList<PointF> corners,int brightness,Color[]? cachedBackground=null)
+        IReadOnlyList<PointF> corners,int brightness,Color[]? cachedBackground=null,
+        bool preserveHeader=true)
     {
         var output=new Bitmap(photo.Width,photo.Height,PixelFormat.Format32bppArgb);
         using(var g=Graphics.FromImage(output))g.DrawImage(photo,0,0,photo.Width,photo.Height);
@@ -457,7 +465,7 @@ internal sealed class DockPreviewPanel : UserControl
         // OLED is only 128×64; cache its on/off pixels rather than calling
         // Bitmap.GetPixel four times per source-photo pixel.
         var sourcePixels=new bool[128*64];
-        for(int oy=10;oy<64;oy++)
+        for(int oy=preserveHeader?10:0;oy<64;oy++)
         for(int ox=0;ox<128;ox++)
             sourcePixels[oy*128+ox]=oled.GetPixel(ox,oy).R>127;
 
@@ -468,7 +476,7 @@ internal sealed class DockPreviewPanel : UserControl
             if(!map.TryInverse(x+.5,y+.5,out var u,out var v))continue;
             if(u<0 || u>=1 || v<0 || v>=1)continue;
             double nx=u*128,ny=v*64;
-            if(ny<10)continue; // Factory battery icons remain photo pixels.
+            if(preserveHeader && ny<10)continue; // Factory status bar pixels remain original.
 
             var old=output.GetPixel(x,y);
             var bg=smooth[y];
@@ -479,7 +487,7 @@ internal sealed class DockPreviewPanel : UserControl
 
             double distance=Math.Min(
                 Math.Min(nx,128-nx),
-                Math.Min(ny-10,64-ny));
+                Math.Min(preserveHeader?ny-10:ny,64-ny));
             double edge=Math.Clamp(distance/3.0,0.0,1.0);
             // Restrained photo texture, clamped so that original white text
             // cannot leak through the new black pixels.
@@ -557,7 +565,7 @@ internal sealed class DockPreviewPanel : UserControl
     }
 
     private static int IsLit(bool[] image,int x,int y) =>
-        x>=0 && x<128 && y>=10 && y<64 && image[y*128+x] ? 1 : 0;
+        x>=0 && x<128 && y>=0 && y<64 && image[y*128+x] ? 1 : 0;
 
     protected override void Dispose(bool disposing)
     {

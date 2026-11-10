@@ -76,6 +76,9 @@ internal static class GgBatteryProvider
                         continue;
                     if(!TryParseBattery(name,battery,DateTimeOffset.Now,out var reading))continue;
                     found[reading.Kind]=reading;
+                    if(TryParseSpareBattery(name,battery,DateTimeOffset.Now,
+                            out var spare))
+                        found["SpareBattery"]=spare;
                 }
                 catch(HttpRequestException){}
                 catch(TaskCanceledException){}
@@ -140,6 +143,24 @@ internal static class GgBatteryProvider
 
         reading=new BatteryReading(kind,pct,"SteelSeries GG Engine (canlı)",
             detail,at);
+        return true;
+    }
+
+    internal static bool TryParseSpareBattery(string device,JsonElement battery,
+        DateTimeOffset at,out BatteryReading spare)
+    {
+        spare=new BatteryReading("SpareBattery",null,"SteelSeries GG Engine",
+            "Yedek pil okunamadı",at);
+        if(device!="arctis_nova_pro_wireless_tx" ||
+           !battery.TryGetProperty("type",out var kind) ||
+           kind.GetString()!="primary_and_backup_battery" ||
+           !TryPercent(battery,"backupPercent",out int value))return false;
+        if(battery.TryGetProperty("backupStatusKnown",out var known) &&
+           known.ValueKind==JsonValueKind.False)return false;
+        bool charging=GetBool(battery,"backupCharging");
+        spare=new BatteryReading("SpareBattery",value,
+            "SteelSeries GG Engine (yedek pil)",
+            charging?"Dock içinde şarj oluyor":"Yedek pil mevcut",at);
         return true;
     }
 

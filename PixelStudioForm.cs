@@ -12,12 +12,27 @@ namespace SteelseriesDockCustomiser;
 
 internal sealed class PixelStudioForm : Form
 {
-    private const int Zoom = 6, CanvasWidth = 128, CanvasHeight = 64, LockedRows = 10;
+    private const int Zoom = 6, CanvasWidth = 128, CanvasHeight = 64;
+    private int LockedRows => workspace.PreserveFactoryHeader?10:0;
     private readonly string savePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","studio-v05.json");
 
-    private LayoutState state = LayoutDefaults.Create();
+    private StudioWorkspace workspace=StudioWorkspace.Load();
+    private DockMode editorMode=DockMode.Media;
+    private LayoutState state=LayoutDefaults.Create();
+    private readonly TabControl modeTabs=new(){
+        Left=16,Top=7,Width=793,Height=40,Multiline=false
+    };
+    private readonly CheckBox protectHeader=new(){
+        Text="Üst 10 px koru",AutoSize=true,Checked=true
+    };
+    private readonly NumericUpDown strokeWeight=new(){
+        Minimum=1,Maximum=3,Value=1,Width=48
+    };
+    private GameSnapshot gameSnapshot=GameSnapshot.None;
+    private bool gamePolling;
+    private int gameTickCounter;
     private BatteryPreferences batteryPreferences = BatteryPreferences.Load();
     private BatterySnapshot batterySnapshot = new();
     private BatteryStatusDialog? batteryDialog;
@@ -59,10 +74,11 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.7 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser v0.9.8 | Multi-Mode OLED Studio";
+        state=workspace.Media;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(830,795);
-        MinimumSize = new Size(850,830);
+        ClientSize = new Size(830,870);
+        MinimumSize = new Size(850,910);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         KeyPreview = true;
@@ -73,8 +89,7 @@ internal sealed class PixelStudioForm : Form
         var dockTab = new TabPage("Dock Preview") { BackColor=Color.FromArgb(246,248,250) };
         tabs.TabPages.Add(editTab); tabs.TabPages.Add(dockTab);
         editTab.Controls.Add(editor);
-        dockPreview = new DockPreviewPanel(() => OledRenderer.Render(state,MediaActive,showDate.Checked,
-            SpotifyActive,batterySnapshot,LiveMedia));
+        dockPreview = new DockPreviewPanel(()=>RenderCurrentMode(),()=>workspace.PreserveFactoryHeader);
         dockTab.Controls.Add(dockPreview);
         editor.Paint += (_,e) => PaintFrame(e.Graphics,true,Zoom);
 
@@ -84,13 +99,13 @@ internal sealed class PixelStudioForm : Form
 
         tool.Items.AddRange(["Kalem","Silgi","Taşı / Seç"]);
         tool.SelectedIndex=2;
-        kind.Items.AddRange(["Mouse","Phone","DualSense","Headset","Laptop","Source","Track","Artist","Progress","Clock","Date","Custom text"]);
-        kind.SelectedIndex=0;
+        FillWidgetKinds();
         source.Items.AddRange(["Spotify","Diğer medya"]);
         source.SelectedIndex=0;
 
         var toolbar = new FlowLayoutPanel { Left=15,Top=444,Width=795,Height=42,WrapContents=false,AutoScroll=true };
-        toolbar.Controls.AddRange([L("Araç:"),tool,L("Widget:"),kind,autoMedia,showDate,showGrid]);
+        toolbar.Controls.AddRange([L("Araç:"),tool,L("Öğe:"),kind,autoMedia,
+            protectHeader,showGrid]);
         editTab.Controls.Add(toolbar);
 
         var actions = new FlowLayoutPanel { Left=15,Top=488,Width=795,Height=43,WrapContents=false };
@@ -110,7 +125,8 @@ internal sealed class PixelStudioForm : Form
         var line1 = new FlowLayoutPanel { Width=525,Height=37,WrapContents=false };
         line1.Controls.AddRange([L("Metin:"),customText,L("Boyut:"),fontSize,L("X:"),xPos,L("Y:"),yPos]);
         var line2 = new FlowLayoutPanel { Width=525,Height=37,WrapContents=false };
-        line2.Controls.AddRange([widgetVisible,media,L("Kaynak:"),source]);
+        line2.Controls.AddRange([widgetVisible,L("Kalınlık:"),strokeWeight,media,
+            L("Kaynak:"),source]);
         editorControls.Controls.AddRange([line1,line2,new Label { Width=520,Height=27,
             Text="Kısayollar: Ctrl+Z, Ctrl+Y, Delete, ok tuşları (Shift: 5 px)." }]);
         content.Controls.Add(editorControls);editTab.Controls.Add(content);
@@ -134,7 +150,17 @@ internal sealed class PixelStudioForm : Form
         remove.Click += (_,_) => RemoveWidget();
         save.Click += (_,_) => SaveLayout();
         load.Click += (_,_) => LoadLayout();
-        reset.Click += (_,_) => { Record(); state=LayoutDefaults.Create();selected=null;RefreshWidgetList();Redraw();SetStatus("Varsayılan yerleşime dönüldü."); };
+        reset.Click += (_,_) => {
+            Record();
+            state=editorMode switch {
+                DockMode.Media=>StudioWorkspace.MakeMedia(),
+                DockMode.Game=>StudioWorkspace.MakeGame(),
+                _=>StudioWorkspace.MakeIdle()
+            };
+            workspace.Set(editorMode,state);
+            selected=null;RefreshWidgetList();Redraw();
+            SetStatus(ModeLabel(editorMode)+" varsayılan düzenine döndü.");
+        };
         clear.Click += (_,_) => { if(state.Pixels.Any(x=>x)){Record();Array.Clear(state.Pixels,0,state.Pixels.Length);Redraw();SetStatus("Serbest çizim pikselleri temizlendi.");} };
         export.Click += (_,_) => ExportPng();
 
@@ -155,6 +181,20 @@ internal sealed class PixelStudioForm : Form
         };
         media.CheckedChanged += (_,_) => Redraw();
         showDate.CheckedChanged += (_,_) => Redraw();
+        protectHeader.Checked=workspace.PreserveFactoryHeader;
+        protectHeader.CheckedChanged+=(_,_)=>{
+            workspace.PreserveFactoryHeader=protectHeader.Checked;
+            yPos.Minimum=LockedRows;
+            if(selected is not null && selected.Y<LockedRows)
+            {
+                Record();selected.Y=LockedRows;
+            }
+            Redraw();
+            SetStatus(protectHeader.Checked ?
+                "Üst 10 piksel korunuyor; bu alan fiziksel dock'a gönderilmez.":
+                "Üst 10 piksel de özelleştirilebilir; varsayılan SteelSeries göstergeleri gizlenebilir.");
+        };
+        strokeWeight.ValueChanged+=(_,_)=>ChangeNumber();
         new ToolTip().SetToolTip(showGrid,
             "Yalnızca büyütülmüş editörde her OLED pikselinin hücre sınırını gösterir.\nGerçek OLED veya Dock Preview'da görünmez.");
         showGrid.CheckedChanged += (_,_) => editor.Invalidate();
@@ -166,7 +206,8 @@ internal sealed class PixelStudioForm : Form
         yPos.ValueChanged += (_,_) => ChangeNumber();
         widgetVisible.CheckedChanged += (_,_) =>
         {
-            if(changeUi||selected==null||selected.Visible==widgetVisible.Checked)return;
+            if(changeUi||selected==null||selected.Visible==widgetVisible.Checked ||
+           StudioWorkspace.Mandatory(editorMode,selected.Kind))return;
             Record();selected.Visible=widgetVisible.Checked;Redraw();
         };
 
@@ -181,7 +222,12 @@ internal sealed class PixelStudioForm : Form
             // skipped when unchanged, and in-flight sends never overlap.
             Redraw();
             _=RefreshMediaAsync();
-            if(++batteryRefreshCounter>=5)
+            if(++gameTickCounter>=5)
+            {
+                gameTickCounter=0;
+                _=RefreshGameAsync();
+            }
+            if(++batteryRefreshCounter>=60)
             {
                 batteryRefreshCounter=0;
                 _=RefreshBatteriesAsync();
@@ -190,14 +236,98 @@ internal sealed class PixelStudioForm : Form
         };
         ticker.Start();
         FormClosed += (_,_) => ticker.Stop();
-        ApplyBatteryWidgets(batteryPreferences.DisplayDevices,false);
+        modeTabs.TabPages.Add("Medya çalarken");
+        modeTabs.TabPages.Add("Oyun açıkken");
+        modeTabs.TabPages.Add("Idle");
+        editTab.Controls.Add(modeTabs);
+        modeTabs.SelectedIndexChanged+=(_,_)=>SwitchEditorMode();
+        // Preserve the original controls while making room for sub-mode tabs.
+        foreach(Control ctl in editTab.Controls)
+            if(ctl!=modeTabs) ctl.Top+=40;
         Shown += async (_,_) =>
         {
             await RefreshMediaAsync();
+            await RefreshGameAsync();
             await RefreshBatteriesAsync();
         };
         RefreshWidgetList();UpdateHistoryButtons();Redraw();
         tabs.SelectedIndex=1; // Open the photographic preview first.
+    }
+
+    private static string ModeLabel(DockMode mode)=>mode switch {
+        DockMode.Game=>"Oyun",DockMode.Media=>"Medya",_=>"Idle"
+    };
+
+    private void FillWidgetKinds()
+    {
+        kind.Items.Clear();
+        string[] common=[
+            "BatterySlot1","BatterySlot2","BatterySlot3",
+            "Mouse","Laptop","Phone","DualSense","Headset","SpareBattery",
+            "SmallClock","Clock","Date","Custom text"
+        ];
+        foreach(var k in common)
+            if(editorMode!=DockMode.Idle || k!="SmallClock")
+                kind.Items.Add(k);
+        if(kind.Items.Count>0)kind.SelectedIndex=0;
+    }
+
+    private void SwitchEditorMode()
+    {
+        if(modeTabs.SelectedIndex<0)return;
+        workspace.Set(editorMode,state);
+        editorMode=(DockMode)modeTabs.SelectedIndex;
+        state=workspace.For(editorMode);
+        selected=null;
+        undo.Clear();redo.Clear();UpdateHistoryButtons();
+        FillWidgetKinds();
+        RefreshWidgetList();
+        Redraw();
+        SetStatus(ModeLabel(editorMode)+" düzeni seçildi. Değişiklikler diğer modlardan bağımsız.");
+    }
+
+    private DockMode CurrentDockMode=>gameSnapshot.Active ? DockMode.Game :
+        MediaActive ? DockMode.Media : DockMode.Idle;
+
+    private string[] ResolveBatteryDevices()=>BatteryPriority.Resolve(
+        batterySnapshot,batteryPreferences.PriorityOrder,
+        batteryPreferences.DualSenseReplacesLaptop);
+
+    private Bitmap RenderCurrentMode()
+    {
+        var mode=CurrentDockMode;
+        var current=workspace.For(mode);
+        return OledRenderer.Render(current,mode==DockMode.Media,true,
+            SpotifyActive,batterySnapshot,LiveMedia,mode,gameSnapshot,
+            ResolveBatteryDevices(),workspace.PreserveFactoryHeader);
+    }
+
+    private Bitmap RenderEditorMode()
+    {
+        var mode=editorMode;
+        return OledRenderer.Render(state,mode==DockMode.Media,true,
+            SpotifyActive,batterySnapshot,LiveMedia,mode,gameSnapshot,
+            ResolveBatteryDevices(),workspace.PreserveFactoryHeader);
+    }
+
+    private async System.Threading.Tasks.Task RefreshGameAsync()
+    {
+        if(gamePolling||IsDisposed)return;
+        gamePolling=true;
+        try
+        {
+            var latest=await GameDetector.PollAsync();
+            if(IsDisposed)return;
+            if(latest.Active!=gameSnapshot.Active || latest.Name!=gameSnapshot.Name)
+            {
+                gameSnapshot=latest;
+                Redraw();
+                SetStatus(latest.Active?"Oyun modu: "+latest.Name:
+                    "Oyun kapandı; medya/idle moduna dönüldü.");
+            }
+            else gameSnapshot=latest;
+        }
+        finally {gamePolling=false;}
     }
 
     private async System.Threading.Tasks.Task RefreshMediaAsync()
@@ -217,14 +347,16 @@ internal sealed class PixelStudioForm : Form
 
     private void OpenClockDateSettings()
     {
+        string clockKind=editorMode==DockMode.Idle?"Clock":"SmallClock";
         using var dialog=new ClockDateSettingsDialog(state,(clockFmt,clockStroke,dateFmt,dateStroke)=>
         {
             Record();
-            var clock=state.Widgets.FirstOrDefault(w=>w.Kind=="Clock");
+            var clock=state.Widgets.FirstOrDefault(w=>w.Kind==clockKind);
             var date=state.Widgets.FirstOrDefault(w=>w.Kind=="Date");
             if(clock==null)
             {
-                clock=new DockWidget{Kind="Clock",X=36,Y=17,FontSize=20};
+                clock=new DockWidget{Kind=clockKind,X=36,Y=17,
+                    FontSize=clockKind=="Clock"?20:9};
                 state.Widgets.Add(clock);
             }
             if(date==null)
@@ -238,7 +370,7 @@ internal sealed class PixelStudioForm : Form
             date.StrokeWidth=dateStroke;
             RefreshWidgetList();Redraw();
             SetStatus("Saat ve tarih ayarları güncellendi. Kaydet ile sakla.");
-        });
+        },clockKind);
         dialog.ShowDialog(this);
     }
 
@@ -265,7 +397,7 @@ internal sealed class PixelStudioForm : Form
         try
         {
             var newest=await BatterySources.PollAsync(batteryPreferences.ExperimentalControllerHid,
-                batteryPreferences.UseAdbPhoneBattery);
+                false /* Phone Link preferred; debugging disabled */);
             if(IsDisposed)return;
             batterySnapshot=newest;
             Redraw();
@@ -283,18 +415,9 @@ internal sealed class PixelStudioForm : Form
 
     private void ApplyBatteryWidgets(string[] selectedDevices,bool record)
     {
-        if(record)Record();
-        var current=state.Widgets
-            .Where(w=>BatterySources.Kinds.Contains(w.Kind))
-            .OrderBy(w=>w.X).ToList();
-        var positions=current.Select(w=>new Point(w.X,w.Y)).ToList();
-        state.Widgets.RemoveAll(w=>BatterySources.Kinds.Contains(w.Kind));
-        for(int i=0;i<selectedDevices.Length;i++)
-        {
-            var p=i<positions.Count?positions[i]:new Point(2+i*43,53);
-            state.Widgets.Add(new DockWidget{Kind=selectedDevices[i],X=p.X,Y=p.Y,Visible=true});
-        }
-        RefreshWidgetList();Redraw();
+        // Widgets are independent per-mode BatterySlot1/2/3 positions.
+        // Priority ordering only affects which device is rendered in each slot.
+        Redraw();
     }
 
     private void OpenBatteryDialog()
@@ -326,12 +449,14 @@ internal sealed class PixelStudioForm : Form
     {
         if(undo.Count==0)return;
         redo.Push(state.DeepClone());state=undo.Pop();
+        workspace.Set(editorMode,state);
         selected=null;RefreshWidgetList();Redraw();UpdateHistoryButtons();SetStatus("Son işlem geri alındı.");
     }
     private void Redo()
     {
         if(redo.Count==0)return;
         undo.Push(state.DeepClone());state=redo.Pop();
+        workspace.Set(editorMode,state);
         selected=null;RefreshWidgetList();Redraw();UpdateHistoryButtons();SetStatus("İşlem yeniden uygulandı.");
     }
     private void RefreshWidgetList()
@@ -346,12 +471,18 @@ internal sealed class PixelStudioForm : Form
         changeUi=true;
         bool has=selected!=null;
         customText.Enabled=has && selected!.Kind=="Custom text";
-        fontSize.Enabled=has && selected!.Kind is "Clock" or "Date" or "Track" or "Artist" or "Custom text";
-        widgetVisible.Enabled=has;xPos.Enabled=has;yPos.Enabled=has;
+        fontSize.Enabled=has && selected!.Kind is "Clock" or "SmallClock" or
+            "Date" or "Track" or "Artist" or "GameLabel" or "GameTitle" or "Custom text";
+        strokeWeight.Enabled=has && selected!.Kind is "Clock" or "SmallClock" or
+            "Date" or "GameLabel" or "Custom text";
+        widgetVisible.Enabled=has && selected is not null &&
+            !StudioWorkspace.Mandatory(editorMode,selected.Kind);
+        xPos.Enabled=has;yPos.Enabled=has;
         if(selected!=null)
         {
             customText.Text=selected.Text;
             fontSize.Value=Math.Clamp(selected.FontSize,7,24);
+            strokeWeight.Value=Math.Clamp(selected.StrokeWidth,1,3);
             xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
         }
@@ -367,18 +498,34 @@ internal sealed class PixelStudioForm : Form
     {
         if(changeUi||selected==null)return;
         int newX=(int)xPos.Value,newY=(int)yPos.Value,newSize=(int)fontSize.Value;
-        if(selected.X==newX&&selected.Y==newY&&selected.FontSize==newSize)return;
-        Record();selected.X=newX;selected.Y=newY;selected.FontSize=newSize;RefreshWidgetList();Redraw();
+        int newStroke=(int)strokeWeight.Value;
+        if(selected.X==newX&&selected.Y==newY&&selected.FontSize==newSize
+           && selected.StrokeWidth==newStroke)return;
+        Record();selected.X=newX;selected.Y=newY;selected.FontSize=newSize;
+        selected.StrokeWidth=newStroke;RefreshWidgetList();Redraw();
     }
     private void AddWidget()
     {
+        if(StudioWorkspace.Mandatory(editorMode,kind.Text))return;
         Record();
-        var w=new DockWidget{Kind=kind.Text,X=5,Y=19};
+        var w=new DockWidget{Kind=kind.Text,X=5,Y=Math.Max(LockedRows,19),
+            FontSize=kind.Text=="SmallClock"?9:10};
+        if(w.Kind is "BatterySlot1" or "BatterySlot2" or "BatterySlot3" &&
+           state.Widgets.Any(existing=>existing.Kind==w.Kind))
+        {
+            SetStatus("Bu pil alanı zaten bu modda ekli; konumunu listeden düzenleyebilirsin.");
+            return;
+        }
         state.Widgets.Add(w);selected=w;RefreshWidgetList();Redraw();tool.SelectedIndex=2;
     }
     private void RemoveWidget()
     {
         if(selected==null)return;
+        if(StudioWorkspace.Mandatory(editorMode,selected.Kind))
+        {
+            SetStatus("Bu öğe bu modda zorunlu; kaldırılamaz.");
+            return;
+        }
         Record();state.Widgets.Remove(selected);selected=null;RefreshWidgetList();Redraw();
     }
 
@@ -429,16 +576,10 @@ internal sealed class PixelStudioForm : Form
         if(!gestureChanged){Record();gestureChanged=true;}
         state.Pixels[index]=value;lastPixel=index;Redraw();
     }
-    private bool Current(DockWidget w)=>w.Kind switch
-    {
-        "Clock" or "Date"=>!MediaActive&&(w.Kind!="Date"||showDate.Checked),
-        "Source" or "Track" or "Artist" or "Progress"=>MediaActive,
-        _=>true
-    };
+    private bool Current(DockWidget w)=>true; // Separate profiles enforce mode-specific widgets.
     private void PaintFrame(Graphics g,bool edit,int zoom)
     {
-        using var frame=OledRenderer.Render(state,MediaActive,showDate.Checked,
-            SpotifyActive,batterySnapshot,LiveMedia);
+        using var frame=RenderEditorMode();
         g.Clear(Color.Black);
         g.InterpolationMode=InterpolationMode.NearestNeighbor;
         g.PixelOffsetMode=PixelOffsetMode.Half;
@@ -459,7 +600,8 @@ internal sealed class PixelStudioForm : Form
     {
         if(e.Control && e.KeyCode==Keys.Z && !e.Shift){Undo();e.SuppressKeyPress=true;return;}
         if(e.Control && (e.KeyCode==Keys.Y || (e.Shift && e.KeyCode==Keys.Z))){Redo();e.SuppressKeyPress=true;return;}
-        if(ActiveControl==customText||ActiveControl==fontSize||ActiveControl==xPos||ActiveControl==yPos)return;
+        if(ActiveControl==customText||ActiveControl==fontSize||ActiveControl==xPos||
+            ActiveControl==yPos||ActiveControl==strokeWeight)return;
         if(e.KeyCode==Keys.Delete){RemoveWidget();e.SuppressKeyPress=true;return;}
         if(selected==null)return;
         int dx=e.KeyCode==Keys.Left?-1:e.KeyCode==Keys.Right?1:0;
@@ -476,24 +618,30 @@ internal sealed class PixelStudioForm : Form
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-            File.WriteAllText(savePath,JsonSerializer.Serialize(state,new JsonSerializerOptions{WriteIndented=false}));
-            SetStatus("Yerleşim kaydedildi: "+savePath);
+            workspace.Set(editorMode,state);
+            workspace.Save();
+            SetStatus("Üç mod ve OLED ayarları kaydedildi: "+StudioWorkspace.FilePath);
         }
         catch(Exception ex){SetStatus("Kayıt hatası: "+ex.Message);}
     }
     private void LoadLayout()
     {
-        if(!File.Exists(savePath)){SetStatus("Henüz kayıtlı yerleşim bulunmuyor.");return;}
+        if(!File.Exists(StudioWorkspace.FilePath))
+        {
+            SetStatus("Yeni biçimde kayıt bulunamadı. Eski düzen ayrı tutuluyor.");
+            return;
+        }
         try
         {
-            var next=JsonSerializer.Deserialize<LayoutState>(File.ReadAllText(savePath));
-            if(next==null||next.Pixels.Length!=8192||next.Widgets.Count>100)throw new InvalidDataException("Geçersiz yerleşim");
-            foreach(var w in next.Widgets)
-            {
-                w.X=Math.Clamp(w.X,0,127);w.Y=Math.Clamp(w.Y,LockedRows,63);
-                w.FontSize=Math.Clamp(w.FontSize,7,24);
-            }
-            Record();state=next;selected=null;RefreshWidgetList();Redraw();SetStatus("Kaydedilen yerleşim yüklendi.");
+            var loaded=StudioWorkspace.Load();
+            loaded.Validate();
+            workspace=loaded;
+            state=workspace.For(editorMode);
+            protectHeader.Checked=workspace.PreserveFactoryHeader;
+            yPos.Minimum=LockedRows;
+            selected=null;undo.Clear();redo.Clear();
+            RefreshWidgetList();UpdateHistoryButtons();Redraw();
+            SetStatus("Medya, oyun ve idle düzenleri yüklendi.");
         }
         catch(Exception ex){SetStatus("Yükleme hatası: "+ex.Message);}
     }
@@ -503,8 +651,7 @@ internal sealed class PixelStudioForm : Form
         if(dialog.ShowDialog()!=DialogResult.OK)return;
         try
         {
-            using var img=OledRenderer.Render(state,MediaActive,showDate.Checked,
-                SpotifyActive,batterySnapshot,LiveMedia);
+            using var img=RenderEditorMode();
             img.Save(dialog.FileName,ImageFormat.Png);
             SetStatus("128×64 PNG kaydedildi: "+dialog.FileName);
         }

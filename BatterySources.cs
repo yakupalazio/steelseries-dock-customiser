@@ -25,7 +25,7 @@ internal sealed class BatterySnapshot
 }
 internal static class BatterySources
 {
-    public static readonly string[] Kinds = ["Laptop","Mouse","Headset","DualSense","Phone"];
+    public static readonly string[] Kinds = ["Laptop","Mouse","Headset","SpareBattery","DualSense","Phone"];
     // Polling does not change GG, Bluetooth profiles, paired devices or HID.
     public static async Task<BatterySnapshot> PollAsync(bool readDualSenseHid=false,
         bool enableAdbPhone=false)
@@ -41,7 +41,16 @@ internal static class BatterySources
         phone ??= await Task.Run(PhoneLinkBatteryProvider.TryRead);
         if(phone is not null)
             snapshot.Values["Phone"] = phone;
-        if(readDualSenseHid && !snapshot["DualSense"].Available)
+        else snapshot.Values["Phone"]=new BatteryReading("Phone",null,
+            "Microsoft Phone Link (arayüz kapalı)",
+            "Başlat menüsü pili gösteriyor ancak Phone Link'in arka plan servisi " +
+            "desteklenen üçüncü taraf pil API'si sunmuyor. İstersen uygulamayı küçültülmüş aç.",
+            DateTimeOffset.Now);
+        bool dualSenseConnected=await Task.Run(DualSenseReadOnly.IsConnected);
+        if(dualSenseConnected && !snapshot["DualSense"].Available)
+            snapshot.Values["DualSense"]=new BatteryReading("DualSense",null,
+                "DualSense HID (bağlı)","Bağlı, pil yüzdesi henüz doğrulanmadı",DateTimeOffset.Now);
+        if(dualSenseConnected && readDualSenseHid && !snapshot["DualSense"].Available)
         {
             int? estimated=await DualSenseReadOnly.TryBatteryPercentAsync();
             if(estimated is int value)
@@ -76,7 +85,7 @@ internal static class BatterySources
         }catch{}
 
         var gg=await GgBatteryProvider.ReadAsync();
-        foreach(string kind in new[]{"Mouse","Headset"})
+        foreach(string kind in new[]{"Mouse","Headset","SpareBattery"})
         {
             if(gg.TryGetValue(kind,out var current)) values[kind]=current;
             else if(values.TryGetValue(kind,out var old) &&
@@ -93,13 +102,13 @@ internal static class BatterySources
         var now=DateTimeOffset.Now;
         var values=Kinds.ToDictionary(k=>k,k=>new BatteryReading(k,null,
             k switch {
-                "Headset" or "Mouse"=>"SteelSeries / GG (doğrulanmamış)",
+                "Headset" or "SpareBattery" or "Mouse"=>"SteelSeries / GG (doğrulanmamış)",
                 "DualSense"=>"Bluetooth HID (bağlı olduğunda)",
                 "Phone"=>"Phone Link (doğrulanmamış)",
                 _=>"Windows battery"
             },
             k switch {
-                "Headset" or "Mouse"=>"SteelSeries GG değeri için doğrulanmış canlı okuyucu henüz yok.",
+                "Headset" or "SpareBattery" or "Mouse"=>"SteelSeries GG değeri için doğrulanmış canlı okuyucu henüz yok.",
                 "DualSense"=>"Bağlı değil veya canlı pil raporu alınamadı.",
                 "Phone"=>"Phone Link açık değil veya pil göstergesi erişilebilir değil.",
                 _=>"Pil bilgisi yok."
