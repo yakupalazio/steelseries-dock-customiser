@@ -84,6 +84,35 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--mini-player-preview-file"))
+        {
+            var at=Array.IndexOf(args,"--mini-player-preview-file");
+            if(at>=0 && at+1<args.Length)
+            {
+                var location=args[at+1];
+                var design=StudioProject.Defaults(ScreenMode.Game);
+                design.Widgets.Add(new DockWidget{
+                    Kind="GameMiniPlayer",X=4,Y=38,FontSize=7,
+                    StrokeWidth=1,MiniWidth=88
+                });
+                var game=new GameSnapshot("VALORANT","valorant",1);
+                var song=new MediaSnapshot(true,true,
+                    "IN THE END","LINKIN PARK","Spotify",
+                    TimeSpan.FromSeconds(48),TimeSpan.FromSeconds(210),
+                    DateTimeOffset.UtcNow);
+                using(var playing=OledRenderer.Render(design,false,true,
+                    false,null,song,game,protectHeader:true,layoutMode:ScreenMode.Game))
+                    playing.Save(location,System.Drawing.Imaging.ImageFormat.Png);
+                using(var paused=OledRenderer.Render(design,false,true,
+                    false,null,MediaSnapshot.Empty,game,protectHeader:true,
+                    layoutMode:ScreenMode.Game))
+                    paused.Save(System.IO.Path.Combine(
+                        System.IO.Path.GetDirectoryName(location)!,
+                        System.IO.Path.GetFileNameWithoutExtension(location)+"-paused.png"),
+                        System.Drawing.Imaging.ImageFormat.Png);
+            }
+            return;
+        }
         if(args.Contains("--self-test"))
         {
             var at=Array.IndexOf(args,"--demo-output");
@@ -103,10 +132,11 @@ public sealed class DockWidget
     public int Y { get; set; } = 17;
     public int FontSize { get; set; } = 10;
     public int StrokeWidth { get; set; } = 1;
+    public int MiniWidth { get; set; } = 88;
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;
-    public override string ToString() => $"{Kind}  ({X}, {Y})";
+    public override string ToString() => $"{(Kind=="GameMiniPlayer"?"Mini Player (Oyun)":Kind)}  ({X}, {Y})";
 }
 
 public sealed class LayoutState

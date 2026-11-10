@@ -137,10 +137,14 @@ internal static class OledRenderer
         var mode=layoutMode??(media?ScreenMode.Media:ScreenMode.Idle);
         var kinds=BatteryPriority.SelectThree(batteries??new BatterySnapshot(),
             preferences??new BatteryPreferences());
+        // Draw optional Mini Player last. Its reserved rectangle becomes black
+        // whenever music is not playing, even if unrelated free-drawn pixels
+        // or another widget previously occupied that rectangle.
         foreach(var w in layout.Widgets.Where(w=>w.Visible &&
             (layoutMode is null?ShouldShow(w,media,showDate):
                 StudioProject.IsAllowed(mode,w.Kind) &&
-                    (w.Kind!="Date"||showDate))))
+                    (w.Kind!="Date"||showDate)))
+            .OrderBy(w=>w.Kind=="GameMiniPlayer"?1:0))
             DrawWidget(frame,w,spotify,batteries,playback,game,kinds);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
@@ -180,6 +184,9 @@ internal static class OledRenderer
         "Clock" => w.FontSize>=15
             ? new(w.X,w.Y,Math.Min(128-w.X,DisplayText(w).Length*13),15)
             : new(w.X,w.Y,Math.Max(10,TextWidth(DisplayText(w),w.FontSize)+w.StrokeWidth),9),
+        "GameMiniPlayer" => new(w.X,w.Y,Math.Min(Width-w.X,
+            Math.Clamp(w.MiniWidth,35,128)),Math.Max(14,
+            7*Scale(w.FontSize)+Math.Clamp(w.StrokeWidth,1,3)+2)),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
     };
 
@@ -259,6 +266,9 @@ internal static class OledRenderer
                 DrawText(px,string.IsNullOrWhiteSpace(w.Text)?"NOW PLAYING:":w.Text,
                     x,y,Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
                 break;
+            case "GameMiniPlayer":
+                DrawGameMiniPlayer(px,w,playback);
+                break;
             case "Track":
             case "Artist":
                 DrawMarquee(px,DisplayText(w,playback),x,y,Scale(w.FontSize));
@@ -272,6 +282,60 @@ internal static class OledRenderer
                     Math.Clamp(w.StrokeWidth,1,3));
                 break;
         }
+    }
+
+    /// <summary>
+    /// Optional game-only media widget. No fake title or playback indicator:
+    /// the entire reserved rectangle is black if no media session is playing.
+    /// The active song is confined to a configurable box, so it cannot
+    /// overwrite the game title or another widget outside that box.
+    /// </summary>
+    private static void DrawGameMiniPlayer(bool[] px,DockWidget widget,
+        MediaSnapshot? playback)
+    {
+        var area=GetBounds(widget);
+        for(int yy=Math.Max(0,area.Top);yy<Math.Min(Height,area.Bottom);yy++)
+        for(int xx=Math.Max(0,area.Left);xx<Math.Min(Width,area.Right);xx++)
+            px[yy*Width+xx]=false;
+
+        if(playback?.IsPlaying!=true)return;
+
+        int x=widget.X,y=widget.Y;
+        // The icon editor supports custom 4..20px sprites. Render the chosen
+        // icon in isolation then fit it into the mini player's 14x14 icon box,
+        // never leaking into other game screen elements.
+        string iconKind=playback.IsSpotify?"Spotify":"Media";
+        if(IconLibrary.TryCustom(iconKind,out var custom) &&
+           custom.Length>0 && custom[0].Length>0)
+        {
+            for(int yy=0;yy<14 && y+yy<area.Bottom;yy++)
+            for(int xx=0;xx<14 && x+xx<area.Right;xx++)
+            {
+                int sy=yy*custom.Length/14;
+                int sx=xx*custom[0].Length/14;
+                if(custom[sy][sx]=='1')
+                    Dot(px,x+xx,y+yy);
+            }
+        }
+        else
+        {
+            var badge=new bool[Width*Height];
+            DrawIcon(badge,iconKind,x,y);
+            for(int yy=y;yy<Math.Min(area.Bottom,y+14);yy++)
+            for(int xx=x;xx<Math.Min(area.Right,x+14);xx++)
+                if(xx>=0 && xx<Width && yy>=0 && yy<Height &&
+                   badge[yy*Width+xx])
+                    Dot(px,xx,yy);
+        }
+        int textX=x+16;
+        int width=area.Right-textX;
+        if(width<=0)return;
+        string name=string.IsNullOrWhiteSpace(playback.Title)
+            ?"PLAYING":playback.Title;
+        int scale=Scale(widget.FontSize);
+        int textY=y+(scale>1?1:3);
+        DrawMarquee(px,name,textX,textY,scale,width,
+            Math.Clamp(widget.StrokeWidth,1,3),8);
     }
 
     private static void DrawProgress(bool[] px,int x,int y,int width,int percentage)
@@ -376,46 +440,60 @@ internal static class OledRenderer
     // A physical OLED is 128 pixels wide: text moves by actual PIXELS,
     // rather than jumping one entire character at each update.
     public const int MarqueePixelsPerSecond=3;
-    internal static int MarqueeOffset(int textWidth,int displayWidth,long seconds)
+    internal static int MarqueeOffset(int textWidth,int displayWidth,long seconds,int gap=24)
     {
         if(textWidth<=displayWidth)return 0;
-        int cycle=textWidth+24; // Space between repeated labels.
+        int cycle=textWidth+gap; // Shorter seam for compact game mini titles.
         return (int)((seconds*MarqueePixelsPerSecond)%cycle);
     }
 
-    private static void DrawMarquee(bool[] framebuffer,string text,int left,int top,int scale)
+    /// <summary>
+    /// Per-second pixel marquee, optionally confined to a mini-player box.
+    /// Text weight 1–3 is supported for the game mini player without leaking
+    /// pixels outside its horizontal layout bounds.
+    /// </summary>
+    private static void DrawMarquee(bool[] framebuffer,string text,int left,int top,
+        int scale,int maxWidth=128,int stroke=1,int gap=24)
     {
+        if(string.IsNullOrWhiteSpace(text) || left<0 || left>=Width ||
+           top<0 || top>=Height)return;
         string label=ToPixelAlphabet(text);
-        int advance=6*scale;
-        int displayWidth=Width-left;
-        if(label.Length*advance<=displayWidth)
-        {
-            DrawText(framebuffer,label,left,top,scale);
-            return;
-        }
+        if(label.Length==0)return;
+        int weight=Math.Clamp(stroke,1,3);
+        int right=Math.Min(Width,left+Math.Max(0,maxWidth));
+        int displayWidth=right-left;
+        if(displayWidth<=0)return;
 
+        int advance=6*scale+weight-1;
         int labelWidth=label.Length*advance;
-        int stride=labelWidth+24;
-        int offset=MarqueeOffset(labelWidth,displayWidth,
-            DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        // Tile twice so the next copy enters after a short empty interval.
-        for(int copy=0;copy<2;copy++)
+        int stride=labelWidth+gap;
+        bool longText=labelWidth>displayWidth;
+        int offset=longText
+            ?MarqueeOffset(labelWidth,displayWidth,
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds(),gap)
+            :0;
+        int copies=longText?2:1;
+
+        for(int copy=0;copy<copies;copy++)
         {
             int baseX=left-offset+copy*stride;
             for(int i=0;i<label.Length;i++)
             {
                 int glyphX=baseX+i*advance;
-                if(glyphX+5*scale<left || glyphX>=Width)continue;
+                if(glyphX+5*scale+weight<left || glyphX>=right)continue;
                 if(!Glyphs.TryGetValue(label[i],out var glyph))continue;
                 for(int gy=0;gy<7;gy++)
                 for(int gx=0;gx<5;gx++)
                     if(glyph[gy][gx]=='1')
-                        for(int yy=0;yy<scale;yy++)
-                        for(int xx=0;xx<scale;xx++)
+                        for(int sy=0;sy<scale;sy++)
+                        for(int sx=0;sx<scale;sx++)
+                        for(int yy=0;yy<weight;yy++)
+                        for(int xx=0;xx<weight;xx++)
                         {
-                            int pixelX=glyphX+gx*scale+xx;
-                            if(pixelX>=left && pixelX<Width)
-                                Dot(framebuffer,pixelX,top+gy*scale+yy);
+                            int px=glyphX+gx*scale+sx+xx;
+                            int py=top+gy*scale+sy+yy;
+                            if(px>=left && px<right)
+                                Dot(framebuffer,px,py);
                         }
             }
         }

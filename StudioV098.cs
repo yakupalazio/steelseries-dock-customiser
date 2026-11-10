@@ -35,15 +35,18 @@ internal sealed class StudioProject
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","studio-v098.json");
+        "SteelseriesDockCustomiser","studio-v099.json");
 
     public static StudioProject Load()
     {
         try
         {
-            if(File.Exists(FilePath))
+            // Copy-on-first-load migration: do not rewrite v0.9.8 layouts.
+            string legacy=Path.Combine(Path.GetDirectoryName(FilePath)!,"studio-v098.json");
+            string source=File.Exists(FilePath)?FilePath:legacy;
+            if(File.Exists(source))
             {
-                var result=JsonSerializer.Deserialize<StudioProject>(File.ReadAllText(FilePath));
+                var result=JsonSerializer.Deserialize<StudioProject>(File.ReadAllText(source));
                 if(result!=null)
                 {
                     foreach(var mode in Enum.GetValues<ScreenMode>())
@@ -106,7 +109,7 @@ internal sealed class StudioProject
     {
         "Source" or "Track" or "Artist" or "Progress" or "MediaClock" =>
             mode==ScreenMode.Media,
-        "GameLabel" or "GameTitle"=>mode==ScreenMode.Game,
+        "GameLabel" or "GameTitle" or "GameMiniPlayer"=>mode==ScreenMode.Game,
         "Clock" or "Date" or "Custom text" or
         "Mouse" or "Phone" or "DualSense" or "Headset" or "SpareBattery" or "Laptop" or
         "BatterySlot1" or "BatterySlot2" or "BatterySlot3"=>true,
@@ -120,13 +123,15 @@ internal sealed class StudioProject
         var mandatorySeen=new HashSet<string>();
         layout.Widgets=layout.Widgets.Take(80)
             .Where(w=>w!=null && IsAllowed(mode,w.Kind) &&
-                (!IsLocked(mode,w.Kind)||mandatorySeen.Add(w.Kind)))
+                (!IsLocked(mode,w.Kind)||mandatorySeen.Add(w.Kind)) &&
+                (w.Kind!="GameMiniPlayer"||mandatorySeen.Add(w.Kind)))
             .ToList();
         foreach(var w in layout.Widgets)
         {
             w.X=Math.Clamp(w.X,0,127);
             w.Y=Math.Clamp(w.Y,0,63);
             w.StrokeWidth=Math.Clamp(w.StrokeWidth,1,3);
+            w.MiniWidth=Math.Clamp(w.MiniWidth,35,128);
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }

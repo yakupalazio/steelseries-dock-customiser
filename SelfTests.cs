@@ -152,6 +152,87 @@ internal static class SelfTests
                 if(masked.GetPixel(7,5).R!=0||unmasked.GetPixel(7,5).R!=255)
                     throw new Exception("Header protection renderer is inconsistent");
             }
+            // v0.9.9: optional game Mini Player must never force full Media mode.
+            if(!StudioProject.IsAllowed(ScreenMode.Game,"GameMiniPlayer") ||
+                StudioProject.IsAllowed(ScreenMode.Media,"GameMiniPlayer") ||
+                StudioProject.IsAllowed(ScreenMode.Idle,"GameMiniPlayer"))
+                throw new Exception("Game Mini Player is not restricted to Game mode");
+            if(StudioProject.Defaults(ScreenMode.Game).Widgets
+                .Any(w=>w.Kind=="GameMiniPlayer"))
+                throw new Exception("Game Mini Player is optional, not installed by default");
+
+            var compact=new DockWidget {
+                Kind="GameMiniPlayer", X=7,Y=35,FontSize=7,StrokeWidth=1,
+                MiniWidth=66,Visible=true
+            };
+            var compactLayout=new LayoutState {
+                Widgets=[compact]
+            };
+            // A stale pixel underneath the optional widget must become black
+            // when media stops, with no leftover title/icon.
+            compactLayout.Pixels[37*128+32]=true;
+            var miniPlayback=new MediaSnapshot(
+                true,true,"ONE STEP CLOSER","LINKIN PARK","Spotify",
+                TimeSpan.FromSeconds(25),TimeSpan.FromSeconds(90),
+                DateTimeOffset.Now);
+            using(var playingMini=OledRenderer.Render(compactLayout,false,true,
+                true,null,miniPlayback,new GameSnapshot("VALORANT","VALORANT",1),
+                protectHeader:true,layoutMode:ScreenMode.Game))
+            using(var stoppedMini=OledRenderer.Render(compactLayout,false,true,
+                true,null,MediaSnapshot.Empty,new GameSnapshot("VALORANT","VALORANT",1),
+                protectHeader:true,layoutMode:ScreenMode.Game))
+            {
+                var bounds=OledRenderer.GetBounds(compact);
+                if(bounds.Width!=66 || bounds.Height<14)
+                    throw new Exception("Mini Player configurable rectangle is incorrect");
+                bool playingVisible=false;
+                for(int yy=bounds.Top;yy<bounds.Bottom;yy++)
+                for(int xx=bounds.Left;xx<bounds.Right;xx++)
+                {
+                    playingVisible|=playingMini.GetPixel(xx,yy).R==255;
+                    if(stoppedMini.GetPixel(xx,yy).R!=0)
+                        throw new Exception("Stopped/paused Game Mini Player isn't black");
+                }
+                if(!playingVisible)
+                    throw new Exception("Active Game Mini Player did not draw music");
+                for(int yy=0;yy<64;yy++)
+                for(int xx=0;xx<128;xx++)
+                {
+                    if(xx>=bounds.Left && xx<bounds.Right &&
+                       yy>=bounds.Top && yy<bounds.Bottom)continue;
+                    if(playingMini.GetPixel(xx,yy).R!=
+                       stoppedMini.GetPixel(xx,yy).R)
+                        throw new Exception($"Mini Player writes outside its reserved area at {xx},{yy}; bounds={bounds}; playing={playingMini.GetPixel(xx,yy).R} paused={stoppedMini.GetPixel(xx,yy).R}");
+                }
+                if(playingMini.GetPixel(0,0).R!=0)
+                    throw new Exception("Mini Player modified factory OLED header");
+            }
+            // Larger stroke thickness must render differently without changing
+            // the widget's left/right clipping boundaries.
+            compact.StrokeWidth=3;
+            using(var thickMini=OledRenderer.Render(compactLayout,false,true,
+                true,null,miniPlayback,new GameSnapshot("VALORANT","VALORANT",1),
+                protectHeader:true,layoutMode:ScreenMode.Game))
+            {
+                var bounds=OledRenderer.GetBounds(compact);
+                if(thickMini.GetPixel(7,35).R!=0)
+                    throw new Exception("Mini Player should not fill its whole background");
+                for(int yy=bounds.Top;yy<bounds.Bottom;yy++)
+                for(int xx=bounds.Right;xx<128;xx++)
+                    if(thickMini.GetPixel(xx,yy).R!=0)
+                        throw new Exception("Bold mini song text escaped its selected width");
+            }
+            var compactClone=compactLayout.DeepClone();
+            if(compactClone.Widgets[0].MiniWidth!=66 ||
+               compactClone.Widgets[0].StrokeWidth!=3)
+                throw new Exception("Mini Player size/weight not persisted in layout JSON");
+            // Restrict, but preserve width when loading an existing Game layout.
+            compact.MiniWidth=900;
+            StudioProject.Sanitize(compactLayout,ScreenMode.Game,true);
+            if(compact.MiniWidth!=128 ||
+               compactLayout.Widgets.Count(w=>w.Kind=="GameMiniPlayer")!=1)
+                throw new Exception("Mini Player width was not sanitized or preserved");
+
             // Cached Bluetooth percentages are never live. GG/Phone Link are fetched separately.
             var scan = BatterySources.PollNow();
             foreach(var unverified in new[]{"Mouse","Phone","Headset","DualSense"})

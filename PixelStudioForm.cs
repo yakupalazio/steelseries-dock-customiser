@@ -24,6 +24,7 @@ internal sealed class PixelStudioForm : Form
     private readonly CheckBox headerProtect=new(){
         Left=570,Top=13,Width=240,Text="Üst 10 pikseli koru",Checked=true};
     private readonly NumericUpDown strokeWidth=new(){Minimum=1,Maximum=3,Width=50};
+    private readonly NumericUpDown miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=62};
     private readonly string savePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","studio-v05.json");
@@ -70,7 +71,7 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.8 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser v0.9.9 | OLED Pixel Studio";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(830,875);
         MinimumSize = new Size(850,912);
@@ -96,6 +97,11 @@ internal sealed class PixelStudioForm : Form
 
         tool.Items.AddRange(["Kalem","Silgi","Taşı / Seç"]);
         tool.SelectedIndex=2;
+        kind.FormattingEnabled=true;
+        kind.Format+=(_,e)=>{
+            if(e.ListItem is string name && name=="GameMiniPlayer")
+                e.Value="Mini Player (Oyun)";
+        };
         kind.Items.AddRange(AllWidgetKinds);
         kind.SelectedIndex=0;
         source.Items.AddRange(["Spotify","Diğer medya"]);
@@ -124,8 +130,14 @@ internal sealed class PixelStudioForm : Form
         var line2 = new FlowLayoutPanel { Width=525,Height=37,WrapContents=false };
         line2.Controls.AddRange([widgetVisible,media,L("Kaynak:"),source,
             L("Kalınlık:"),strokeWidth]);
-        editorControls.Controls.AddRange([line1,line2,new Label { Width=520,Height=27,
-            Text="Kısayollar: Ctrl+Z, Ctrl+Y, Delete, ok tuşları (Shift: 5 px)." }]);
+        var line3=new FlowLayoutPanel{ Width=525,Height=30,WrapContents=false };
+        line3.Controls.AddRange([L("Mini Player genişliği:"),miniWidth,
+            L("Müzik yokken alan siyah kalır")]);
+        editorControls.Controls.AddRange([line1,line2,line3]);
+        // Original keyboard shortcut hint is also available through tooltips.
+        var keyboardTip=new ToolTip();
+        keyboardTip.SetToolTip(editor,"Ctrl+Z / Ctrl+Y / Delete / Ok tuşları (Shift: 5 piksel)");
+
         content.Controls.Add(editorControls);editTab.Controls.Add(content);
         status.Left=18;status.Top=680;status.Width=256;editTab.Controls.Add(status);
         var clockDateButton=B("Saat / Tarih",159);
@@ -200,6 +212,7 @@ internal sealed class PixelStudioForm : Form
         customText.KeyDown += (_,e) => { if(e.KeyCode==Keys.Enter){ChangeText();e.SuppressKeyPress=true;} };
         fontSize.ValueChanged += (_,_) => ChangeNumber();
         strokeWidth.ValueChanged += (_,_) => ChangeNumber();
+        miniWidth.ValueChanged += (_,_) => ChangeNumber();
         xPos.ValueChanged += (_,_) => ChangeNumber();
         yPos.ValueChanged += (_,_) => ChangeNumber();
         widgetVisible.CheckedChanged += (_,_) =>
@@ -251,7 +264,7 @@ internal sealed class PixelStudioForm : Form
     private static readonly string[] AllWidgetKinds=[
         "BatterySlot1","BatterySlot2","BatterySlot3","Mouse","Phone",
         "DualSense","Laptop","Headset","SpareBattery","Source","Track",
-        "Artist","Progress","MediaClock","GameLabel","GameTitle",
+        "Artist","Progress","MediaClock","GameLabel","GameTitle","GameMiniPlayer",
         "Clock","Date","Custom text"
     ];
 
@@ -260,7 +273,9 @@ internal sealed class PixelStudioForm : Form
 
     private Bitmap RenderScreen(ScreenMode mode) =>
         OledRenderer.Render(project.For(mode),mode==ScreenMode.Media,true,
-            SpotifyActive,batterySnapshot,LiveMedia,gameSnapshot,
+            SpotifyActive,batterySnapshot,
+            mode==ScreenMode.Game ? (mediaSnapshot.IsPlaying ? mediaSnapshot : null) : LiveMedia,
+            gameSnapshot,
             batteryPreferences,project.ProtectHeader,mode);
 
     private void SwitchEditingMode(ScreenMode next)
@@ -457,8 +472,10 @@ internal sealed class PixelStudioForm : Form
         bool has=selected!=null;
         customText.Enabled=has && selected!.Kind is "Custom text" or "GameLabel";
         fontSize.Enabled=has && selected!.Kind is "Clock" or "MediaClock" or "Date" or
-            "Track" or "Artist" or "GameTitle" or "GameLabel" or "Custom text";
+            "Track" or "Artist" or "GameTitle" or "GameLabel" or
+            "GameMiniPlayer" or "Custom text";
         strokeWidth.Enabled=fontSize.Enabled;
+        miniWidth.Enabled=has && selected!.Kind=="GameMiniPlayer";
         widgetVisible.Enabled=has && !StudioProject.IsLocked(editingMode,selected!.Kind);
         xPos.Enabled=has;yPos.Enabled=has;
         if(selected!=null)
@@ -466,6 +483,7 @@ internal sealed class PixelStudioForm : Form
             customText.Text=selected.Text;
             fontSize.Value=Math.Clamp(selected.FontSize,7,24);
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
+            miniWidth.Value=Math.Clamp(selected.MiniWidth,35,128);
             xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
         }
@@ -482,16 +500,18 @@ internal sealed class PixelStudioForm : Form
         if(changeUi||selected==null)return;
         int newX=(int)xPos.Value,newY=(int)yPos.Value,newSize=(int)fontSize.Value;
         int newWeight=(int)strokeWidth.Value;
+        int newMiniWidth=(int)miniWidth.Value;
         if(selected.X==newX&&selected.Y==newY&&selected.FontSize==newSize&&
-           selected.StrokeWidth==newWeight)return;
+           selected.StrokeWidth==newWeight && selected.MiniWidth==newMiniWidth)return;
         Record();selected.X=newX;selected.Y=newY;selected.FontSize=newSize;
-        selected.StrokeWidth=newWeight;RefreshWidgetList();Redraw();
+        selected.StrokeWidth=newWeight;selected.MiniWidth=newMiniWidth;
+        RefreshWidgetList();Redraw();
     }
     private void AddWidget()
     {
-        string type=kind.Text;
+        string type=kind.SelectedItem?.ToString()??kind.Text;
         if(!StudioProject.IsAllowed(editingMode,type))return;
-        if(StudioProject.IsLocked(editingMode,type) &&
+        if((StudioProject.IsLocked(editingMode,type) || type=="GameMiniPlayer") &&
            state.Widgets.Any(w=>w.Kind==type))
         {
             selected=state.Widgets.First(w=>w.Kind==type);RefreshWidgetList();return;
@@ -500,6 +520,10 @@ internal sealed class PixelStudioForm : Form
         Record();
         var w=new DockWidget{Kind=type,X=5,Y=19};
         if(type=="MediaClock")w.FontSize=7;
+        if(type=="GameMiniPlayer")
+        {
+            w.X=4;w.Y=38;w.FontSize=7;w.MiniWidth=88;
+        }
         if(type=="GameLabel")w.Text="NOW PLAYING:";
         state.Widgets.Add(w);selected=w;RefreshWidgetList();Redraw();tool.SelectedIndex=2;
     }
@@ -587,7 +611,7 @@ internal sealed class PixelStudioForm : Form
         if(e.Control && e.KeyCode==Keys.Z && !e.Shift){Undo();e.SuppressKeyPress=true;return;}
         if(e.Control && (e.KeyCode==Keys.Y || (e.Shift && e.KeyCode==Keys.Z))){Redo();e.SuppressKeyPress=true;return;}
         if(ActiveControl==customText||ActiveControl==fontSize||ActiveControl==xPos||
-           ActiveControl==yPos||ActiveControl==strokeWidth)return;
+           ActiveControl==yPos||ActiveControl==strokeWidth||ActiveControl==miniWidth)return;
         if(e.KeyCode==Keys.Delete){RemoveWidget();e.SuppressKeyPress=true;return;}
         if(selected==null)return;
         int dx=e.KeyCode==Keys.Left?-1:e.KeyCode==Keys.Right?1:0;
