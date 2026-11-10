@@ -17,3 +17,5 @@ dock-photo-local.png
 battery-live-preview.png
 *.gif
 **/user-dock-photo*
+diagnostic-batteries.txt
+battery-source-test.txt

@@ -34,6 +34,11 @@ internal static class BatterySources
         // Prefer its live loadout battery status over stale Windows Bluetooth PnP metadata.
         foreach(var (kind,reading) in await GgBatteryProvider.ReadAsync())
             snapshot.Values[kind]=reading;
+        // Phone Link's accessibility status is available while minimized.
+        // Do not display old Bluetooth PnP percentages when UIA is unavailable.
+        var phone = await Task.Run(PhoneLinkBatteryProvider.TryRead);
+        if(phone is not null)
+            snapshot.Values["Phone"] = phone;
         if(readDualSenseHid && !snapshot["DualSense"].Available)
         {
             int? estimated=await DualSenseReadOnly.TryBatteryPercentAsync();
@@ -59,7 +64,7 @@ internal static class BatterySources
             k switch {
                 "Headset" or "Mouse"=>"SteelSeries GG değeri için doğrulanmış canlı okuyucu henüz yok.",
                 "DualSense"=>"Bağlı değil veya canlı pil raporu alınamadı.",
-                "Phone"=>"Phone Link pil seviyesi için doğrulanmış API yok.",
+                "Phone"=>"Phone Link açık değil veya pil göstergesi erişilebilir değil.",
                 _=>"Pil bilgisi yok."
             },now),StringComparer.OrdinalIgnoreCase);
 

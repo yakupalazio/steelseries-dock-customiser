@@ -1,17 +1,24 @@
 # Changelog
 
-## 0.9.2 — Native GG live battery bridge
-- Discovered actual local SteelSeries Engine loadout status API from the already-installed GG frontend (read-only).
-- Added loopback-only HTTPS discovery, active loadout detection, and connected-device filtering.
-- Integrated live Aerox 3 Wireless Gen 2, Nova Pro Wireless headset and spare-dock-battery status with automatic refresh.
-- Added strict battery-status and GG URL parsing tests; reject unknown/unavailable status rather than guessing.
-- Retained stale Bluetooth cache as diagnostics only, not a live value; phone remains unresolved.
-- No HID output or firmware commands, no changes to GG settings, and no global TLS security changes.
+## 0.9.3 — Phone Link battery reader
 
-## 0.9.1 — Cached Bluetooth suppression
-- Corrected wrong mouse and phone percentages displayed from stale Windows Bluetooth cache.
-- Unknown sources display --% until a verified live provider is available.
+- Read phone battery percent and charging state directly from Phone Link's accessible status Group via Windows UI Automation.
+- Verified on a real linked Galaxy S24+: **100% and charging**, including while Phone Link was minimized.
+- Added safe Turkish/English text parsing, bounds checks, ambiguous-value rejection and parser tests.
+- Integrated the phone reading with the existing 45-second polling and Dock Preview.
+- Do not open or focus Phone Link, read private messages, interact with its controls, or fall back to stale Bluetooth percentages.
+- Added CLI `--battery-scan-file` for accurate offline diagnostics.
+- Kept all previous tools and the physical dock preview-only.
 
-## 0.9.0 — Battery device selector, icon editor, initial adapters
-- Added laptop battery, diagnostic PnP battery discovery, optional experimental DualSense input reader.
-- Added pixel-by-pixel custom icon editor.
+## 0.9.2 — SteelSeries GG live battery integration
+
+- Discovered the local GG Engine read-only battery status API for connected Aerox 3 Gen 2, Nova Pro headset and spare dock battery.
+- Added automatic GG device discovery, connected-device checks and tests.
+
+## 0.9.1 — Stale Bluetooth suppression
+
+- Rejected old Windows Bluetooth battery records as current percentages.
+
+## 0.9.0 — Battery selection, icon editor
+
+- Added the device battery selection dialog, icon pixel editor and read-only Windows battery sources.

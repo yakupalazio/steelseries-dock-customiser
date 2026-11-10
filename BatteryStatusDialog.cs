@@ -98,7 +98,7 @@ internal sealed class BatteryStatusDialog : Form
         };
         Controls.Add(experimental);
         Controls.Add(new Label{Left=16,Top=416,Width=780,Height=41,
-            Text="Eski Bluetooth pil değeri canlı kabul edilmez; yüzde yerine --% gösterilir. Deneysel HID yalnızca giriş raporu okur, ancak oyunlarla çakışabilir. GG / Phone Link okuyucusu henüz yok.",
+            Text="Eski Bluetooth yüzdeleri kullanılmaz. Telefon pili Phone Link'in erişilebilirlik metninden okunur; Phone Link kapalıysa --% görünür. Senkronizasyon güncelliği garanti değildir.",
             ForeColor=Color.DarkSlateGray});
         var applyButton=new Button { Left=585,Top=459,Width=208,Height=34,Text="3 cihazı uygula" };
         applyButton.Click+=(_,_)=>{

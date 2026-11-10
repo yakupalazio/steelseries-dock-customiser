@@ -52,7 +52,7 @@ internal sealed class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser v0.9.2 | OLED Pixel Studio";
+        Text = "Steelseries Dock Customiser v0.9.3 | OLED Pixel Studio";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(830,795);
         MinimumSize = new Size(850,830);

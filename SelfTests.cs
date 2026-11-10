@@ -45,7 +45,25 @@ internal static class SelfTests
                     DateTimeOffset.Now,out _))
                     throw new Exception("GG unknown status was incorrectly treated as live");
             }
-            // Cached Bluetooth percentages are never live. GG is fetched separately.
+            // Phone Link exposes a localized accessible battery status group.
+            if(!PhoneLinkBatteryProvider.TryParseAccessibleBattery(
+                "Cihazınız şarj oluyor ve pil şu anda %84 düzeyinde",
+                out int trPercent, out bool? trCharging) ||
+                trPercent!=84 || trCharging!=true)
+                throw new Exception("Phone Link Turkish accessibility parser failed");
+            if(!PhoneLinkBatteryProvider.TryParseAccessibleBattery(
+                "Your phone battery level is 47% and not charging",
+                out int enPercent, out bool? enCharging) ||
+                enPercent!=47 || enCharging!=false)
+                throw new Exception("Phone Link English accessibility parser failed");
+            if(PhoneLinkBatteryProvider.TryParseAccessibleBattery(
+                "Pil düzeyi düşük olduğunda bildirimleri göster",out _,out _) ||
+                PhoneLinkBatteryProvider.TryParseAccessibleBattery(
+                "Phone battery level: 140%",out _,out _) ||
+                PhoneLinkBatteryProvider.TryParseAccessibleBattery(
+                "Mesaj: %100 tamamlandı",out _,out _))
+                throw new Exception("Phone Link parser accepted non-battery or invalid data");
+            // Cached Bluetooth percentages are never live. GG/Phone Link are fetched separately.
             var scan = BatterySources.PollNow();
             foreach(var unverified in new[]{"Mouse","Phone","Headset","DualSense"})
                 if(scan[unverified].Available)

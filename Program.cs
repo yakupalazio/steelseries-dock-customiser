@@ -12,14 +12,18 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
-        if(args.Contains("--battery-scan"))
+        if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
-            foreach(var kind in BatterySources.Kinds)
+            var lines=BatterySources.Kinds.Select(kind =>
             {
                 var b=snapshot[kind];
-                Console.WriteLine($"{kind}: {b.Display} | {b.Source} | {b.Detail}");
-            }
+                return $"{kind}: {b.Display} | {b.Source} | {b.Detail}";
+            }).ToArray();
+            foreach(var line in lines) Console.WriteLine(line);
+            var at=Array.IndexOf(args,"--battery-scan-file");
+            if(at>=0 && at+1<args.Length)
+                System.IO.File.WriteAllLines(args[at+1],lines);
             return;
         }
         if(args.Contains("--battery-preview"))
