@@ -12,17 +12,6 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
-        if(args.Contains("--game-scan-file"))
-        {
-            int i=Array.IndexOf(args,"--game-scan-file");
-            if(i>=0 && i+1<args.Length)
-            {
-                var game=GameDetector.PollAsync().GetAwaiter().GetResult();
-                System.IO.File.WriteAllText(args[i+1],
-                    $"GameActive={game.Active}; GameName={game.Name}; MatchedExe={game.Executable}");
-            }
-            return;
-        }
         if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
@@ -56,6 +45,43 @@ internal static class Program
             rendered.Save(output,System.Drawing.Imaging.ImageFormat.Png);
             System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(output,".txt"),
                 $"Playing={playback.IsPlaying}; Spotify={playback.IsSpotify}; Title={playback.Title}; Artist={playback.Artist}; Progress={playback.ProgressPercent}%");
+            return;
+        }
+        if(args.Contains("--game-scan-file"))
+        {
+            int pos=Array.IndexOf(args,"--game-scan-file");
+            if(pos>=0 && pos+1<args.Length)
+            {
+                var catalog=GgGameDetector.LoadGgLibrary();
+                var active=GgGameDetector.Poll();
+                var lines=new[]{
+                    "GG Library entries="+catalog.Count,
+                    "Includes VALORANT="+catalog.Any(g=>g.Name.Equals("VALORANT",
+                        StringComparison.OrdinalIgnoreCase)),
+                    "Running game="+(active.IsRunning?active.Name:"None"),
+                    "Detector source=read-only GG library_scan + Windows process list"
+                };
+                System.IO.File.WriteAllLines(args[pos+1],lines);
+            }
+            return;
+        }
+        if(args.Contains("--phone-recovery-test-file"))
+        {
+            int pos=Array.IndexOf(args,"--phone-recovery-test-file");
+            if(pos>=0 && pos+1<args.Length)
+            {
+                var first=PhoneLinkBatteryProvider.TryRead();
+                string prior=PhoneLinkBatteryProvider.LastDiagnostic;
+                var second=PhoneLinkBatteryProvider.TryReadAsync(true)
+                    .GetAwaiter().GetResult();
+                var lines=new[]{
+                    "Without opening: "+(first?.Display??"--%")+" | "+prior,
+                    "After optional Phone Link minimize: "+(second?.Display??"--%")+
+                        " | "+PhoneLinkBatteryProvider.LastDiagnostic,
+                    "This method uses only Phone Link UI Automation, not a background API."
+                };
+                System.IO.File.WriteAllLines(args[pos+1],lines);
+            }
             return;
         }
         if(args.Contains("--self-test"))

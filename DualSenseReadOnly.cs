@@ -71,12 +71,6 @@ internal static class DualSenseReadOnly
         return paths;
     }
 
-    public static bool IsConnected()
-    {
-        try{return EnumeratePaths().Count>0;}
-        catch{return false;}
-    }
-
     public static async Task<int?> TryBatteryPercentAsync()
     {
         foreach(string path in EnumeratePaths())

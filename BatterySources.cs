@@ -19,16 +19,18 @@ internal sealed record BatteryReading(string Kind,int? Percent,string Source,
 internal sealed class BatterySnapshot
 {
     public DateTimeOffset CheckedAt {get; init;} = DateTimeOffset.MinValue;
+    public bool DualSenseConnected {get;init;}=false;
     public Dictionary<string,BatteryReading> Values {get; init;} = new(StringComparer.OrdinalIgnoreCase);
     public BatteryReading this[string kind] => Values.TryGetValue(kind,out var b)
         ? b : new BatteryReading(kind,null,"No provider","Kaynak bulunamadı",CheckedAt);
 }
 internal static class BatterySources
 {
-    public static readonly string[] Kinds = ["Laptop","Mouse","Headset","SpareBattery","DualSense","Phone"];
+    public static readonly string[] Kinds =
+        ["Laptop","Mouse","Headset","SpareBattery","DualSense","Phone"];
     // Polling does not change GG, Bluetooth profiles, paired devices or HID.
     public static async Task<BatterySnapshot> PollAsync(bool readDualSenseHid=false,
-        bool enableAdbPhone=false)
+        bool enableAdbPhone=false,bool autoMinimizePhoneLink=false)
     {
         // Live updates never enumerate all Windows PnP devices. That diagnostic
         // path is expensive and carries no trustworthy live percentages.
@@ -38,19 +40,14 @@ internal static class BatterySources
         // Do not display old Bluetooth PnP percentages when UIA is unavailable.
         BatteryReading? phone=null;
         if(enableAdbPhone) phone=await AdbPhoneBatteryProvider.ReadAsync();
-        phone ??= await Task.Run(PhoneLinkBatteryProvider.TryRead);
+        phone ??= await PhoneLinkBatteryProvider.TryReadAsync(autoMinimizePhoneLink);
         if(phone is not null)
             snapshot.Values["Phone"] = phone;
-        else snapshot.Values["Phone"]=new BatteryReading("Phone",null,
-            "Microsoft Phone Link (arayüz kapalı)",
-            "Başlat menüsü pili gösteriyor ancak Phone Link'in arka plan servisi " +
-            "desteklenen üçüncü taraf pil API'si sunmuyor. İstersen uygulamayı küçültülmüş aç.",
-            DateTimeOffset.Now);
-        bool dualSenseConnected=await Task.Run(DualSenseReadOnly.IsConnected);
-        if(dualSenseConnected && !snapshot["DualSense"].Available)
-            snapshot.Values["DualSense"]=new BatteryReading("DualSense",null,
-                "DualSense HID (bağlı)","Bağlı, pil yüzdesi henüz doğrulanmadı",DateTimeOffset.Now);
-        if(dualSenseConnected && readDualSenseHid && !snapshot["DualSense"].Available)
+        else
+            snapshot.Values["Phone"]=new BatteryReading("Phone",null,
+                "Phone Link (erişilemiyor)",
+                PhoneLinkBatteryProvider.LastDiagnostic,DateTimeOffset.Now);
+        if(readDualSenseHid && !snapshot["DualSense"].Available)
         {
             int? estimated=await DualSenseReadOnly.TryBatteryPercentAsync();
             if(estimated is int value)
@@ -59,7 +56,12 @@ internal static class BatterySources
                     "Deneysel: son alınan HID raporundan yaklaşık seviye.",
                     DateTimeOffset.Now);
         }
-        return snapshot;
+        // Query actual Bluetooth connection status only in the slow loop.
+        bool connected=await DualSenseConnection.IsConnectedAsync();
+        return new BatterySnapshot{
+            CheckedAt=snapshot.CheckedAt,Values=snapshot.Values,
+            DualSenseConnected=connected || snapshot["DualSense"].Available
+        };
     }
 
     /// <summary>
@@ -94,7 +96,9 @@ internal static class BatterySources
                 values[kind]=new BatteryReading(kind,null,
                     "SteelSeries GG (bağlantı yok)","Son onaylı veri 10 saniyeyi aştı.",now);
         }
-        return new BatterySnapshot{CheckedAt=now,Values=values};
+        return new BatterySnapshot{
+            CheckedAt=now,Values=values,DualSenseConnected=previous.DualSenseConnected
+        };
     }
 
     public static BatterySnapshot PollNow()
@@ -102,13 +106,13 @@ internal static class BatterySources
         var now=DateTimeOffset.Now;
         var values=Kinds.ToDictionary(k=>k,k=>new BatteryReading(k,null,
             k switch {
-                "Headset" or "SpareBattery" or "Mouse"=>"SteelSeries / GG (doğrulanmamış)",
+                "Headset" or "Mouse"=>"SteelSeries / GG (doğrulanmamış)",
                 "DualSense"=>"Bluetooth HID (bağlı olduğunda)",
                 "Phone"=>"Phone Link (doğrulanmamış)",
                 _=>"Windows battery"
             },
             k switch {
-                "Headset" or "SpareBattery" or "Mouse"=>"SteelSeries GG değeri için doğrulanmış canlı okuyucu henüz yok.",
+                "Headset" or "Mouse"=>"SteelSeries GG değeri için doğrulanmış canlı okuyucu henüz yok.",
                 "DualSense"=>"Bağlı değil veya canlı pil raporu alınamadı.",
                 "Phone"=>"Phone Link açık değil veya pil göstergesi erişilebilir değil.",
                 _=>"Pil bilgisi yok."

@@ -5,6 +5,8 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows.Automation;
 
 namespace SteelseriesDockCustomiser;
@@ -18,6 +20,58 @@ namespace SteelseriesDockCustomiser;
 /// </summary>
 internal static class PhoneLinkBatteryProvider
 {
+    private static DateTimeOffset lastAutoLaunch=DateTimeOffset.MinValue;
+    public static string LastDiagnostic {get;private set;}="Henüz sorgulanmadı";
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd,int nCmdShow);
+
+    /// <summary>
+    /// Optional, disclosed workaround: opens the official Phone Link app using
+    /// its own registered shell identity and immediately minimizes the window.
+    /// This is NOT an undocumented CrossDevice battery API. No messages are read.
+    /// </summary>
+    public static async Task<BatteryReading?> TryReadAsync(bool allowAutoMinimize)
+    {
+        var direct=await Task.Run(TryRead);
+        if(direct is not null || !allowAutoMinimize)return direct;
+        // Avoid re-opening the UI every minute if sync or accessibility failed.
+        if((DateTimeOffset.Now-lastAutoLaunch).TotalMinutes<5)return null;
+        lastAutoLaunch=DateTimeOffset.Now;
+        try
+        {
+            using var launch=Process.Start(new ProcessStartInfo{
+                FileName="explorer.exe",
+                Arguments=@"shell:AppsFolder\Microsoft.YourPhone_8wekyb3d8bbwe!App",
+                UseShellExecute=true
+            });
+            // Phone Link first shows a non-battery SplashScreen. Its WinUI
+            // accessibility Group loads several seconds afterward. Read it
+            // only once the actual battery status becomes accessible.
+            for(int attempt=0;attempt<12;attempt++)
+            {
+                await Task.Delay(850);
+                var ready=await Task.Run(TryRead);
+                if(ready is null)continue;
+                foreach(var proc in Process.GetProcessesByName("PhoneExperienceHost"))
+                {
+                    using(proc)
+                    {
+                        proc.Refresh();
+                        if(proc.MainWindowHandle!=IntPtr.Zero)
+                            ShowWindow(proc.MainWindowHandle,6); // SW_MINIMIZE
+                    }
+                }
+                return ready;
+            }
+            LastDiagnostic="Phone Link açıldı ancak pil erişilebilirlik alanı 10 saniyede hazır olmadı.";
+            return null;
+        }
+        catch(Exception ex)
+        {
+            LastDiagnostic="Phone Link otomatik küçültme açılamadı: "+ex.GetType().Name;
+            return null;
+        }
+    }
+
     private static readonly Regex PercentBefore = new(
         @"%\s*(?<percent>\d{1,3})(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -35,25 +89,32 @@ internal static class PhoneLinkBatteryProvider
         {
             using var processList = new ProcessScope("PhoneExperienceHost");
             var pids = processList.ProcessIds;
-            if (pids.Length == 0) return null;
+            if(pids.Length==0)
+            {
+                LastDiagnostic="PhoneExperienceHost çalışmıyor.";
+                return null;
+            }
 
             var root = AutomationElement.RootElement;
             var windows = root.FindAll(TreeScope.Children, Condition.TrueCondition);
             var candidates = new List<BatteryReading>();
+            int eligibleWindows=0,accessibleGroups=0;
 
             foreach (AutomationElement window in windows)
             {
                 try
                 {
                     if (!pids.Contains(window.Current.ProcessId)) continue;
-                    // Use owning process rather than a hard-coded WinUI class.
-                    // Phone Link can change its native window class after updates.
-                    if(window.Current.NativeWindowHandle==0) continue;
+                    // Avoid reading any other top-level windows or unrelated app UI.
+                    if(window.Current.ClassName is not
+                        ("WinUIDesktopWin32WindowClass" or "ApplicationFrameWindow"))continue;
+                    eligibleWindows++;
 
                     // Restrict reads to Group control names: the phone battery
                     // is a Group. This deliberately avoids messages/notifications.
                     var groups = window.FindAll(TreeScope.Descendants,
                         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Group));
+                    accessibleGroups+=groups.Count;
                     foreach (AutomationElement group in groups)
                     {
                         try
@@ -81,8 +142,12 @@ internal static class PhoneLinkBatteryProvider
 
             // If there are multiple distinct phone batteries, do not guess
             // which one belongs to the configured phone.
-            return candidates.Count>0 && candidates.Select(c=>c.Percent).Distinct().Count()==1
-                ? candidates[0] : null;
+            LastDiagnostic=candidates.Count==1?"Phone Link pil alanı okundu.":
+                candidates.Count>1?"Birden fazla telefon pil değeri: eşleştirme belirsiz.":
+                eligibleWindows==0?"Phone Link arka planda çalışıyor, fakat UIA penceresi yok.":
+                accessibleGroups==0?"Phone Link penceresinde erişilebilir grup bulunamadı.":
+                "Phone Link pil grubu bulunamadı veya erişilebilirlik etiketi değişti.";
+            return candidates.Count == 1 ? candidates[0] : null;
         }
         catch (ElementNotAvailableException) { }
         catch (InvalidOperationException) { }

@@ -4,47 +4,63 @@ using System.Linq;
 
 namespace SteelseriesDockCustomiser;
 
-/// <summary>Stable priority order, with an explicit optional DualSense-over-Laptop rule.</summary>
 internal static class BatteryPriority
 {
-    public static readonly string[] Defaults=[
-        "Mouse","Laptop","Phone","DualSense","Headset","SpareBattery"
-    ];
+    public static readonly string[] AllKinds =
+        ["Mouse","Phone","DualSense","Laptop","Headset","SpareBattery"];
 
-    public static string[] Normalize(IEnumerable<string>? candidate)
+    public static readonly string[] DefaultKinds =
+        ["Mouse","Phone","DualSense","Laptop","Headset","SpareBattery"];
+
+    public static string DisplayName(string kind)=>kind switch
     {
-        var safe=new List<string>();
-        foreach(var c in candidate??[])
-            if(BatterySources.Kinds.Contains(c) && !safe.Contains(c))
-                safe.Add(c);
-        foreach(var c in Defaults)
-            if(!safe.Contains(c))safe.Add(c);
-        return safe.ToArray();
+        "Mouse"=>"Aerox Mouse",
+        "Phone"=>"Galaxy S24+",
+        "DualSense"=>"DualSense",
+        "Laptop"=>"Laptop",
+        "Headset"=>"Nova Pro Kulaklık",
+        "SpareBattery"=>"Nova Pro Yedek Pil",
+        _=>kind
+    };
+
+    public static string[] Sanitize(IEnumerable<string>? priority)
+    {
+        var result=(priority??[]).Where(AllKinds.Contains)
+            .Distinct(StringComparer.Ordinal).ToList();
+        foreach(var kind in DefaultKinds)
+            if(!result.Contains(kind)) result.Add(kind);
+        return result.ToArray();
     }
 
-    public static string[] Resolve(BatterySnapshot snapshot,
-        IEnumerable<string>? priority,bool dualSenseReplacesLaptop)
+    /// <summary>
+    /// Defaults display Mouse + Phone + Laptop.
+    /// DualSense only becomes eligible if its Bluetooth link is positively
+    /// connected or its live HID report was obtained. Phone remains an explicit
+    /// placeholder if Phone Link is unavailable rather than claiming 0%.
+    /// Other peripherals are eligible when a current reliable GG reading exists.
+    /// </summary>
+    public static string[] SelectThree(BatterySnapshot snapshot,
+        BatteryPreferences preferences)
     {
-        var sorted=Normalize(priority).ToList();
-        bool dualSenseConnected=snapshot["DualSense"].Available ||
-            snapshot["DualSense"].Source.StartsWith("DualSense HID (bağlı)",
-                StringComparison.OrdinalIgnoreCase);
-        if(dualSenseReplacesLaptop && dualSenseConnected)
+        var active=new List<string>();
+        foreach(var kind in Sanitize(preferences.PriorityKinds))
         {
-            sorted.Remove("DualSense");
-            int index=sorted.IndexOf("Laptop");
-            if(index>=0)sorted[index]="DualSense";
+            bool eligible=kind switch
+            {
+                "Phone" or "Laptop"=>true,
+                "DualSense"=>preferences.AutoDualSense &&
+                    (snapshot.DualSenseConnected || snapshot["DualSense"].Available),
+                _=>snapshot[kind].Available
+            };
+            if(eligible)active.Add(kind);
+            if(active.Count==3)break;
         }
-        else if(!dualSenseConnected)
-            sorted.Remove("DualSense");
-
-        var eligible=sorted.Where(k=>
-            k is "Laptop" or "Phone" || snapshot[k].Available ||
-            (k=="DualSense" && dualSenseConnected)).ToList();
-        // Do not put an unconnected/unknown device in the top three unless
-        // no other eligible item is available.
-        foreach(var kind in sorted)
-            if(!eligible.Contains(kind))eligible.Add(kind);
-        return eligible.Take(3).ToArray();
+        // Never leave the UI completely empty when source access is intermittent.
+        foreach(var kind in DefaultKinds)
+        {
+            if(active.Count>=3)break;
+            if(!active.Contains(kind) && kind!="DualSense")active.Add(kind);
+        }
+        return active.Take(3).ToArray();
     }
 }

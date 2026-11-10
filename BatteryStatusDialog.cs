@@ -3,40 +3,54 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Collections.Generic;
 
 namespace SteelseriesDockCustomiser;
 
 internal sealed class BatteryPreferences
 {
-    // Legacy array retained for old settings. v0.9.8 uses PriorityOrder instead.
-    public string[] DisplayDevices {get;set;}=["Mouse","Laptop","Phone"];
-    public string[] PriorityOrder {get;set;}=BatteryPriority.Defaults.ToArray();
-    public bool DualSenseReplacesLaptop {get;set;}=true;
+    public string[] PriorityKinds {get;set;}=BatteryPriority.DefaultKinds.ToArray();
+    public bool AutoDualSense {get;set;}=true;
     public bool ExperimentalControllerHid {get;set;}=false;
-    public bool UseAdbPhoneBattery {get;set;}=false; // kept off; debugging not required.
+    public bool UseAdbPhoneBattery {get;set;}=false;
+    public bool AutoMinimizePhoneLink {get;set;}=false;
     public static string FilePath=>Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","batteries-v09.json");
+        "SteelseriesDockCustomiser","batteries-v098.json");
 
     public static BatteryPreferences Load()
     {
         try
         {
-            var prefs=JsonSerializer.Deserialize<BatteryPreferences>(File.ReadAllText(FilePath));
-            if(prefs!=null)
+            if(File.Exists(FilePath))
             {
-                prefs.PriorityOrder=BatteryPriority.Normalize(prefs.PriorityOrder);
-                return prefs;
+                var pref=JsonSerializer.Deserialize<BatteryPreferences>(File.ReadAllText(FilePath));
+                if(pref!=null){pref.PriorityKinds=BatteryPriority.Sanitize(pref.PriorityKinds);return pref;}
             }
-        }catch{}
+            // Carry over the old experimental-device flag, but apply the new
+            // default priority instead of the former hard-coded 3 devices.
+            string old=Path.Combine(Path.GetDirectoryName(FilePath)!,"batteries-v09.json");
+            if(File.Exists(old))
+            {
+                using var data=JsonDocument.Parse(File.ReadAllText(old));
+                var r=data.RootElement;
+                return new BatteryPreferences{
+                    ExperimentalControllerHid=ReadFlag(r,"ExperimentalControllerHid"),
+                    UseAdbPhoneBattery=ReadFlag(r,"UseAdbPhoneBattery")
+                };
+            }
+        }
+        catch{}
         return new BatteryPreferences();
     }
+    private static bool ReadFlag(JsonElement root,string field)=>
+        root.TryGetProperty(field,out var value)&&value.ValueKind==JsonValueKind.True;
+
     public void Save()
     {
+        PriorityKinds=BatteryPriority.Sanitize(PriorityKinds);
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        PriorityOrder=BatteryPriority.Normalize(PriorityOrder);
         File.WriteAllText(FilePath,JsonSerializer.Serialize(this,
             new JsonSerializerOptions{WriteIndented=true}));
     }
@@ -45,141 +59,153 @@ internal sealed class BatteryPreferences
 internal sealed class BatteryStatusDialog : Form
 {
     private readonly BatteryPreferences prefs;
-    private readonly Func<BatterySnapshot> snapshot;
-    private readonly Func<System.Threading.Tasks.Task> refresh;
-    private readonly Action<string[]> apply;
-    private readonly DataGridView grid=new(){
-        Left=16,Top=42,Width=810,Height=220,ReadOnly=true,
+    private readonly Func<BatterySnapshot> snapshotGetter;
+    private readonly Func<Task> refresh;
+    private readonly Action onApply;
+    private readonly DataGridView grid=new()
+    {
+        Left=16,Top=18,Width=840,Height=210,ReadOnly=true,
         AllowUserToAddRows=false,AllowUserToDeleteRows=false,
-        RowHeadersVisible=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,
+        MultiSelect=false,RowHeadersVisible=false,
+        SelectionMode=DataGridViewSelectionMode.FullRowSelect,
         AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,
         BackgroundColor=Color.White
     };
-    private readonly ListBox priorities=new(){Left=18,Top=317,Width=375,Height=174};
-    private readonly CheckBox special=new(){
-        Left=18,Top=503,Width=800,Height=27,
-        Text="DualSense bağlanınca laptop yerine göster (diğer cihazlarda geçerli değil)"};
-    private readonly CheckBox hid=new(){
-        Left=18,Top=538,Width=800,Height=27,
-        Text="DualSense için deneysel salt-okunur HID raporunu kullan"};
-    private readonly Label updated=new(){Left=18,Top=566,Width=800,Height=42,
-        Text="Phone Link: yalnız doğrulanmış erişilebilir pil değeri kullanılır. " +
-             "ADB ve USB hata ayıklama gerekmez. Telefon ve DualSense dakikada bir güncellenir.",
-        ForeColor=Color.DarkSlateGray};
-    private bool updating;
+    private readonly ListBox priority=new(){Left=17,Top=292,Width=355,Height=164};
+    private readonly Label active=new(){Left=402,Top=329,Width=450,Height=73};
+    private readonly Label lastUpdated=new(){Left=150,Top=234,Width=700,Height=27};
+    private readonly CheckBox dualSense=new()
+    {
+        Left=403,Top=412,Width=450,Text="DualSense bağlandığında otomatik öne çıkar"
+    };
+    private readonly CheckBox experimental=new()
+    {
+        Left=17,Top=482,Width=790,Text="Deneysel DualSense HID pil okuması (salt-okunur)"
+    };
+    private readonly CheckBox adb=new()
+    {
+        Left=17,Top=509,Width=790,Text="Android ADB pil kaynağı (isteğe bağlı)"
+    };
+    private readonly CheckBox minimizePhoneLink=new()
+    {
+        Left=17,Top=536,Width=790,
+        Text="Phone Link'i gerekirse açıp küçült (pencereyi kapalı tutmaya alternatif)"
+    };
 
     public BatteryStatusDialog(BatteryPreferences preferences,
-        Func<BatterySnapshot> getSnapshot,Func<System.Threading.Tasks.Task> refreshNow,
-        Action<string[]> applyChoices)
+        Func<BatterySnapshot> getSnapshot,Func<Task> update,Action apply)
     {
-        prefs=preferences;snapshot=getSnapshot;refresh=refreshNow;apply=applyChoices;
-        Text="Cihaz pilleri — öncelik sırası ve canlı kaynaklar";
+        prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
+        Text="Pil cihazları — öncelik sıralaması";
         StartPosition=FormStartPosition.CenterParent;
-        ClientSize=new Size(844,660);
-        MinimumSize=new Size(862,700);
-        Font=new Font("Segoe UI",10);
-        Controls.Add(new Label{
-            Left=18,Top=12,Width=790,Height=24,
-            Text="En yüksek öncelikli 3 uygun cihaz dock ekranında gösterilir."
-        });
-        grid.Columns.Add("device","Cihaz");
-        grid.Columns.Add("charge","Pil");
-        grid.Columns.Add("source","Veri kaynağı");
-        grid.Columns.Add("detail","Durum");
-        grid.Columns[0].FillWeight=65;
-        grid.Columns[1].FillWeight=38;
-        grid.Columns[2].FillWeight=135;
-        grid.Columns[3].FillWeight=185;
-        foreach(var kind in BatterySources.Kinds)
-            grid.Rows.Add(kind,"--%","Yok","...");
+        ClientSize=new Size(875,665);
+        MinimumSize=new Size(885,700);
+        Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
-        Controls.Add(new Label{Left=18,Top=276,Width=670,Height=27,
-            Text="Öncelik sırası (yukarı taşıyarak önceliği artır):"});
-        Controls.Add(priorities);
-        var up=new Button{Text="Yukarı ↑",Left=415,Top=325,Width=116,Height=36};
-        var down=new Button{Text="Aşağı ↓",Left=415,Top=369,Width=116,Height=36};
-        var reset=new Button{Text="Varsayılan sıra",Left=415,Top=418,Width=165,Height=35};
-        up.Click+=(_,_)=>Shift(-1);
-        down.Click+=(_,_)=>Shift(1);
-        reset.Click+=(_,_)=>FillPriority(BatteryPriority.Defaults);
-        Controls.AddRange([up,down,reset,special,hid,updated]);
-        special.Checked=prefs.DualSenseReplacesLaptop;
-        hid.Checked=prefs.ExperimentalControllerHid;
-        var liveOrder=new Label{Left=583,Top=318,Width=236,Height=155,
-            Text="Gösterilecek üç cihaz:",Font=new Font("Segoe UI",10,FontStyle.Bold)};
-        Controls.Add(liveOrder);
-        special.CheckedChanged+=(_,_)=>PreviewOrder();
-        hid.CheckedChanged+=(_,_)=>PreviewOrder();
-        void PreviewOrder()
-        {
-            var order=BatteryPriority.Resolve(snapshot(),ListPriority(),special.Checked);
-            liveOrder.Text="Seçilen üç cihaz:\n\n"+string.Join("\n",order.Select((k,i)=>$"{i+1}. {k}"));
-        }
-        priorities.SelectedIndexChanged+=(_,_)=>PreviewOrder();
-        var refreshButton=new Button{Left=18,Top=615,Width=138,Height=32,
-            Text="Şimdi yenile"};
-        refreshButton.Click+=async (_,_)=>{
-            if(updating)return;
-            updating=true;refreshButton.Enabled=false;
-            try{await refresh();UpdateRows();PreviewOrder();}
-            finally{updating=false;refreshButton.Enabled=true;}
+        grid.Columns.Add("device","Cihaz");
+        grid.Columns.Add("pct","Pil");
+        grid.Columns.Add("source","Doğrulanan kaynak");
+        grid.Columns.Add("status","Durum");
+        grid.Columns[0].FillWeight=90;
+        grid.Columns[1].FillWeight=40;
+        grid.Columns[2].FillWeight=115;
+        grid.Columns[3].FillWeight=190;
+        foreach(var kind in BatteryPriority.AllKinds)
+            grid.Rows.Add(BatteryPriority.DisplayName(kind),"--%","","");
+
+        var now=new Button{Left=17,Top=232,Width=125,Height=31,Text="Şimdi yenile"};
+        now.Click+=async (_,_)=>{
+            now.Enabled=false;
+            try{await refresh();UpdateRows();}finally{now.Enabled=true;}
         };
-        var phoneButton=new Button{Left=170,Top=615,Width=322,Height=32,
-            Text="Phone Link'i aç ve küçült (ADB gerekmez)"};
-        phoneButton.Click+=async (_,_)=>{
-            phoneButton.Enabled=false;
-            try{
-                updated.Text=await PhoneLinkLauncher.OpenMinimizedAsync();
-                await refresh();UpdateRows();PreviewOrder();
-            }
-            finally{phoneButton.Enabled=true;}
-        };
-        Controls.Add(phoneButton);
-        var saveButton=new Button{Left=623,Top=615,Width=197,Height=32,
+        Controls.Add(now);Controls.Add(lastUpdated);
+        Controls.Add(new Label{
+            Left=17,Top=271,Width=360,Height=23,
+            Text="Öncelik sırası (yukarıdaki üç uygun cihaz):"
+        });
+        Controls.Add(priority);
+        foreach(var kind in BatteryPriority.Sanitize(prefs.PriorityKinds))
+            priority.Items.Add(kind);
+        priority.SelectedIndex=0;
+        var up=new Button{Left=382,Top=294,Width=76,Height=32,Text="Yukarı"};
+        var down=new Button{Left=382,Top=334,Width=76,Height=32,Text="Aşağı"};
+        // Keep the priority controls separate from other device editing.
+        up.Click+=(_,_)=>MovePriority(-1);
+        down.Click+=(_,_)=>MovePriority(1);
+        Controls.Add(up);Controls.Add(down);
+        active.Left=470;active.Top=290;active.Width=384;
+        Controls.Add(active);
+        dualSense.Checked=prefs.AutoDualSense;
+        dualSense.Left=403;dualSense.Top=403;
+        Controls.Add(dualSense);
+        Controls.Add(new Label{
+            Left=17,Top=459,Width=834,Height=22,
+            Text="Telefon ve DualSense okumaları 60 saniyede bir; GG/laptop her saniye.",
+            ForeColor=Color.DarkSlateGray
+        });
+        experimental.Checked=prefs.ExperimentalControllerHid;
+        adb.Checked=prefs.UseAdbPhoneBattery;
+        minimizePhoneLink.Checked=prefs.AutoMinimizePhoneLink;
+        Controls.Add(experimental);Controls.Add(adb);Controls.Add(minimizePhoneLink);
+        Controls.Add(new Label{
+            Left=17,Top=569,Width=832,Height=42,
+            Text="Phone Link veri kaynağı: yalnızca pil durumunun erişilebilirlik metni. "+
+                "Arka plan servisi doğrudan pil API'si sunmuyor. Açıp küçültme isteğe bağlıdır; "+
+                "telefon verilerine veya mesajlara erişilmez.",
+            ForeColor=Color.DarkSlateGray
+        });
+        var applyButton=new Button{Left=649,Top=617,Width=207,Height=32,
             Text="Öncelikleri uygula"};
-        saveButton.Click+=(_,_)=>{
-            prefs.PriorityOrder=BatteryPriority.Normalize(ListPriority());
-            prefs.DualSenseReplacesLaptop=special.Checked;
-            prefs.ExperimentalControllerHid=hid.Checked;
-            // ADB source is intentionally disabled by default unless already enabled.
+        applyButton.Click+=(_,_)=>{
+            prefs.PriorityKinds=priority.Items.Cast<string>().ToArray();
+            prefs.AutoDualSense=dualSense.Checked;
+            prefs.ExperimentalControllerHid=experimental.Checked;
+            prefs.UseAdbPhoneBattery=adb.Checked;
+            prefs.AutoMinimizePhoneLink=minimizePhoneLink.Checked;
             prefs.Save();
-            apply(BatteryPriority.Resolve(snapshot(),prefs.PriorityOrder,
-                prefs.DualSenseReplacesLaptop));
+            onApply();
             Close();
         };
-        Controls.AddRange([refreshButton,saveButton]);
-        FillPriority(prefs.PriorityOrder);
+        Controls.Add(applyButton);
+        priority.SelectedIndexChanged+=(_,_)=>ShowActive();
+        dualSense.CheckedChanged+=(_,_)=>ShowActive();
         UpdateRows();
-        PreviewOrder();
     }
 
-    private void FillPriority(IEnumerable<string> order)
+    private void MovePriority(int delta)
     {
-        priorities.Items.Clear();
-        foreach(var key in BatteryPriority.Normalize(order))priorities.Items.Add(key);
-        if(priorities.Items.Count>0)priorities.SelectedIndex=0;
+        int before=priority.SelectedIndex,after=before+delta;
+        if(before<0||after<0||after>=priority.Items.Count)return;
+        var item=priority.Items[before];
+        priority.Items.RemoveAt(before);
+        priority.Items.Insert(after,item);
+        priority.SelectedIndex=after;
+        ShowActive();
     }
-    private string[] ListPriority()=>priorities.Items.Cast<string>().ToArray();
-    private void Shift(int offset)
+    private void ShowActive()
     {
-        int i=priorities.SelectedIndex,j=i+offset;
-        if(i<0||j<0||j>=priorities.Items.Count)return;
-        object item=priorities.Items[i];
-        priorities.Items.RemoveAt(i);
-        priorities.Items.Insert(j,item);
-        priorities.SelectedIndex=j;
+        var local=new BatteryPreferences{
+            PriorityKinds=priority.Items.Cast<string>().ToArray(),
+            AutoDualSense=dualSense.Checked
+        };
+        string[] display=BatteryPriority.SelectThree(snapshotGetter(),local);
+        active.Text="Şu anda seçilenler:\n"+string.Join("  ·  ",
+            display.Select(BatteryPriority.DisplayName));
     }
-
     public void UpdateRows()
     {
         if(IsDisposed)return;
-        var result=snapshot();
-        for(int i=0;i<BatterySources.Kinds.Length;i++)
+        var snap=snapshotGetter();
+        for(int i=0;i<BatteryPriority.AllKinds.Length;i++)
         {
-            var b=result[BatterySources.Kinds[i]];
-            grid.Rows[i].Cells[1].Value=b.Display;
-            grid.Rows[i].Cells[2].Value=b.Source;
-            grid.Rows[i].Cells[3].Value=b.Detail;
+            string kind=BatteryPriority.AllKinds[i];
+            var reading=snap[kind];
+            grid.Rows[i].Cells[1].Value=reading.Display;
+            grid.Rows[i].Cells[2].Value=reading.Source;
+            grid.Rows[i].Cells[3].Value=reading.Detail;
         }
+        lastUpdated.Text=snap.CheckedAt==DateTimeOffset.MinValue
+            ?"Tarama bekleniyor":"Son okuma: "+snap.CheckedAt.ToLocalTime().ToString("HH:mm:ss");
+        ShowActive();
     }
 }

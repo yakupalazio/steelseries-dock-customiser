@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.Linq;
 using System.Globalization;
 using System.Text;
+using System.Threading;
 
 namespace SteelseriesDockCustomiser;
 
@@ -18,9 +19,7 @@ internal static class OledRenderer
 {
     public const int Width=128, Height=64, ReservedTop=10;
     private static readonly IReadOnlyDictionary<char,string[]> Glyphs = MakeGlyphs();
-    [ThreadStatic] private static bool clipOverride;
-    [ThreadStatic] private static int clipOverrideTop;
-    private static int ClipTop=>clipOverride?clipOverrideTop:ReservedTop;
+    private static readonly AsyncLocal<bool> EditableHeader = new();
 
     private static readonly Dictionary<string,string[]> IconSprites = new()
     {
@@ -77,16 +76,17 @@ internal static class OledRenderer
             "001000000100"
         ],
         ["SpareBattery"] = [
-            "000111111100",
-            "001000000010",
-            "011000000010",
-            "011000000010",
-            "011000000010",
-            "011000000010",
-            "011000000010",
-            "011000000010",
-            "001000000010",
-            "000111111100"
+            "11111111100",
+            "10000000110",
+            "10111110111",
+            "10111110111",
+            "10111110111",
+            "10111110111",
+            "10111110111",
+            "10111110111",
+            "10111110111",
+            "10000000110",
+            "11111111100"
         ],
         ["Laptop"] = [
             "0011111111100",
@@ -118,60 +118,55 @@ internal static class OledRenderer
 
     public static Bitmap Render(LayoutState layout,bool media,bool showDate,bool spotify,
         BatterySnapshot? batteries=null,MediaSnapshot? playback=null,
-        DockMode mode=DockMode.Media,GameSnapshot? game=null,
-        string[]? displayDevices=null,bool preserveHeader=true)
+        GameSnapshot? game=null,BatteryPreferences? preferences=null,
+        bool protectHeader=true,ScreenMode? layoutMode=null)
     {
-        bool oldOverride=clipOverride;
-        int oldTop=clipOverrideTop;
-        clipOverride=true;
-        clipOverrideTop=preserveHeader?10:0;
-        try
-        {
+        bool wasEditable=EditableHeader.Value;
+        EditableHeader.Value=!protectHeader;
+        try {
         var frame=new bool[Width*Height];
 
         // Physical OEM indicator rows are managed by the dock firmware, not by us.
         // Leave the protected region black in the framebuffer; never transmit it.
 
         // Draw every editable pixel, clipped below simulated factory bar.
-        for(int y=ClipTop;y<Height;y++)
+        for(int y=protectHeader?ReservedTop:0;y<Height;y++)
         for(int x=0;x<Width;x++)
             if(layout.Pixels[y*Width+x])frame[y*Width+x]=true;
 
+        var mode=layoutMode??(media?ScreenMode.Media:ScreenMode.Idle);
+        var kinds=BatteryPriority.SelectThree(batteries??new BatterySnapshot(),
+            preferences??new BatteryPreferences());
         foreach(var w in layout.Widgets.Where(w=>w.Visible &&
-                 ShouldShow(w,media,showDate,mode)))
-            DrawWidget(frame,w,spotify,batteries,playback,game,displayDevices);
+            (layoutMode is null?ShouldShow(w,media,showDate):
+                StudioProject.IsAllowed(mode,w.Kind) &&
+                    (w.Kind!="Date"||showDate))))
+            DrawWidget(frame,w,spotify,batteries,playback,game,kinds);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
         for(int y=0;y<Height;y++)
         for(int x=0;x<Width;x++)
             bmp.SetPixel(x,y,frame[y*Width+x]?Color.White:Color.Black);
         return bmp;
-        }
-        finally
-        {
-            clipOverride=oldOverride;
-            clipOverrideTop=oldTop;
-        }
+        } finally { EditableHeader.Value=wasEditable; }
     }
 
-    private static bool ShouldShow(DockWidget w,bool media,bool date,DockMode mode)=>
-        w.Kind switch
-        {
-            "Source" or "Track" or "Artist" or "Progress" => mode==DockMode.Media && media,
-            "GameLabel" or "GameTitle" => mode==DockMode.Game,
-            "Date"=>date,
-            _=>true
-        };
+    private static bool ShouldShow(DockWidget w,bool media,bool date)=>w.Kind switch
+    {
+        "Clock" or "Date" => !media && (w.Kind!="Date" || date),
+        "Source" or "Track" or "Artist" or "Progress" => media,
+        _=>true
+    };
 
     public static string DisplayText(DockWidget w,MediaSnapshot? playback=null)=>w.Kind switch
     {
-        "Clock"=>DateTime.Now.ToString(ClockDateFormats.ClockFormat(w.Format),CultureInfo.InvariantCulture),
+        "Clock" or "MediaClock"=>
+            DateTime.Now.ToString(ClockDateFormats.ClockFormat(w.Format),CultureInfo.InvariantCulture),
         "Date"=>DateTime.Now.ToString(ClockDateFormats.DateFormat(w.Format),CultureInfo.InvariantCulture),
         "Track"=>playback?.IsPlaying==true ? playback.Title : "PALE TORTURED",
         "Artist"=>playback?.IsPlaying==true ? playback.Artist : "DRACONIAN",
-        "Custom text"=>w.Text,
-        "SmallClock"=>DateTime.Now.ToString(ClockDateFormats.ClockFormat(w.Format),CultureInfo.InvariantCulture),
-        "GameLabel"=>"NOW PLAYING:",
+        "Custom text" or "GameLabel"=>w.Text,
+        "GameTitle"=>w.Text,
         _=>""
     };
 
@@ -179,21 +174,17 @@ internal static class OledRenderer
     {
         "Progress" => new(w.X,w.Y,98,5),
         "Source" => new(w.X,w.Y,14,14),
-        "Mouse" or "Phone" or "Headset" or "SpareBattery" or "Laptop" or "DualSense" or
-        "BatterySlot1" or "BatterySlot2" or "BatterySlot3" =>
-            new(w.X,w.Y,38,11),
-        "Clock" => new(w.X,w.Y,Math.Min(128-w.X,
-            DisplayText(w).Length*(12+Math.Max(0,w.StrokeWidth-1))),15),
-        "SmallClock"=>new(w.X,w.Y,Math.Min(128-w.X,
-            TextWidth(DisplayText(w),w.FontSize)+DisplayText(w).Length*(w.StrokeWidth-1)),
-            TextHeight(w.FontSize)+w.StrokeWidth-1),
-        "GameLabel"=>new(w.X,w.Y,84,8),
-        "GameTitle"=>new(w.X,w.Y,Math.Max(5,Width-w.X),TextHeight(w.FontSize)),
+        "Mouse" or "Phone" or "Headset" or "SpareBattery" or "Laptop" or
+        "DualSense" or "BatterySlot1" or "BatterySlot2" or "BatterySlot3" =>
+            new(w.X,w.Y,41,11),
+        "Clock" => w.FontSize>=15
+            ? new(w.X,w.Y,Math.Min(128-w.X,DisplayText(w).Length*13),15)
+            : new(w.X,w.Y,Math.Max(10,TextWidth(DisplayText(w),w.FontSize)+w.StrokeWidth),9),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
     };
 
-    public static bool IsDevice(string name)=>name is "Mouse" or "Phone" or "Headset" or
-        "SpareBattery" or "Laptop" or "DualSense" or
+    public static bool IsDevice(string name)=>name is "Mouse" or "Phone" or
+        "Headset" or "SpareBattery" or "Laptop" or "DualSense" or
         "BatterySlot1" or "BatterySlot2" or "BatterySlot3";
 
     public static int TextWidth(string text,int fontSize)
@@ -215,8 +206,9 @@ internal static class OledRenderer
         for(int x=0;x<Width;x++)Dot(px,x,11,false);
     }
 
-    private static void DrawWidget(bool[] px,DockWidget w,bool spotify,BatterySnapshot? batteries,
-        MediaSnapshot? playback,GameSnapshot? game,string[]? displayDevices)
+    private static void DrawWidget(bool[] px,DockWidget w,bool spotify,
+        BatterySnapshot? batteries,MediaSnapshot? playback,
+        GameSnapshot? game,string[] currentDevices)
     {
         int x=w.X,y=w.Y;
         switch(w.Kind)
@@ -233,15 +225,15 @@ internal static class OledRenderer
             case "BatterySlot1":
             case "BatterySlot2":
             case "BatterySlot3":
-                string batteryKind=w.Kind;
-                if(batteryKind.StartsWith("BatterySlot",StringComparison.Ordinal))
+                string device=w.Kind;
+                if(device.StartsWith("BatterySlot",StringComparison.Ordinal))
                 {
-                    int index=batteryKind[^1]-'1';
-                    if(displayDevices is null || index<0 || index>=displayDevices.Length) break;
-                    batteryKind=displayDevices[index];
+                    if(!int.TryParse(device[^1..],out var slot))break;
+                    if(slot<1||slot>currentDevices.Length)break;
+                    device=currentDevices[slot-1];
                 }
-                DrawIcon(px,batteryKind,x,y);
-                string pct=batteries?[batteryKind].Display ?? "--%";
+                DrawIcon(px,device,x,y);
+                string pct=batteries?[device].Display ?? "--%";
                 DrawText(px,pct,x+15,y+2,1);
                 break;
             case "Progress":
@@ -249,19 +241,23 @@ internal static class OledRenderer
                     playback?.IsPlaying==true ? playback.ProgressPercent : 46);
                 break;
             case "Clock":
-                DrawClock(px,DisplayText(w),x,y,Math.Clamp(w.StrokeWidth,1,3));
+                if(w.FontSize>=15)
+                    DrawClock(px,DisplayText(w),x,y,Math.Clamp(w.StrokeWidth,1,3));
+                else
+                    DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
+                        Math.Clamp(w.StrokeWidth,1,3));
                 break;
-            case "SmallClock":
+            case "MediaClock":
                 DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
                     Math.Clamp(w.StrokeWidth,1,3));
                 break;
-            case "GameLabel":
-                DrawText(px,"NOW PLAYING:",x,y,Scale(w.FontSize),
-                    Math.Clamp(w.StrokeWidth,1,3));
-                break;
             case "GameTitle":
-                DrawMarquee(px,game?.Active==true?game.Name:"GAME PREVIEW",
-                    x,y,Scale(w.FontSize));
+                DrawMarquee(px,game?.IsRunning==true?game.Name:
+                    "GAME NOT RUNNING",x,y,Scale(w.FontSize));
+                break;
+            case "GameLabel":
+                DrawText(px,string.IsNullOrWhiteSpace(w.Text)?"NOW PLAYING:":w.Text,
+                    x,y,Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
                 break;
             case "Track":
             case "Artist":
@@ -505,13 +501,13 @@ internal static class OledRenderer
 
     private static void Dot(bool[] pixels,int x,int y,bool clip=true)
     {
-        if(x>=0&&x<Width&&y>=0&&y<Height&&(!clip||y>=ClipTop))
+        if(x>=0&&x<Width&&y>=0&&y<Height&&(!clip||EditableHeader.Value||y>=ReservedTop))
             pixels[y*Width+x]=true;
     }
 
     private static void Undot(bool[] pixels,int x,int y,bool clip=true)
     {
-        if(x>=0&&x<Width&&y>=0&&y<Height&&(!clip||y>=ClipTop))
+        if(x>=0&&x<Width&&y>=0&&y<Height&&(!clip||EditableHeader.Value||y>=ReservedTop))
             pixels[y*Width+x]=false;
     }
 

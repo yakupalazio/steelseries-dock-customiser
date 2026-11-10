@@ -15,11 +15,9 @@ internal sealed class ClockDateSettingsDialog : Form
     private readonly PictureBox preview=new(){Width=640,Height=320,BackColor=Color.Black,BorderStyle=BorderStyle.FixedSingle};
     private readonly LayoutState original;
     private readonly Action<string,int,string,int> save;
-    private readonly string clockKind;
-    public ClockDateSettingsDialog(LayoutState state,Action<string,int,string,int> onSave,
-        string clockWidgetKind="Clock")
+    public ClockDateSettingsDialog(LayoutState state,Action<string,int,string,int> onSave)
     {
-        original=state.DeepClone();save=onSave;clockKind=clockWidgetKind;
+        original=state.DeepClone();save=onSave;
         Text="Saat ve tarih — OLED kişiselleştirme";
         Font=new Font("Segoe UI",10f);
         StartPosition=FormStartPosition.CenterParent;
@@ -28,7 +26,7 @@ internal sealed class ClockDateSettingsDialog : Form
         var top=new Label{Text="Saat ve tarihi bağımsız olarak düzenle",
             Font=new Font("Segoe UI",13,FontStyle.Bold),
             Left=24,Top=15,Width=655,Height=31}; Controls.Add(top);
-        var clk=original.Widgets.FirstOrDefault(w=>w.Kind==clockKind);
+        var clk=original.Widgets.FirstOrDefault(w=>w.Kind=="Clock");
         var dt=original.Widgets.FirstOrDefault(w=>w.Kind=="Date");
         clockFormat.Items.AddRange(ClockDateFormats.Clock);
         dateFormat.Items.AddRange(ClockDateFormats.Date);
@@ -82,7 +80,7 @@ internal sealed class ClockDateSettingsDialog : Form
         var clone=original.DeepClone();
         foreach(var w in clone.Widgets)
         {
-            if(w.Kind==clockKind){w.Format=clockFormat.Text;w.StrokeWidth=(int)clockWeight.Value;}
+            if(w.Kind=="Clock"){w.Format=clockFormat.Text;w.StrokeWidth=(int)clockWeight.Value;}
             if(w.Kind=="Date"){w.Format=dateFormat.Text;w.StrokeWidth=(int)dateWeight.Value;}
         }
         return clone;
