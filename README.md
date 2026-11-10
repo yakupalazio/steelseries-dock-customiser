@@ -64,13 +64,33 @@ Our **full graphical editor remains standalone in 1.0**. For the physical Nova P
 
 A later opt-in GG GameSense registration could add an Apps entry / supported events **after checking Nova Pro Wireless zone compatibility and conflict behavior**. No undocumented GG app files are patched or injected, and no registration is performed without user consent.
 
+## Settings, About and hidden OLED mini FPS
+
+Open **Ayarlar → Hakkında** for the app information and the **Yakup Can Palaz** signature. While the About panel has keyboard focus, enter the classic Konami sequence:
+
+`↑ ↑ ↓ ↓ ← → ← → B A`
+
+This launches **DOOM MODE**, an original monochrome 128×64 ray-casting mini FPS with walls, an enemy, health, shooting and a pixel gun. It is an Easter egg **inspired by retro FPS games**, not the copyrighted id Software DOOM game or engine.
+
+- `W/S` or `↑/↓`: forward/back, `A/D` or `←/→`: turn, `Space`: fire, `R`: reset.
+- `ESC`: close the game and return to the normal OLED Studio.
+- The game first runs **only in the Windows preview**. No hardware command is sent by unlocking it.
+- **Gerçek OLED'de dene (20 sn)** is an optional, explicitly confirmed *experimental* test on the Nova Pro Wireless base station. It replaces the entire 128×64 OLED image for at most 20 seconds, including the factory battery strip. The user can stop it at any time and the SHA-verified separate `ggoled` utility sends `return` afterward.
+- Fast output uses the restricted OLED collection only, with HidSharp feature reports; no firmware modifications, brightness changes, device settings edits or unattended automatic starts.
+- It refuses to start while the in-app normal live OLED writer is active, if the USB OLED collection cannot be verified, or if the validated restore utility is unavailable.
+- **High-frame-rate physical streaming has not yet been visually verified on the user's dock.** Check on the actual device before marking the Easter egg hardware path release-ready.
+
+Developer read-only diagnostics: `SteelseriesDockCustomiser.exe --oled-hid-check` checks the supported OLED interface; `--oled-hid-open-test` additionally opens and closes the same interface without sending a frame. Neither writes an image.
+
+See `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES/` for HidSharp (Apache 2.0) and external ggoled notices.
+
 ## Privacy and safety
 
 - GG battery status and Library catalog are inspected read-only; no game process injection.
 - Windows Media sessions provide playing song title/artist and timeline; no Spotify account token.
 - Phone Link battery reading uses its accessibility status while open/minimized, with an optional user-enabled open-and-minimize recovery. It does not read messages, photos or contact data.
 - No direct firmware modification or automatic full-screen OLED writes.
-- User-specific official product photo stays **local and excluded from Git**. If this project is built on another PC without the photo, the Dock Preview will ask for a locally selected reference photo.
+- The user-specific product photograph stays **local and excluded from Git and release packages**. On another PC the integrated preview draws a dark original vector dock instead, and the user can choose and calibrate a local product photo when desired.
 
 ## Verification status
 

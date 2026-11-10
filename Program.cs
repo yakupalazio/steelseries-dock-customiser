@@ -113,6 +113,29 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--oled-hid-check"))
+        {
+            var error=FastOledTransport.ValidateAvailable();
+            Console.WriteLine(error.Length==0
+                ? "Nova Pro Wireless OLED HID: detected (read-only)"
+                : "Nova Pro Wireless OLED HID: "+error);
+            return;
+        }
+        if(args.Contains("--oled-hid-open-test"))
+        {
+            try
+            {
+                using var stream=new FastOledTransport();
+                stream.Open();
+                Console.WriteLine("Nova Pro Wireless OLED HID: open/close succeeded; no frame sent");
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("OLED HID open failed: "+ex.Message);
+                Environment.ExitCode=1;
+            }
+            return;
+        }
         if(args.Contains("--self-test"))
         {
             var at=Array.IndexOf(args,"--demo-output");

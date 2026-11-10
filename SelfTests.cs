@@ -416,6 +416,82 @@ internal static class SelfTests
                     throw new Exception("Integrated dock photo and pixel editor are missing");
             }
 
+            // An illuminated factory OLED has a slightly grey glass shade;
+            // off pixels in a custom overlay should match the darker bezel,
+            // not leave a visible bright rectangle in the dock photograph.
+            using(var bezelPhoto=new Bitmap(480,260))
+            using(var darkOled=new Bitmap(128,64))
+            {
+                using(var g=Graphics.FromImage(bezelPhoto))
+                {
+                    g.Clear(Color.FromArgb(24,24,24));
+                    using var grey=new SolidBrush(Color.FromArgb(40,40,40));
+                    g.FillRectangle(grey,80,25,320,170);
+                }
+                PointF[] bezelCorners=[
+                    new(80,25),new(400,25),new(400,195),new(80,195)
+                ];
+                using var corrected=DockPreviewPanel.ComposePhotograph(
+                    bezelPhoto,darkOled,bezelCorners,92,protectHeader:false);
+                var offPixel=corrected.GetPixel(240,110);
+                if(offPixel.R>31 || offPixel.G>31 || offPixel.B>31)
+                    throw new Exception("OLED glass still has a grey overlay rectangle");
+                if(corrected.GetPixel(25,120).ToArgb()!=
+                   bezelPhoto.GetPixel(25,120).ToArgb())
+                    throw new Exception("Bezel color fix changed pixels outside OLED");
+            }
+
+            // The secret code unlocks only after all ten keys in order.
+            var konami=new KonamiSequence();
+            Keys[] sequence=[
+                Keys.Up,Keys.Up,Keys.Down,Keys.Down,Keys.Left,
+                Keys.Right,Keys.Left,Keys.Right,Keys.B,Keys.A
+            ];
+            for(int i=0;i<sequence.Length;i++)
+                if(konami.Feed(sequence[i])!=(i==sequence.Length-1))
+                    throw new Exception("Konami-code unlock regression");
+            using(var about=new SettingsDialog())
+            {
+                if(!AllChildren(about).OfType<Label>().Any(
+                    c=>c.Text=="Yakup Can Palaz"))
+                    throw new Exception("About author signature is missing");
+
+            }
+            using(var game=new DoomModeForm())
+            using(var preview=game.SnapshotForTest())
+            {
+                if(preview.Width!=128 || preview.Height!=64)
+                    throw new Exception("Secret mini FPS has wrong native OLED size");
+                int lit=0;
+                for(int y=0;y<64;y++)
+                    for(int x=0;x<128;x++)
+                        if(preview.GetPixel(x,y).R>127)lit++;
+                if(lit<70)throw new Exception("Secret mini FPS renders a blank OLED");
+                if(exportDemo!=null)
+                    preview.Save(Path.Combine(
+                        Path.GetDirectoryName(Path.GetFullPath(exportDemo))!,
+                        "doom-mode-preview-128x64.png"),ImageFormat.Png);
+            }
+
+            // Fast OLED reports are tested entirely in memory: the HID
+            // device is never opened and nothing is sent to hardware.
+            using(var pattern=new Bitmap(128,64))
+            {
+                pattern.SetPixel(0,0,Color.White);
+                pattern.SetPixel(63,7,Color.White);
+                pattern.SetPixel(64,8,Color.White);
+                pattern.SetPixel(127,63,Color.White);
+                var first=FastOledTransport.EncodeHalf(pattern,0);
+                var second=FastOledTransport.EncodeHalf(pattern,64);
+                if(first.Length!=1024 || second.Length!=1024 ||
+                   first[0]!=6 || second[0]!=6 ||
+                   first[1]!=0x93 || second[1]!=0x93 ||
+                   first[2]!=0 || second[2]!=64 ||
+                   first[6]!=1 || first[6+63*8]!=128 ||
+                   second[6+1]!=1 || second[6+63*8+7]!=128)
+                    throw new Exception("Fast OLED feature report bit packing regression");
+            }
+
             // Charging bolt: only a provider-confirmed true value makes pixels.
             var chargingBattery=new BatteryReading("Mouse",84,"GG","Şarj oluyor",
                 DateTimeOffset.Now,true);

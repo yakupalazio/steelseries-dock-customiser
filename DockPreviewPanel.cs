@@ -475,7 +475,11 @@ internal sealed class DockPreviewPanel : UserControl
     {
         g.Clear(_embeddedStudio?Color.FromArgb(24,30,40):
             Color.FromArgb(25,29,37));
-        if(_photo==null)return;
+        if(_photo==null)
+        {
+            DrawFallbackDock(g);
+            return;
+        }
 
         var renderBox=_embeddedStudio
             ?new Rectangle(18,15,Math.Max(1,_photoBox.Width-36),
@@ -523,6 +527,79 @@ internal sealed class DockPreviewPanel : UserControl
                 if(i>0)g.DrawLine(p,ToScreen(_newCorners[i-1]),pt);
             }
         }
+    }
+
+    // A self-drawn, redistribution-safe fallback for release packages that
+    // intentionally omit the licensed local product photograph. The editor
+    // remains useful on another PC without asking users to download assets.
+    private void DrawFallbackDock(Graphics g)
+    {
+        _imageRect=RectangleF.Empty;
+        var area=_photoBox.ClientRectangle;
+        if(area.Width<120 || area.Height<90)return;
+        g.SmoothingMode=SmoothingMode.AntiAlias;
+        float width=Math.Min(area.Width-42,700);
+        float height=Math.Min(area.Height-38,238);
+        float x=(area.Width-width)/2,y=(area.Height-height)/2;
+        var body=new RectangleF(x,y,width,height);
+        using var shape=new GraphicsPath();
+        float radius=Math.Min(43,height/4);
+        float diam=radius*2;
+        shape.AddArc(x,y,diam,diam,180,90);
+        shape.AddArc(x+width-diam,y,diam,diam,270,90);
+        shape.AddArc(x+width-diam,y+height-diam,diam,diam,0,90);
+        shape.AddArc(x,y+height-diam,diam,diam,90,90);
+        shape.CloseFigure();
+        using(var shadow=new SolidBrush(Color.FromArgb(80,0,0,0)))
+            g.FillEllipse(shadow,x+20,y+height-6,width-30,25);
+        using(var gradient=new LinearGradientBrush(body,
+            Color.FromArgb(51,53,55),Color.FromArgb(11,13,15),90f))
+            g.FillPath(gradient,shape);
+        using(var outline=new Pen(Color.FromArgb(94,99,105),1.4f))
+            g.DrawPath(outline,shape);
+
+        float knobSize=Math.Min(height*.86f,width*.32f);
+        var knob=new RectangleF(x+width-knobSize-20,y+(height-knobSize)/2,
+            knobSize,knobSize);
+        using(var ring=new LinearGradientBrush(knob,
+            Color.FromArgb(128,130,132),Color.FromArgb(38,41,45),45f))
+            g.FillEllipse(ring,knob);
+        using(var outer=new Pen(Color.FromArgb(163,167,170),1.6f))
+            g.DrawEllipse(outer,knob);
+        var center=RectangleF.Inflate(knob,-knobSize*.095f,-knobSize*.095f);
+        using(var face=new SolidBrush(Color.FromArgb(30,31,33)))
+            g.FillEllipse(face,center);
+        using(var rim=new Pen(Color.FromArgb(71,74,77),2))
+            g.DrawEllipse(rim,center);
+
+        int screenW=(int)Math.Min(width*.45f,280);
+        int screenH=screenW/2;
+        int screenX=(int)(x+width*.12f);
+        int screenY=(int)(y+(height-screenH)/2-13);
+        using(var screenBack=new SolidBrush(Color.FromArgb(14,15,17)))
+            g.FillRectangle(screenBack,screenX-4,screenY-4,screenW+8,screenH+8);
+        using(var border=new Pen(Color.FromArgb(37,40,43)))
+            g.DrawRectangle(border,screenX-4,screenY-4,screenW+8,screenH+8);
+        if(_factory.Checked)
+        {
+            using var font=new Font("Consolas",9.5f,FontStyle.Bold);
+            g.DrawString("NOVA PRO  WIRELESS",font,Brushes.White,screenX+10,screenY+20);
+            g.DrawString("48kHz / 24bit",font,Brushes.White,screenX+10,screenY+48);
+        }
+        else
+        {
+            using var oled=_frameFactory();
+            g.InterpolationMode=InterpolationMode.NearestNeighbor;
+            g.PixelOffsetMode=PixelOffsetMode.Half;
+            g.DrawImage(oled,new Rectangle(screenX,screenY,screenW,screenH),
+                new Rectangle(0,0,128,64),GraphicsUnit.Pixel);
+        }
+        using(var muted=new SolidBrush(Color.FromArgb(143,149,155)))
+        using(var font=new Font("Segoe UI Semibold",Math.Max(9,height*.066f),FontStyle.Bold))
+            g.DrawString("steelseries",font,muted,screenX+32,
+                y+height-Math.Max(35,height*.2f));
+        using(var marker=new Pen(Color.FromArgb(129,133,138),2.2f))
+            g.DrawEllipse(marker,x+width*.67f,y+height*.72f,31,31);
     }
 
     private PointF ToScreen(PointF pt) =>
@@ -618,24 +695,48 @@ internal sealed class DockPreviewPanel : UserControl
         int y1=Math.Min(output.Height-1,(int)Math.Ceiling(corners.Max(p=>p.Y)));
         if(x1<=x0||y1<=y0)return new Color[output.Height];
 
-        // Compute a dark neutral background for every source-photo row. The
-        // bright original screen characters are excluded from the estimation.
+        // Sample the bezel immediately beside the OLED as well as its own
+        // dark pixels. The factory screen is slightly grey from reflections;
+        // reusing only that shade creates a visible grey rectangle on the
+        // otherwise black dock. Prefer the darker neighboring body shade,
+        // but reject transparent/photo-background samples.
         var background=new Color[output.Height];
         for(int row=y0;row<=y1;row++)
         {
-            var rr=new List<byte>(); var gg=new List<byte>(); var bb=new List<byte>();
-            for(int col=x0;col<=x1;col++)
+            var innerR=new List<byte>();var innerG=new List<byte>();var innerB=new List<byte>();
+            var outerR=new List<byte>();var outerG=new List<byte>();var outerB=new List<byte>();
+            for(int col=Math.Max(0,x0-26);col<=Math.Min(output.Width-1,x1+26);col++)
             {
+                bool inner=col>=x0 && col<=x1;
+                bool neighbor=(col>=x0-26 && col<=x0-6) ||
+                              (col>=x1+6 && col<=x1+26);
+                if(!inner && !neighbor)continue;
                 var c=output.GetPixel(col,row);
-                if(c.R<72 && c.G<72 && c.B<72)
+                if(c.A<250 || c.R>=72 || c.G>=72 || c.B>=72)continue;
+                if(inner)
                 {
-                    rr.Add(c.R);gg.Add(c.G);bb.Add(c.B);
+                    innerR.Add(c.R);innerG.Add(c.G);innerB.Add(c.B);
+                }
+                else if(c.R>=8 && c.G>=8 && c.B>=8)
+                {
+                    outerR.Add(c.R);outerG.Add(c.G);outerB.Add(c.B);
                 }
             }
-            if(rr.Count==0){background[row]=Color.FromArgb(23,24,26);continue;}
-            rr.Sort();gg.Sort();bb.Sort();
-            int mid=rr.Count/2;
-            background[row]=Color.FromArgb(rr[mid],gg[mid],bb[mid]);
+            if(innerR.Count==0 && outerR.Count==0)
+            {
+                background[row]=Color.FromArgb(23,24,26);
+                continue;
+            }
+            static byte Median(List<byte> values,byte fallback)
+            {
+                if(values.Count==0)return fallback;
+                values.Sort();
+                return values[values.Count/2];
+            }
+            byte ir=Median(innerR,23),ig=Median(innerG,24),ib=Median(innerB,26);
+            byte or=Median(outerR,ir),og=Median(outerG,ig),ob=Median(outerB,ib);
+            background[row]=Color.FromArgb(
+                Math.Min(ir,or),Math.Min(ig,og),Math.Min(ib,ob));
         }
 
         // Smooth the source-photo dark-glass background vertically; this avoids

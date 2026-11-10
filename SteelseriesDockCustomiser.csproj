@@ -11,8 +11,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <ItemGroup><None Update="PixelOperator.ttf" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup>
-    <None Update="dock-photo-local.png" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="HidSharp" Version="2.6.4" />
+    <None Update="PixelOperator.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="dock-photo-local.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>

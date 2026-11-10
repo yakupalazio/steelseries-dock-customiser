@@ -13,7 +13,13 @@
 - Independent 1.0 layout store `studio-v100.json`, loading earlier v0.9.9 / v0.9.8 files only as read-only migration sources.
 - Preserved opt-in physical 10-second frame, live 1Hz, return, photo import and four-point calibration.
 - Added regression tests for the new one-page workspace and charging-flag behavior; removed obsolete two-tab assertions.
-- No automatic hardware output, GG app registration, firmware changes or public GitHub push.
+- Matched the dark off-pixel OLED photo composite to the surrounding black dock bezel; removed the grey preview rectangle.
+- Added **Settings → About**, the Yakup Can Palaz signature and hidden Konami-code entry.
+- Added an original playable 128×64 monochrome DOOM-style mini FPS (not the licensed DOOM game/engine); ESC returns to the normal application.
+- Added optional 20-second, fully user-confirmed physical OLED gameplay streaming via a restricted Nova Pro Wireless HID collection. It is off by default, stops on ESC, checks for competing in-app live output and restores via the SHA-verified ggoled CLI.
+- Added read-only HID collection detection, successful open/close without drawing, and report-packing/self-test coverage. The physical fast-stream mode still requires on-device visual acceptance testing.
+- Added HidSharp 2.6.4 attribution, Apache 2.0 license and NOTICE files.
+- No unattended hardware output, firmware writes or SteelSeries GG registration.
 
 ## 0.9.9 — Game Mini Player
 

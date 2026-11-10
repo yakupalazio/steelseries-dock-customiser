@@ -330,6 +330,16 @@ internal sealed partial class PixelStudioForm
             Font=new Font("Segoe UI",8.1f)
         };
         left.Controls.Add(modernDockStatus);
+        left.Controls.Add(Spacer(18,190));
+        left.Controls.Add(Section("AYARLAR",190));
+        var settingsButton=ModeButton("⚙   Ayarlar");
+        settingsButton.Height=44;
+        left.Controls.Add(settingsButton);
+        settingsButton.Click+=(_,_)=>{
+            using var dialog=new SettingsDialog(
+                ()=>dockPreview?.LiveOutputActive==true);
+            dialog.ShowDialog(this);
+        };
 
         var footer=new Panel{Dock=DockStyle.Fill,BackColor=UiSidebar};
         root.Controls.Add(footer,0,2);

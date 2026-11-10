@@ -19,3 +19,8 @@ battery-live-preview.png
 **/user-dock-photo*
 diagnostic-batteries.txt
 battery-source-test.txt
+
+# Local release artifacts are built from source, not committed.
+dist/
+artifacts/
+build-release/
