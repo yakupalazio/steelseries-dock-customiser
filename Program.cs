@@ -148,12 +148,56 @@ internal static class Program
         }
         if(args.Contains("--self-test"))
         {
+            ApplicationConfiguration.Initialize();
+            Application.SetColorMode(SystemColorMode.Dark);
             var at=Array.IndexOf(args,"--demo-output");
             var export=at>=0 && at+1<args.Length ? args[at+1] : null;
             Environment.ExitCode=SelfTests.Run(export);
             return;
         }
+        if(args.Contains("--ui-screenshot"))
+        {
+            // Off-screen WinForms smoke preview: no HID output and no new
+            // visible app window. Used only to inspect responsive geometry.
+            var at=Array.IndexOf(args,"--ui-screenshot");
+            if(at+1>=args.Length)throw new ArgumentException("Missing screenshot path");
+            ApplicationConfiguration.Initialize();
+            Application.SetColorMode(SystemColorMode.Dark);
+            if(args.Contains("--capture-english"))UiLanguage.PreviewOnly(true);
+            if(args.Contains("--capture-settings"))
+            {
+                using var settings=new SettingsDialog(()=>false,new BatteryPreferences(),
+                    ()=>new BatterySnapshot(),
+                    ()=>System.Threading.Tasks.Task.CompletedTask,()=>{});
+                settings.EnableOffscreenCapture();
+                settings.Show();
+                Application.DoEvents();
+                using var image=new System.Drawing.Bitmap(settings.Width,settings.Height);
+                settings.DrawToBitmap(image,new System.Drawing.Rectangle(0,0,
+                    image.Width,image.Height));
+                image.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                settings.Close();
+                return;
+            }
+            using var studio=new PixelStudioForm();
+            if(args.Contains("--capture-idle"))studio.SelectCaptureMode(ScreenMode.Idle);
+            else if(args.Contains("--capture-game"))studio.SelectCaptureMode(ScreenMode.Game);
+            studio.EnableOffscreenCapture();
+            studio.Show();
+            Application.DoEvents();
+            studio.PerformLayout();
+            Application.DoEvents();
+            using var preview=new System.Drawing.Bitmap(studio.Width,studio.Height);
+            studio.DrawToBitmap(preview,new System.Drawing.Rectangle(0,0,
+                preview.Width,preview.Height));
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(
+                System.IO.Path.GetFullPath(args[at+1]))!);
+            preview.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+            studio.Close();
+            return;
+        }
         ApplicationConfiguration.Initialize();
+        Application.SetColorMode(SystemColorMode.Dark);
         Application.Run(new PixelStudioForm());
     }
 }
@@ -166,6 +210,9 @@ public sealed class DockWidget
     public int FontSize { get; set; } = 10;
     public int StrokeWidth { get; set; } = 1;
     public int MiniWidth { get; set; } = 88;
+    // "Wheel" renders the OEM-inspired 1-bit radial gauge; "Bar" preserves
+    // older designs without requiring a layout-file format migration.
+    public string DialStyle { get; set; } = "Bar";
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;

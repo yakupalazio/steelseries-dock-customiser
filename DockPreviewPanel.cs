@@ -126,6 +126,7 @@ internal sealed class DockPreviewPanel : UserControl
     public void InvalidateFrame() => _photoBox.Invalidate();
 
     public bool LiveOutputActive => _liveEnabled;
+    public bool OledWriterActive => _liveEnabled||_hardware.Active;
     public string HardwareStatus => _message.Text;
     public bool FactoryPreviewActive => _factory.Checked;
 
@@ -135,6 +136,50 @@ internal sealed class DockPreviewPanel : UserControl
     public void ApplyDesign() => _ = ApplyDesignAsync();
     public void ToggleLiveOutput() => _ = ToggleLiveMode();
     public void RestoreOriginalScreen() => ResetDock();
+
+    /// <summary>
+    /// Grants the secret game exclusive OLED ownership. Never overlaps an
+    /// in-flight ggoled update: RestoreNow uses the existing hardware gate.
+    /// The return value records whether a user-authorized live session should
+    /// resume after the game exits.
+    /// </summary>
+    public async System.Threading.Tasks.Task<bool> SuspendLiveForGameAsync()
+    {
+        bool wasLive=_liveEnabled;
+        if(!wasLive)return false;
+        _liveEnabled=false;
+        _liveTimer.Stop();
+        _lastLiveFrame=null;
+        _liveToggle.Text="Canlı dock modunu başlat";
+        _sendHardware.Enabled=false;
+        _message.Text="DOOM MODE için OLED aktarımı duraklatılıyor…";
+        // Execute the potentially long CLI return off the UI thread. The
+        // previous send is drained first by DockHardwareTest.liveGate.
+        string result=await System.Threading.Tasks.Task.Run(_hardware.RestoreNow);
+        if(!IsDisposed)_message.Text=result;
+        if(!result.StartsWith("SteelSeries varsayılan",StringComparison.Ordinal))
+            throw new InvalidOperationException(result);
+        return wasLive;
+    }
+
+    public async System.Threading.Tasks.Task ResumeLiveAfterGameAsync(bool wasLive)
+    {
+        if(!wasLive||IsDisposed||_liveEnabled)return;
+        if(!_custom.Checked || _hardware.Active)
+        {
+            _message.Text="DOOM kapandı; önce Özel tasarım ve Dock Reset durumunu kontrol et.";
+            return;
+        }
+        string validation=_hardware.Validate();
+        if(validation!=""){_message.Text=validation;return;}
+        _lastLiveFrame=null;
+        _liveEnabled=true;
+        _sendHardware.Enabled=false;
+        _liveToggle.Text="Canlı modu durdur";
+        _message.Text="DOOM MODE kapandı, önceki canlı OLED oturumu geri yüklendi.";
+        _liveTimer.Start();
+        await RefreshLiveDock();
+    }
 
     private void ResetDock()
     {
@@ -229,15 +274,23 @@ internal sealed class DockPreviewPanel : UserControl
             _message.Text=validation;
             return;
         }
-        if(MessageBox.Show(this,
-            "Canlı OLED saniyede 1 kez kontrol edilir; medya durduğunda saat ve tarih gösterilir.\n"+
-            (_protectHeader()
-                ?"Yalnızca 10–63. satırlar güncellenir; orijinal üst bölüm korunur.\n"
-                :"UYARI: Üst koruma kapalı, tüm 128×64 ekran değiştirilecek.\n")+
-            "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
-            "OLED ömrü için değişmeyen kareler yeniden gönderilmez. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
-            "Canlı moda geçilsin mi?",
-            "Dock canlı modu (deneysel)",MessageBoxButtons.YesNo,MessageBoxIcon.Information)
+        string liveConsent=UiLanguage.English
+            ?"Live OLED checks once per second. Unchanged frames are not resent.\n"+
+                (_protectHeader()
+                    ?"Only rows 10–63 will update; original top 10 pixels remain untouched.\n"
+                    :"WARNING: Full-screen 128×64 output will replace the OEM header.\n")+
+                "SteelSeries GG Now Playing may conflict with this feature.\n"+
+                "Closing live mode restores the original OLED. Start live mode?"
+            :"Canlı OLED saniyede 1 kez kontrol edilir; medya durduğunda saat ve tarih gösterilir.\n"+
+                (_protectHeader()
+                    ?"Yalnızca 10–63. satırlar güncellenir; orijinal üst bölüm korunur.\n"
+                    :"UYARI: Üst koruma kapalı, tüm 128×64 ekran değiştirilecek.\n")+
+                "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
+                "OLED ömrü için değişmeyen kareler yeniden gönderilmez. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
+                "Canlı moda geçilsin mi?";
+        if(MessageBox.Show(this,liveConsent,
+            UiLanguage.English?"Dock live mode (experimental)":"Dock canlı modu (deneysel)",
+            MessageBoxButtons.YesNo,MessageBoxIcon.Information)
             !=DialogResult.Yes) return;
 
         _liveEnabled=true;
@@ -318,15 +371,22 @@ internal sealed class DockPreviewPanel : UserControl
             _message.Text=validation;
             return;
         }
-        var answer=MessageBox.Show(this,
-            (_protectHeader()
+        string applyConsent=UiLanguage.English
+            ?(_protectHeader()
+                ?"Only rows Y=10–63 will change; OEM battery indicators are preserved.\n"
+                :"WARNING: Full-screen 128×64 will temporarily replace the OEM indicators.\n")+
+                "The image remains on the dock until Reset or app exit.\n"+
+                "If the app crashes, reopen it and choose Dock Reset.\n"+
+                "Avoid leaving static OLED images on for extended periods. Apply now?"
+            :(_protectHeader()
                 ?"Yalnızca Y=10–63. Orijinal pil göstergeleri aktarım dışında.\n"
                 :"UYARI: 128×64 tam ekran modu. OEM pil göstergeleri geçici olarak silinir.\n")+
             "Tasarım Reset'e basana veya uygulamayı kapatana kadar ekranda kalır.\n"+
             "Uygulama çökerse yeniden açıp Dock Reset'i kullanabilirsin.\n"+
             "OLED yanığı riskini azaltmak için statik görüntüyü uzun süre bırakma.\n"+
-            "Uygulansın mı?",
-            "Gerçek dock ekranı — Uygula",
+            "Uygulansın mı?";
+        var answer=MessageBox.Show(this,applyConsent,
+            UiLanguage.English?"Physical dock — Apply":"Gerçek dock ekranı — Uygula",
             MessageBoxButtons.YesNo,MessageBoxIcon.Information);
         if(answer!=DialogResult.Yes)return;
 

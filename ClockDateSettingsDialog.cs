@@ -10,8 +10,8 @@ internal sealed class ClockDateSettingsDialog : Form
 {
     private readonly ComboBox clockFormat=new(){DropDownStyle=ComboBoxStyle.DropDownList,Width=173};
     private readonly ComboBox dateFormat=new(){DropDownStyle=ComboBoxStyle.DropDownList,Width=173};
-    private readonly NumericUpDown clockWeight=new(){Minimum=1,Maximum=3,Width=68};
-    private readonly NumericUpDown dateWeight=new(){Minimum=1,Maximum=3,Width=68};
+    private readonly DarkNumberBox clockWeight=new(){Minimum=1,Maximum=3,Width=75};
+    private readonly DarkNumberBox dateWeight=new(){Minimum=1,Maximum=3,Width=75};
     private readonly PictureBox preview=new(){Width=640,Height=320,BackColor=Color.Black,BorderStyle=BorderStyle.FixedSingle};
     private readonly LayoutState original;
     private readonly Action<string,int,string,int> save;
@@ -65,14 +65,16 @@ internal sealed class ClockDateSettingsDialog : Form
             Text="Konum ve boyutu ana piksel editöründen değiştirebilirsin. Kalınlık 1, 2 veya 3 gerçek OLED pikselidir.",
             ForeColor=Color.DarkSlateGray};
         Controls.Add(hint);
-        var cancel=new Button{Left=497,Top=528,Width=78,Text="İptal"};
-        var okay=new Button{Left=583,Top=528,Width=96,Text="Uygula"};
+        var cancel=new DarkButton{Left=497,Top=528,Width=78,Height=31,Text="İptal"};
+        var okay=new DarkButton{Left=583,Top=528,Width=96,Height=31,Text="Uygula"};
         cancel.Click+=(_,_)=>Close();
         okay.Click+=(_,_)=>{
             save(clockFormat.Text,(int)clockWeight.Value,dateFormat.Text,(int)dateWeight.Value);
             Close();
         };
         Controls.Add(cancel);Controls.Add(okay);
+        UiSkin.ApplyDark(this);
+        UiLanguage.ApplyTree(this);
     }
 
     private LayoutState PreviewState()

@@ -74,19 +74,19 @@ internal sealed class BatteryStatusDialog : Form
     private readonly ListBox priority=new(){Left=17,Top=292,Width=355,Height=164};
     private readonly Label active=new(){Left=402,Top=329,Width=450,Height=73};
     private readonly Label lastUpdated=new(){Left=150,Top=234,Width=700,Height=27};
-    private readonly CheckBox dualSense=new()
+    private readonly DarkCheckBox dualSense=new()
     {
         Left=403,Top=412,Width=450,Text="DualSense bağlandığında otomatik öne çıkar"
     };
-    private readonly CheckBox experimental=new()
+    private readonly DarkCheckBox experimental=new()
     {
         Left=17,Top=482,Width=790,Text="Deneysel DualSense HID pil okuması (salt-okunur)"
     };
-    private readonly CheckBox adb=new()
+    private readonly DarkCheckBox adb=new()
     {
         Left=17,Top=509,Width=790,Text="Android ADB pil kaynağı (isteğe bağlı)"
     };
-    private readonly CheckBox minimizePhoneLink=new()
+    private readonly DarkCheckBox minimizePhoneLink=new()
     {
         Left=17,Top=536,Width=790,
         Text="Phone Link'i gerekirse açıp küçült (pencereyi kapalı tutmaya alternatif)"
@@ -114,7 +114,7 @@ internal sealed class BatteryStatusDialog : Form
         foreach(var kind in BatteryPriority.AllKinds)
             grid.Rows.Add(BatteryPriority.DisplayName(kind),"--%","","");
 
-        var now=new Button{Left=17,Top=232,Width=125,Height=31,Text="Şimdi yenile"};
+        var now=new DarkButton{Left=17,Top=232,Width=125,Height=31,Text="Şimdi yenile"};
         now.Click+=async (_,_)=>{
             now.Enabled=false;
             try{await refresh();UpdateRows();}finally{now.Enabled=true;}
@@ -128,8 +128,8 @@ internal sealed class BatteryStatusDialog : Form
         foreach(var kind in BatteryPriority.Sanitize(prefs.PriorityKinds))
             priority.Items.Add(kind);
         priority.SelectedIndex=0;
-        var up=new Button{Left=382,Top=294,Width=76,Height=32,Text="Yukarı"};
-        var down=new Button{Left=382,Top=334,Width=76,Height=32,Text="Aşağı"};
+        var up=new DarkButton{Left=382,Top=294,Width=76,Height=32,Text="Yukarı"};
+        var down=new DarkButton{Left=382,Top=334,Width=76,Height=32,Text="Aşağı"};
         // Keep the priority controls separate from other device editing.
         up.Click+=(_,_)=>MovePriority(-1);
         down.Click+=(_,_)=>MovePriority(1);
@@ -155,7 +155,7 @@ internal sealed class BatteryStatusDialog : Form
                 "telefon verilerine veya mesajlara erişilmez.",
             ForeColor=Color.DarkSlateGray
         });
-        var applyButton=new Button{Left=649,Top=617,Width=207,Height=32,
+        var applyButton=new DarkButton{Left=649,Top=617,Width=207,Height=32,
             Text="Öncelikleri uygula"};
         applyButton.Click+=(_,_)=>{
             prefs.PriorityKinds=priority.Items.Cast<string>().ToArray();
@@ -220,6 +220,18 @@ internal sealed class BatteryStatusDialog : Form
             Font=new Font("Segoe UI Semibold",18f,FontStyle.Bold),
             ForeColor=Color.FromArgb(235,242,248),BackColor=BackColor
         });
+        ApplyLanguage();
+    }
+
+    public void ApplyLanguage()
+    {
+        UiLanguage.ApplyTree(this);
+        string[] headers=["Cihaz","Pil","Doğrulanan kaynak","Durum"];
+        for(int i=0;i<headers.Length;i++)
+            grid.Columns[i].HeaderText=UiLanguage.T(headers[i]);
+        for(int i=0;i<BatteryPriority.AllKinds.Length;i++)
+            grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(BatteryPriority.AllKinds[i]);
+        UpdateRows();
     }
 
     private void MovePriority(int delta)
@@ -239,7 +251,7 @@ internal sealed class BatteryStatusDialog : Form
             AutoDualSense=dualSense.Checked
         };
         string[] display=BatteryPriority.SelectThree(snapshotGetter(),local);
-        active.Text="Şu anda seçilenler:\n"+string.Join("  ·  ",
+        active.Text=UiLanguage.T("Şu anda seçilenler:\n")+string.Join("  ·  ",
             display.Select(BatteryPriority.DisplayName));
     }
     public void UpdateRows()
@@ -251,11 +263,12 @@ internal sealed class BatteryStatusDialog : Form
             string kind=BatteryPriority.AllKinds[i];
             var reading=snap[kind];
             grid.Rows[i].Cells[1].Value=reading.Display;
-            grid.Rows[i].Cells[2].Value=reading.Source;
-            grid.Rows[i].Cells[3].Value=reading.Detail;
+            grid.Rows[i].Cells[2].Value=UiLanguage.T(reading.Source);
+            grid.Rows[i].Cells[3].Value=UiLanguage.T(reading.Detail);
         }
         lastUpdated.Text=snap.CheckedAt==DateTimeOffset.MinValue
-            ?"Tarama bekleniyor":"Son okuma: "+snap.CheckedAt.ToLocalTime().ToString("HH:mm:ss");
+            ?UiLanguage.T("Tarama bekleniyor"):
+            UiLanguage.T("Son okuma: ")+snap.CheckedAt.ToLocalTime().ToString("HH:mm:ss");
         ShowActive();
     }
 }

@@ -15,6 +15,9 @@ internal sealed class StudioProject
     public LayoutState Game { get; set; } = Defaults(ScreenMode.Game);
     public LayoutState Idle { get; set; } = Defaults(ScreenMode.Idle);
     public bool ProtectHeader { get; set; } = true;
+    // A one-time migration keeps pre-1.1 layouts intact and, crucially,
+    // remembers when a user deliberately removes either default dial.
+    public bool RadialDefaultsMigrated { get; set; }
 
     public LayoutState For(ScreenMode mode) => mode switch
     {
@@ -56,16 +59,18 @@ internal sealed class StudioProject
                 {
                     foreach(var mode in Enum.GetValues<ScreenMode>())
                         Sanitize(result.For(mode),mode,result.ProtectHeader);
+                    result.MigrateRadialDefaults();
                     return result;
                 }
             }
         }
         catch{}
-        return new StudioProject();
+        return new StudioProject { RadialDefaultsMigrated=true };
     }
 
     public void Save()
     {
+        RadialDefaultsMigrated=true;
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         foreach(var mode in Enum.GetValues<ScreenMode>())
             Sanitize(For(mode),mode,ProtectHeader);
@@ -91,16 +96,76 @@ internal sealed class StudioProject
                 new(){Kind="MediaClock",X=92,Y=11,FontSize=7,StrokeWidth=1}
             ],
             ScreenMode.Game=>[
-                new(){Kind="GameLabel",X=3,Y=15,FontSize=10,Text="NOW PLAYING:"},
-                new(){Kind="GameTitle",X=3,Y=30,FontSize=10,Text="VALORANT"},
-                new(){Kind="Clock",X=92,Y=11,FontSize=7}
+                new(){Kind="GameLabel",X=78,Y=15,FontSize=7,Text="GAME:"},
+                new(){Kind="GameTitle",X=78,Y=29,FontSize=7,Text="VALORANT"},
+                new(){Kind="VolumeChatMix",X=2,Y=11,DialStyle="Wheel"}
             ],
             _=>[
-                new(){Kind="Clock",X=31,Y=17,FontSize=20},
-                new(){Kind="Date",X=37,Y=35,FontSize=9}
+                new(){Kind="Clock",X=85,Y=18,FontSize=10},
+                new(){Kind="Date",X=67,Y=45,FontSize=7},
+                new(){Kind="VolumeChatMix",X=2,Y=11,DialStyle="Wheel"}
             ]
         };
         return new LayoutState{Widgets=primary.Concat(common).ToList()};
+    }
+
+    internal void MigrateRadialDefaults()
+    {
+        if(RadialDefaultsMigrated)return;
+        // Older media presets placed the tiny clock a few rows too low,
+        // where its last pixels touched long scrolling song titles.
+        var mediaClock=Media.Widgets.FirstOrDefault(w=>w.Kind=="MediaClock" &&
+            w.X>=85 && w.Y>=15 && w.Y<=18);
+        if(mediaClock!=null && Media.Widgets.Any(w=>w.Kind=="Track" && w.Y<=23))
+            mediaClock.Y=11;
+        foreach(var mode in new[]{ScreenMode.Idle,ScreenMode.Game})
+        {
+            var layout=For(mode);
+            var oldDial=layout.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
+            // A legacy bar in its old default/left-top slot is migrated once.
+            // A bar deliberately positioned elsewhere keeps its custom style.
+            bool legacyBar=oldDial is {DialStyle:"Bar"} &&
+                oldDial.X<=12 && oldDial.Y>=19 && oldDial.Y<=30;
+            if(oldDial==null || legacyBar)
+            {
+                if(oldDial==null)
+                    layout.Widgets.Insert(0,Defaults(mode).Widgets.First(
+                        w=>w.Kind=="VolumeChatMix"));
+                else
+                {
+                    oldDial.DialStyle="Wheel";
+                    (oldDial.X,oldDial.Y)=(2,11);
+                }
+                // Only adjust familiar legacy defaults, leaving custom
+                // placement untouched. Users can remove and save the wheel.
+                if(mode==ScreenMode.Idle)
+                {
+                    var clock=layout.Widgets.FirstOrDefault(w=>w.Kind=="Clock");
+                    var date=layout.Widgets.FirstOrDefault(w=>w.Kind=="Date");
+                    if(clock is {X:31,Y:17,FontSize:20})
+                        (clock.X,clock.Y,clock.FontSize)=(85,18,10);
+                    if(clock is {X:72,Y:20})
+                        (clock.X,clock.Y,clock.FontSize)=(85,18,10);
+                    if(date is {X:37,Y:35})
+                        (date.X,date.Y,date.FontSize)=(67,45,7);
+                    if(date is {X:62,Y:38})
+                        (date.X,date.Y,date.FontSize)=(67,45,7);
+                }
+                else
+                {
+                    var title=layout.Widgets.FirstOrDefault(w=>w.Kind=="GameTitle");
+                    var label=layout.Widgets.FirstOrDefault(w=>w.Kind=="GameLabel");
+                    var legacyClock=layout.Widgets.FirstOrDefault(w=>w.Kind=="Clock" &&
+                        w.X==92 && w.Y==11 && w.FontSize==7);
+                    if(legacyClock!=null)layout.Widgets.Remove(legacyClock);
+                    if(title is {X:3,Y:30})
+                        (title.X,title.Y,title.FontSize)=(78,29,7);
+                    if(label is {X:3,Y:15})
+                        (label.X,label.Y,label.FontSize,label.Text)=(78,15,7,"GAME:");
+                }
+            }
+        }
+        RadialDefaultsMigrated=true;
     }
 
     public static bool IsLocked(ScreenMode mode,string kind) => mode switch
@@ -137,6 +202,7 @@ internal sealed class StudioProject
             w.Y=Math.Clamp(w.Y,0,63);
             w.StrokeWidth=Math.Clamp(w.StrokeWidth,1,3);
             w.MiniWidth=Math.Clamp(w.MiniWidth,35,128);
+            w.DialStyle=w.DialStyle=="Wheel"?"Wheel":"Bar";
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }

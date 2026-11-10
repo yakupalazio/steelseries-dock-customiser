@@ -2,7 +2,7 @@ namespace SteelseriesDockCustomiser;
 
 internal static class WidgetLabels
 {
-    public static string Display(string kind)=>kind switch
+    public static string Display(string kind)=>UiLanguage.T(kind switch
     {
         "Source"=>"Kaynak ikonu",
         "Track"=>"Şarkı adı",
@@ -26,5 +26,5 @@ internal static class WidgetLabels
         "DualSense"=>"DualSense bataryası",
         "VolumeChatMix"=>"Ses / ChatMix tekerleği",
         _=>kind
-    };
+    });
 }

@@ -2,6 +2,12 @@
 
 ## 1.1.0 — Wheel widget and integration fixes
 
+- **In-place visual and behavior update (still 1.1.0):** rebuilt the right inspector with non-overlapping rows, relevant-property visibility, 1-bit OLED previews, native Windows 11 dark mode, consistent dark input controls and custom stepper/button painting.
+- Added a radial, OEM-inspired **Volume / ChatMix wheel** alternative to the flat bar. Native monochrome pixels recreate the segmented arc, center mode badge, and percentage. The wheel is present by default in Idle and Game; it can be edited or removed, and a one-time non-destructive migration upgrades familiar legacy layouts without re-adding an intentionally removed wheel.
+- Repacked defaults around the wheel; kept all three bottom battery slots and the protected OEM header. Repaired compact-clock colon and shifted old media/game elements away from overlaps. Charging bolt still appears only when a provider positively reports charging.
+- Moved **About** to the bottom of Settings, added a persistent Turkish / English language selector, and localized the main workspace, battery pane, clock, icons, dialogs and DOOM instructions.
+- The About-only Konami sequence now automatically launches the mini FPS on the physical OLED. A currently running custom live OLED session is paused, allowed to drain and restored after the game exits. Physical frames never appear on the PC; ALT+TAB or Stop closes the game and restores the previous state. The experimental full-screen output still validates the HID device and OEM restoration tool.
+- Added regression checks for radial drawing, intact date/header/battery bounds, one-time layout migration, language strings and English/Turkish UI.
 - **In-place refinement (no version bump):** replaced the timed 10-second test with persistent, separately confirmed **Uygula**; relabeled restore to **Dock Reset**. Static output is restored on normal shutdown or explicit Reset, and Reset is available after relaunch if the app crashed.
 - Removed the DOOM 20-second cutoff; after explicit confirmation, the PC shows a dock-facing instruction rather than the gameplay. The physical OLED alone receives game frames until Stop/ESC/close/focus loss. Restore and OLED burn-in warnings remain.
 

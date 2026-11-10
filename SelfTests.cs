@@ -118,7 +118,52 @@ internal static class SelfTests
                 }
                 if(state.Widgets.Any(w=>!StudioProject.IsAllowed(mode,w.Kind)))
                     throw new Exception("Forbidden widget slipped into "+mode);
+                if(mode!=ScreenMode.Media)
+                {
+                    var wheel=state.Widgets.SingleOrDefault(w=>w.Kind=="VolumeChatMix");
+                    if(wheel?.DialStyle!="Wheel" || wheel.Y<10 ||
+                       OledRenderer.GetBounds(wheel).Bottom>53)
+                        throw new Exception("OEM-style wheel missing or clashes with battery row");
+                }
             }
+            var legacyLayouts=new StudioProject
+            {
+                RadialDefaultsMigrated=false,
+                Game=new LayoutState{Widgets=[
+                    new DockWidget{Kind="GameLabel",X=3,Y=15,Text="NOW PLAYING:"},
+                    new DockWidget{Kind="GameTitle",X=3,Y=30},
+                    new DockWidget{Kind="Clock",X=92,Y=11,FontSize=7}
+                ]},
+                Idle=new LayoutState{Widgets=[
+                    new DockWidget{Kind="VolumeChatMix",X=0,Y=21},
+                    new DockWidget{Kind="Clock",X=72,Y=20,FontSize=20},
+                    new DockWidget{Kind="Date",X=62,Y=38}
+                ]}
+            };
+            legacyLayouts.MigrateRadialDefaults();
+            if(legacyLayouts.Game.Widgets.Any(w=>w.Kind=="Clock" && w.X==92) ||
+               legacyLayouts.Game.Widgets.All(w=>w.Kind!="VolumeChatMix"||w.DialStyle!="Wheel") ||
+               legacyLayouts.Idle.Widgets.First(w=>w.Kind=="VolumeChatMix").DialStyle!="Wheel" ||
+               legacyLayouts.Idle.Widgets.First(w=>w.Kind=="Date").Y!=45)
+                throw new Exception("Legacy layouts were not repacked for radial defaults");
+            legacyLayouts.Game.Widgets.RemoveAll(w=>w.Kind=="VolumeChatMix");
+            legacyLayouts.MigrateRadialDefaults();
+            if(legacyLayouts.Game.Widgets.Any(w=>w.Kind=="VolumeChatMix"))
+                throw new Exception("Removed default dial was re-added after opt-out");
+            bool originalLanguage=UiLanguage.English;
+            try
+            {
+                UiLanguage.PreviewOnly(true);
+                if(UiLanguage.T("Dairesel tekerlek")!="Radial wheel" ||
+                   UiLanguage.T("◉   Dil / Language")!="◉   Language" ||
+                   UiLanguage.T("Tekerlek bekleniyor")!="Waiting for wheel input" ||
+                   BatteryPriority.DisplayName("Headset")!="Nova Pro Headset")
+                    throw new Exception("English UI translations are incomplete");
+                UiLanguage.PreviewOnly(false);
+                if(UiLanguage.T("Dairesel tekerlek")!="Dairesel tekerlek")
+                    throw new Exception("Turkish UI fallback changed native labels");
+            }
+            finally{UiLanguage.PreviewOnly(originalLanguage);}
             // Nova Pro Wireless dial reports are decoded from real-looking
             // bytes in memory, without opening or writing a HID device.
             if(!ArctisDialMonitor.TryDecode(new byte[]{7,0x25,0},out var maximum)||
@@ -151,6 +196,52 @@ internal static class SelfTests
             foreach(var mode in Enum.GetValues<ScreenMode>())
                 if(!StudioProject.IsAllowed(mode,"VolumeChatMix"))
                     throw new Exception("Dial widget unavailable in "+mode);
+            var radialDesign=StudioProject.Defaults(ScreenMode.Idle);
+            var wheelWidget=radialDesign.Widgets.Single(w=>w.Kind=="VolumeChatMix");
+            using(var radialZero=OledRenderer.Render(radialDesign,false,true,false,
+                layoutMode:ScreenMode.Idle,
+                dial:new DialSnapshot(DialView.Volume,0,null,null,
+                    DateTimeOffset.UtcNow,"test")))
+            using(var radialFull=OledRenderer.Render(radialDesign,false,true,false,
+                layoutMode:ScreenMode.Idle,
+                dial:new DialSnapshot(DialView.Volume,100,null,null,
+                    DateTimeOffset.UtcNow,"test")))
+            using(var radialMix=OledRenderer.Render(radialDesign,false,true,false,
+                layoutMode:ScreenMode.Idle,
+                dial:new DialSnapshot(DialView.ChatMix,null,75,25,
+                    DateTimeOffset.UtcNow,"test")))
+            {
+                int changed=0,mixedChanged=0;
+                for(int y=10;y<53;y++)for(int x=2;x<78;x++)
+                {
+                    if(radialZero.GetPixel(x,y).ToArgb()!=radialFull.GetPixel(x,y).ToArgb())
+                        changed++;
+                    if(radialMix.GetPixel(x,y).ToArgb()!=radialFull.GetPixel(x,y).ToArgb())
+                        mixedChanged++;
+                }
+                if(changed<40 || mixedChanged<20)
+                    throw new Exception("Radial VOL/ChatMix wheel did not change with HID data");
+                if(exportDemo!=null)
+                {
+                    string folder=Path.GetDirectoryName(Path.GetFullPath(exportDemo))!;
+                    Directory.CreateDirectory(folder);
+                    radialFull.Save(Path.Combine(folder,"radial-volume-128x64.png"),
+                        ImageFormat.Png);
+                    radialMix.Save(Path.Combine(folder,"radial-chatmix-128x64.png"),
+                        ImageFormat.Png);
+                }
+                for(int y=0;y<10;y++)for(int x=0;x<128;x++)
+                    if(radialFull.GetPixel(x,y).R>0)
+                        throw new Exception("Radial wheel overwrote the OEM header");
+            }
+            radialDesign.Widgets.Remove(wheelWidget);
+            using(var dateOnly=OledRenderer.Render(radialDesign,false,true,false,
+                layoutMode:ScreenMode.Idle))
+            using(var withWheel=OledRenderer.Render(StudioProject.Defaults(ScreenMode.Idle),
+                false,true,false,layoutMode:ScreenMode.Idle))
+                for(int y=44;y<52;y++)for(int x=67;x<128;x++)
+                    if(dateOnly.GetPixel(x,y).ToArgb()!=withWheel.GetPixel(x,y).ToArgb())
+                        throw new Exception("Radial wheel erased a date pixel");
             var trios=new BatterySnapshot{
                 Values=new(System.StringComparer.OrdinalIgnoreCase)
                 {
@@ -499,8 +590,16 @@ internal static class SelfTests
                 ()=>System.Threading.Tasks.Task.CompletedTask,()=>{}))
             {
                 if(!AllChildren(options).OfType<System.Windows.Forms.Button>()
-                    .Any(b=>b.Text.Contains("Pil ve öncelik")))
+                    .Any(b=>b.Text.Contains("Pil ve öncelik") ||
+                             b.Text.Contains("Battery & priority")))
                     throw new Exception("Battery preferences missing from Settings");
+                var menuButtons=AllChildren(options).OfType<System.Windows.Forms.Button>().ToArray();
+                var aboutButton=menuButtons.FirstOrDefault(b=>b.Text.Contains("Hakkında") ||
+                    b.Text.Contains("About"));
+                var languageButton=menuButtons.FirstOrDefault(b=>b.Text.Contains("Language"));
+                if(aboutButton==null || languageButton==null ||
+                   aboutButton.Top<=languageButton.Top)
+                    throw new Exception("About is not the bottom Settings navigation item");
             }
             using(var about=new SettingsDialog())
             {
@@ -516,7 +615,8 @@ internal static class SelfTests
                     throw new Exception("Secret mini FPS has wrong native OLED size");
                 var gameButtons=AllChildren(game).OfType<System.Windows.Forms.Button>().ToArray();
                 if(gameButtons.Any(b=>b.Text.Contains("20 sn")) ||
-                   !gameButtons.Any(b=>b.Text.Contains("CANLI OYNA")))
+                   !gameButtons.Any(b=>b.Text.Contains("CANLI OYNA") ||
+                       b.Text.Contains("PLAY ON DOCK")))
                     throw new Exception("Timed DOOM OLED button was not removed");
                 int lit=0;
                 for(int y=0;y<64;y++)

@@ -187,6 +187,8 @@ internal static class OledRenderer
         "GameMiniPlayer" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,35,128)),Math.Max(14,
             7*Scale(w.FontSize)+Math.Clamp(w.StrokeWidth,1,3)+2)),
+        "VolumeChatMix" when w.DialStyle=="Wheel" => new(w.X,w.Y,
+            Math.Min(Width-w.X,76),42),
         "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,60,128)),25),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
@@ -246,7 +248,7 @@ internal static class OledRenderer
                 string pct=reading?.Display??"--%";
                 int labelX=x+13;
                 DrawText(px,pct,labelX,y+2,1);
-                int boltX=labelX+pct.Length*6+1;
+                int boltX=labelX+TextWidth(pct,7)+2;
                 if(reading?.IsCharging==true &&
                     boltX+3<=Math.Min(Width,x+42))
                     DrawChargeBolt(px,boltX,y+2);
@@ -365,6 +367,13 @@ internal static class OledRenderer
             DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromMinutes(10);
         int width=Math.Max(3,bounds.Width-2);
 
+        if(widget.DialStyle=="Wheel")
+        {
+            DrawRadialDial(tile,x,y,snapshot,fresh);
+        }
+        else
+        {
+
         if(snapshot.View==DialView.ChatMix)
         {
             DrawText(tile,"CHATMIX",x+1,y+1,1);
@@ -384,10 +393,79 @@ internal static class OledRenderer
                 x+49,y+1,1);
             DrawProgress(tile,x+1,y+14,width,volume??0);
         }
+        }
         for(int yy=Math.Max(0,bounds.Top);yy<Math.Min(Height,bounds.Bottom);yy++)
         for(int xx=Math.Max(0,bounds.Left);xx<Math.Min(Width,bounds.Right);xx++)
             if(EditableHeader.Value||yy>=ReservedTop)
-                px[yy*Width+xx]=tile[yy*Width+xx];
+            {
+                // A wheel has curved transparent corners. Do not wipe the
+                // date or text that legitimately occupies those corners.
+                if(widget.DialStyle=="Wheel")
+                {
+                    if(tile[yy*Width+xx])px[yy*Width+xx]=true;
+                }
+                else px[yy*Width+xx]=tile[yy*Width+xx];
+            }
+    }
+
+    /// <summary>
+    /// Monochrome, native-pixel wheel inspired by the SteelSeries OLED:
+    /// a broken annular sweep, hollow inactive ticks, central mode badge and
+    /// a small percentage readout. Intentionally recreated in code rather
+    /// than taken from SteelSeries software/firmware or a photographed image.
+    /// Every illuminated point is an integer OLED pixel (no antialiasing).
+    /// The 42px high ring fits between the OEM top strip and the battery row.
+    /// </summary>
+    private static void DrawRadialDial(bool[] tile,int x,int y,
+        DialSnapshot snapshot,bool fresh)
+    {
+        int cx=x+22,cy=y+21;
+        int? percent=snapshot.View==DialView.ChatMix
+            ?(fresh && snapshot.Game.HasValue && snapshot.Chat.HasValue
+                ?(snapshot.Game.Value+snapshot.Chat.Value>0
+                    ?(int)Math.Round(snapshot.Game.Value*100d/
+                        (snapshot.Game.Value+snapshot.Chat.Value)):50)
+                :null)
+            :(fresh?snapshot.Volume:null);
+        const int segments=61;
+        int active=percent.HasValue
+            ?Math.Clamp((int)Math.Round(percent.Value*segments/100d),0,segments)
+            :0;
+        for(int i=0;i<segments;i++)
+        {
+            double angle=(140d+260d*i/(segments-1))*Math.PI/180d;
+            if(i<active)
+            {
+                // Filled 6px radial thickness with a one-pixel rhythmic
+                // separation between angular ticks, as on the OEM display.
+                for(int radius=16;radius<=21;radius++)
+                {
+                    int px=cx+(int)Math.Round(radius*Math.Cos(angle));
+                    int py=cy+(int)Math.Round(radius*Math.Sin(angle));
+                    Dot(tile,px,py);
+                }
+            }
+            else if(i%2==0)
+            {
+                // The dotted 1-bit outer scale remains visible at 0%.
+                Dot(tile,cx+(int)Math.Round(20*Math.Cos(angle)),
+                    cy+(int)Math.Round(20*Math.Sin(angle)));
+            }
+        }
+        // Keep the center visually separated from the wheel track.
+        if(snapshot.View==DialView.ChatMix)
+        {
+            DrawText(tile,"CH",cx-6,cy-8,1);
+            DrawText(tile,"MIX",cx-8,cy+1,1);
+            DrawText(tile,"MIX",x+48,y+13,1);
+        }
+        else
+        {
+            DrawText(tile,"VOL",cx-8,cy-3,1);
+            DrawText(tile,"VOL",x+48,y+13,1);
+        }
+        DrawText(tile,percent.HasValue?$"{percent.Value}%":"--%",
+            x+48,y+26,1);
     }
 
     // Hand-drawn 3x7 native OLED lightning glyph shown only for confirmed charging.
@@ -706,6 +784,9 @@ internal static class OledRenderer
                 throw new InvalidOperationException("Glyph rows invalid: "+raw);
             d[raw[0]]=rows;
         }
+        // ':' cannot use the "key:rows" serializer because it is itself
+        // the separator. A compact clock must retain its visible colon.
+        d[':']=["00000","00100","00100","00000","00100","00100","00000"];
         return d;
     }
 }

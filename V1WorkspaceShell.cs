@@ -28,6 +28,9 @@ internal sealed partial class PixelStudioForm
     private Label? modernModeLabel,modernRuntimeLabel,modernSelectedLabel;
     private Label? modernDockStatus,modernFooter,modernHint;
     private Panel? modernCanvasHost;
+    private Control? modernTextRow,modernFontRow,modernStrokeRow;
+    private Control? modernVisibleRow,modernXRow,modernYRow;
+    private Control? modernDialStyleRow,modernDialWidthRow;
     private bool modernShellInitialized;
 
     private void BuildModernShell(TabPage legacyEditTab,
@@ -53,7 +56,7 @@ internal sealed partial class PixelStudioForm
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,224));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,316));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,326));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute,73));
         root.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute,43));
@@ -212,9 +215,12 @@ internal sealed partial class PixelStudioForm
         canvasTitle.Controls.Add(canvasTools);
         tool.Width=145;
         DecorateInput(tool);
+        DecorateCombo(tool);
         showGrid.Text="Piksel ızgarası";
-        showGrid.ForeColor=UiMuted;showGrid.AutoSize=true;
-        showGrid.Padding=new Padding(0,5,0,0);
+        showGrid.ForeColor=UiMuted;showGrid.AutoSize=false;
+        showGrid.Width=135;showGrid.Height=30;
+        showGrid.BackColor=UiBg;
+        showGrid.Padding=Padding.Empty;
         canvasTools.Controls.Add(showGrid);
         canvasTools.Controls.Add(tool);
         workspace.Controls.Add(canvasTitle,0,3);
@@ -261,6 +267,7 @@ internal sealed partial class PixelStudioForm
         });
         kind.Width=267;
         DecorateInput(kind);
+        DecorateCombo(kind);
         inspector.Controls.Add(kind);
         var addRow=Row(270,41);
         Decorate(add,true);Decorate(remove);
@@ -275,6 +282,21 @@ internal sealed partial class PixelStudioForm
         widgets.BackColor=UiSurface;
         widgets.ForeColor=UiText;
         widgets.Font=new Font("Segoe UI",9.4f);
+        widgets.DrawMode=DrawMode.OwnerDrawFixed;
+        widgets.ItemHeight=24;
+        widgets.DrawItem+=(_,e)=>
+        {
+            if(e.Index<0)return;
+            bool active=(e.State&DrawItemState.Selected)!=0;
+            using var fill=new SolidBrush(active?Color.FromArgb(38,68,82):
+                (e.Index%2==0?UiSurface:Color.FromArgb(27,37,50)));
+            e.Graphics.FillRectangle(fill,e.Bounds);
+            var value=widgets.Items[e.Index]?.ToString()??"";
+            TextRenderer.DrawText(e.Graphics,value,widgets.Font,
+                new Rectangle(e.Bounds.Left+8,e.Bounds.Top,e.Bounds.Width-12,e.Bounds.Height),
+                active?UiAccent:UiText,TextFormatFlags.VerticalCenter|
+                TextFormatFlags.EndEllipsis);
+        };
         inspector.Controls.Add(widgets);
         inspector.Controls.Add(Spacer(10,268));
         modernSelectedLabel=Section("ÖĞE AYARLARI",268);
@@ -283,13 +305,23 @@ internal sealed partial class PixelStudioForm
             Text="Seçtiğin öğenin özellikleri",Width=268,Height=24,
             Font=new Font("Segoe UI",8.5f),ForeColor=UiMuted
         });
-        inspector.Controls.Add(PropertyRow("Göster",widgetVisible));
-        inspector.Controls.Add(PropertyRow("Metin",customText));
-        inspector.Controls.Add(PropertyRow("Font",fontSize));
-        inspector.Controls.Add(PropertyRow("Kalınlık",strokeWidth));
-        inspector.Controls.Add(PropertyRow("X konumu",xPos));
-        inspector.Controls.Add(PropertyRow("Y konumu",yPos));
-        inspector.Controls.Add(PropertyRow("Widget eni",miniWidth));
+        modernVisibleRow=PropertyRow("Göster",widgetVisible);
+        modernTextRow=PropertyRow("Metin",customText);
+        modernFontRow=PropertyRow("Font",fontSize);
+        modernStrokeRow=PropertyRow("Kalınlık",strokeWidth);
+        modernXRow=PropertyRow("X konumu",xPos);
+        modernYRow=PropertyRow("Y konumu",yPos);
+        inspector.Controls.Add(modernVisibleRow);
+        inspector.Controls.Add(modernTextRow);
+        inspector.Controls.Add(modernFontRow);
+        inspector.Controls.Add(modernStrokeRow);
+        inspector.Controls.Add(modernXRow);
+        inspector.Controls.Add(modernYRow);
+        modernDialStyleRow=PropertyRow("Gösterge tipi",dialStyle);
+        DecorateCombo(dialStyle);
+        inspector.Controls.Add(modernDialStyleRow);
+        modernDialWidthRow=PropertyRow("Widget eni",miniWidth);
+        inspector.Controls.Add(modernDialWidthRow);
         inspector.Controls.Add(Spacer(12,268));
         inspector.Controls.Add(Section("EKRAN KORUMASI",268));
         headerProtect.Text="Orijinal üst 10 pikseli koru";
@@ -332,9 +364,12 @@ internal sealed partial class PixelStudioForm
         left.Controls.Add(settingsButton);
         settingsButton.Click+=(_,_)=>{
             using var dialog=new SettingsDialog(
-                ()=>dockPreview?.LiveOutputActive==true,
+                ()=>dockPreview?.OledWriterActive==true,
                 batteryPreferences,()=>batterySnapshot,RefreshBatteriesAsync,
-                ()=>{Redraw();_ = RefreshBatteriesAsync();});
+                ()=>{Redraw();_ = RefreshBatteriesAsync();},
+                ()=>dockPreview!.SuspendLiveForGameAsync(),
+                wasLive=>dockPreview!.ResumeLiveAfterGameAsync(wasLive),
+                ApplyLanguage);
             settingsDialog=dialog;
             try{dialog.ShowDialog(this);}finally{settingsDialog=null;}
         };
@@ -355,6 +390,7 @@ internal sealed partial class PixelStudioForm
         status.Visible=false;
         status.TextChanged+=(_,_)=>UpdateModernUi();
         modernShellInitialized=true;
+        UiLanguage.ApplyTree(this);
         UpdateModernUi();
         ResumeLayout(true);
         PositionCanvas();
@@ -363,6 +399,13 @@ internal sealed partial class PixelStudioForm
     private void SelectModernMode(ScreenMode screen)
     {
         SwitchEditingMode(screen);
+        UpdateModernUi();
+    }
+
+    private void ApplyLanguage()
+    {
+        UiLanguage.ApplyTree(this);
+        kind.Refresh();tool.Refresh();dialStyle.Refresh();widgets.Refresh();
         UpdateModernUi();
     }
 
@@ -394,17 +437,17 @@ internal sealed partial class PixelStudioForm
             b.FlatAppearance.BorderColor=active?UiAccent:UiSurface;
         }
         if(modernHint!=null)
-            modernHint.Text=selected?.Kind=="VolumeChatMix"
+            modernHint.Text=UiLanguage.T(selected?.Kind=="VolumeChatMix"
                 ?"Salt-okunur tekerlek: "+dialMonitor.Snapshot.Status+
                   " · Mod, ses veya ChatMix hareketi algılandığında değişir."
-                :"Seçili moddaki her değişiklik dock üzerinde anında görünür.";
+                :"Seçili moddaki her değişiklik dock üzerinde anında görünür.");
         if(modernModeLabel!=null)
-            modernModeLabel.Text=editingMode switch
+            modernModeLabel.Text=UiLanguage.T(editingMode switch
             {
                 ScreenMode.Media=>"Medya tasarımı",
                 ScreenMode.Game=>"Oyun tasarımı",
                 _=>"Boşta ekranı"
-            };
+            });
         if(modernRuntimeLabel!=null)
         {
             string runtime=ActiveMode switch
@@ -413,27 +456,38 @@ internal sealed partial class PixelStudioForm
                 ScreenMode.Media=>"MEDYA AKTİF",
                 _=>"BOŞTA"
             };
-            modernRuntimeLabel.Text="Bilgisayarın durumu: "+runtime+
+            modernRuntimeLabel.Text=UiLanguage.T("Bilgisayarın durumu: "+runtime+
                 "\n"+(gameSnapshot.IsRunning?
                     ("Oyun: "+gameSnapshot.Name):
                     mediaSnapshot.IsPlaying?
                     ("Medya: "+mediaSnapshot.Title):
-                    "Oyun veya medya bulunmadı.");
+                    "Oyun veya medya bulunmadı."));
         }
         if(modernSelectedLabel!=null)
-            modernSelectedLabel.Text=selected is null?
-                "ÖĞE AYARLARI":("SEÇİLİ  ·  "+WidgetLabels.Display(selected.Kind));
+            modernSelectedLabel.Text=UiLanguage.T(selected is null?
+                "ÖĞE AYARLARI":("SEÇİLİ  ·  "+WidgetLabels.Display(selected.Kind)));
+        if(modernVisibleRow!=null)modernVisibleRow.Visible=selected!=null;
+        if(modernTextRow!=null)modernTextRow.Visible=customText.Enabled;
+        if(modernFontRow!=null)modernFontRow.Visible=fontSize.Enabled;
+        if(modernStrokeRow!=null)modernStrokeRow.Visible=strokeWidth.Enabled;
+        if(modernXRow!=null)modernXRow.Visible=selected!=null;
+        if(modernYRow!=null)modernYRow.Visible=selected!=null;
+        if(modernDialStyleRow!=null)
+            modernDialStyleRow.Visible=selected?.Kind=="VolumeChatMix";
+        if(modernDialWidthRow!=null)
+            modernDialWidthRow.Visible=selected?.Kind=="GameMiniPlayer" ||
+                (selected?.Kind=="VolumeChatMix"&&selected.DialStyle!="Wheel");
         if(modernDockStatus!=null)
         {
             string message=dockPreview.HardwareStatus;
-            modernDockStatus.Text=(dockPreview.LiveOutputActive?
+            modernDockStatus.Text=UiLanguage.T((dockPreview.LiveOutputActive?
                 "● Dock üzerinde canlı mod açık":
                 "○ Dock canlı modu kapalı")+"\n"+
-                (message.Length>110?message[..110]+"…":message);
+                (message.Length>110?message[..110]+"…":message));
         }
         if(modernLive!=null)
         {
-            modernLive.Text=dockPreview.LiveOutputActive?"■ Durdur":"▶ Canlı";
+            modernLive.Text=UiLanguage.T(dockPreview.LiveOutputActive?"■ Durdur":"▶ Canlı");
             modernLive.BackColor=dockPreview.LiveOutputActive?
                 Color.FromArgb(90,46,44):UiSurface;
             modernLive.ForeColor=dockPreview.LiveOutputActive?
@@ -451,9 +505,9 @@ internal sealed partial class PixelStudioForm
                 UiAccent:UiMuted;
         }
         if(modernFooter!=null)
-            modernFooter.Text="  ●  "+status.Text+
+            modernFooter.Text="  ●  "+UiLanguage.T(status.Text)+
                 "     |     OLED: 128×64, "+(project.ProtectHeader?
-                "üst 10 piksel korunuyor":"tam ekran düzenleme");
+                UiLanguage.T("üst 10 piksel korunuyor"):UiLanguage.T("tam ekran düzenleme"));
     }
 
     private static Label Section(string text,int width)=>new()
@@ -465,7 +519,7 @@ internal sealed partial class PixelStudioForm
     private static Control Spacer(int height,int width)=>new Panel{
         Height=height,Width=width,BackColor=UiSidebar
     };
-    private static Button ModeButton(string name)=>new()
+    private static Button ModeButton(string name)=>new DarkButton()
     {
         Width=192,Height=54,Text=name,
         TextAlign=ContentAlignment.MiddleLeft,
@@ -478,7 +532,7 @@ internal sealed partial class PixelStudioForm
     };
     private static Button ModernButton(string text,int width)
     {
-        var b=new Button{Text=text,Width=width,Height=33,
+        var b=new DarkButton{Text=text,Width=width,Height=33,
             Margin=new Padding(0,0,6,0)};
         Decorate(b);
         return b;
@@ -515,30 +569,72 @@ internal sealed partial class PixelStudioForm
         c.BackColor=UiSurface;c.ForeColor=UiText;
         c.Font=new Font("Segoe UI",9.4f);
         c.Margin=new Padding(3,3,3,3);
+        if(c is ComboBox combo)combo.FlatStyle=FlatStyle.Flat;
+        if(c is TextBox edit)edit.BorderStyle=BorderStyle.None;
+    }
+    private void DecorateCombo(ComboBox combo)
+    {
+        combo.BackColor=UiSurface;combo.ForeColor=UiText;
+        combo.FlatStyle=FlatStyle.Flat;
+        combo.DrawMode=DrawMode.OwnerDrawFixed;
+        combo.ItemHeight=23;
+        combo.DrawItem+=(_,e)=>
+        {
+            if(e.Index<0)return;
+            bool active=(e.State&DrawItemState.Selected)!=0;
+            using var background=new SolidBrush(active?Color.FromArgb(38,68,82):UiSurface);
+            e.Graphics.FillRectangle(background,e.Bounds);
+            var item=combo.Items[e.Index]?.ToString()??"";
+            string label=ReferenceEquals(combo,dialStyle)
+                ?(item=="Wheel"?UiLanguage.T("Dairesel tekerlek"):
+                    UiLanguage.T("Düz çubuk"))
+                :ReferenceEquals(combo,kind)?WidgetLabels.Display(item):
+                    UiLanguage.T(item);
+            TextRenderer.DrawText(e.Graphics,label,combo.Font,
+                new Rectangle(e.Bounds.Left+7,e.Bounds.Top,e.Bounds.Width-9,e.Bounds.Height),
+                active?UiAccent:UiText,TextFormatFlags.VerticalCenter|
+                TextFormatFlags.EndEllipsis);
+        };
     }
     private static FlowLayoutPanel Row(int width,int height)=>new(){
         Width=width,Height=height,WrapContents=false,BackColor=UiSidebar
     };
-    private static Panel PropertyRow(string title,Control ctrl)
+    private static Control PropertyRow(string title,Control ctrl)
     {
-        var panel=new Panel{
-            Width=267,Height=35,BackColor=UiSidebar,
-            Margin=new Padding(0,1,0,1)
+        var row=new TableLayoutPanel{
+            Width=268,Height=39,BackColor=UiSidebar,
+            ColumnCount=2,RowCount=1,
+            Margin=new Padding(0,1,0,1),Padding=Padding.Empty,
+            AutoSize=false
         };
-        panel.Controls.Add(new Label{
-            Text=title,Left=3,Top=8,Width=104,Height=22,
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,105));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        row.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        row.Controls.Add(new Label{
+            Text=title,Dock=DockStyle.Fill,AutoEllipsis=true,
+            TextAlign=ContentAlignment.MiddleLeft,
+            Margin=new Padding(3,0,5,0),
             ForeColor=UiMuted,Font=new Font("Segoe UI",9f)
-        });
-        ctrl.Left=112;ctrl.Top=4;
-        ctrl.Width=ctrl is TextBox?145:ctrl is CheckBox?146:
-            ctrl is NumericUpDown?90:145;
-        if(ctrl is CheckBox box)
+        },0,0);
+        var inset=new Panel{
+            Dock=DockStyle.Fill,
+            BackColor=ctrl is TextBox?UiBorder:UiSidebar,
+            Margin=new Padding(0,2,4,2),
+            Padding=ctrl is TextBox?new Padding(2,7,2,2):new Padding(0,2,0,2)
+        };
+        row.Controls.Add(inset,1,0);
+        ctrl.Dock=DockStyle.Fill;
+        ctrl.Margin=Padding.Empty;
+        if(ctrl is DarkCheckBox box)
         {
             box.Text="Görünür";
             box.ForeColor=UiText;
+            box.BackColor=UiSidebar;
         }
         else DecorateInput(ctrl);
-        panel.Controls.Add(ctrl);
-        return panel;
+        ctrl.Dock=DockStyle.Fill;
+        ctrl.Margin=Padding.Empty;
+        inset.Controls.Add(ctrl);
+        return row;
     }
 }

@@ -8,9 +8,21 @@ namespace SteelseriesDockCustomiser;
 /// <summary>Settings / About window. The Easter egg is deliberately not advertised.</summary>
 internal sealed class SettingsDialog : Form
 {
+    private bool captureMode;
+    internal void EnableOffscreenCapture()
+    {
+        captureMode=true;
+        StartPosition=FormStartPosition.Manual;
+        Location=new Point(-5000,-5000);
+        ShowInTaskbar=false;
+    }
+    protected override bool ShowWithoutActivation=>captureMode;
     private readonly KonamiSequence secret = new();
     private readonly Func<bool> otherOledWriterActive;
-    private bool aboutActive = true;
+    private readonly Func<Task<bool>> suspendLive;
+    private readonly Func<bool,Task> resumeLive;
+    private readonly Action onLanguageChanged;
+    private bool aboutActive;
     private BatteryStatusDialog? batteryEditor;
 
     public void UpdateBatteryRows()
@@ -28,9 +40,15 @@ internal sealed class SettingsDialog : Form
         BatteryPreferences? batteryPreferences = null,
         Func<BatterySnapshot>? snapshotGetter = null,
         Func<Task>? refresh = null,
-        Action? onApply = null)
+        Action? onApply = null,
+        Func<Task<bool>>? suspendLive = null,
+        Func<bool,Task>? resumeLive = null,
+        Action? onLanguageChanged = null)
     {
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
+        this.suspendLive=suspendLive??(()=>Task.FromResult(false));
+        this.resumeLive=resumeLive??(_=>Task.CompletedTask);
+        this.onLanguageChanged=onLanguageChanged??(()=>{});
         Text = "Ayarlar | Dock Customiser";
         BackColor = Background;
         ForeColor = Primary;
@@ -61,16 +79,26 @@ internal sealed class SettingsDialog : Form
             Text = "AYARLAR", Left = 22, Top = 25, Width = 154, Height = 24,
             Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold), ForeColor = Muted
         });
-        var aboutItem = new Button
+        var aboutItem = new DarkButton
         {
-            Text = "ⓘ   Hakkında", Left = 13, Top = 79, Width = 178, Height = 49,
+            Text = "ⓘ   Hakkında", Left = 13, Top = 635, Width = 178, Height = 49,
             TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(12, 0, 0, 0),
-            FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(38, 68, 82),
-            ForeColor = Accent, Cursor = Cursors.Hand,
+            FlatStyle = FlatStyle.Flat, BackColor = Surface,
+            ForeColor = Muted, Cursor = Cursors.Hand,
             Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold)
         };
         aboutItem.FlatAppearance.BorderSize = 0;
         menu.Controls.Add(aboutItem);
+        var languageItem=new DarkButton
+        {
+            Text="◉   Dil / Language",Left=13,Top=79,Width=178,Height=49,
+            TextAlign=ContentAlignment.MiddleLeft,Padding=new Padding(12,0,0,0),
+            FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(38,68,82),
+            ForeColor=Accent,Cursor=Cursors.Hand,
+            Font=new Font("Segoe UI Semibold",10f,FontStyle.Bold)
+        };
+        languageItem.FlatAppearance.BorderSize=0;
+        menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
             Text = "OLED STUDIO   •   1.1.0", Left = 18, Top = 704,
@@ -131,7 +159,7 @@ internal sealed class SettingsDialog : Form
             ForeColor = Muted, Font = new Font("Segoe UI", 8.4f)
         });
 
-        var close = new Button
+        var close = new DarkButton
         {
             Text = "Kapat", Width = 94, Height = 34,
             Left = 410, Top = 413, FlatStyle = FlatStyle.Flat,
@@ -142,12 +170,54 @@ internal sealed class SettingsDialog : Form
         close.Click += (_, _) => Close();
         content.Controls.Add(close);
 
+        var languagePage=new Panel{Dock=DockStyle.Fill,BackColor=Background};
+        contentHost.Controls.Add(languagePage);
+        languagePage.Controls.Add(new Label
+        {
+            Text="DİL / LANGUAGE",Left=32,Top=28,Width=620,Height=25,
+            ForeColor=Accent,Font=new Font("Segoe UI Semibold",10,FontStyle.Bold)
+        });
+        languagePage.Controls.Add(new Label
+        {
+            Text="Uygulama dili",Left=30,Top=66,Width=610,Height=47,
+            ForeColor=Primary,Font=new Font("Segoe UI Semibold",24,FontStyle.Bold)
+        });
+        languagePage.Controls.Add(new Label
+        {
+            Text="Değişiklik anında uygulanır ve sonraki açılışlarda korunur.",
+            Left=32,Top=130,Width=730,Height=36,ForeColor=Muted,
+            Font=new Font("Segoe UI",10)
+        });
+        var languageSelector=new ComboBox
+        {
+            Left=32,Top=198,Width=328,Height=39,
+            DropDownStyle=ComboBoxStyle.DropDownList,
+            FlatStyle=FlatStyle.Flat,DrawMode=DrawMode.OwnerDrawFixed,
+            ItemHeight=29,BackColor=Surface,ForeColor=Primary,
+            Font=new Font("Segoe UI Semibold",11)
+        };
+        languageSelector.Items.AddRange(["Türkçe","İngilizce"]);
+        languageSelector.DrawItem+=(_,e)=>
+        {
+            if(e.Index<0)return;
+            using var bg=new SolidBrush((e.State&DrawItemState.Selected)!=0
+                ?Color.FromArgb(38,68,82):Surface);
+            e.Graphics.FillRectangle(bg,e.Bounds);
+            TextRenderer.DrawText(e.Graphics,UiLanguage.T(languageSelector.Items[e.Index]?.ToString()),
+                languageSelector.Font,new Rectangle(e.Bounds.Left+12,e.Bounds.Top,
+                    e.Bounds.Width-14,e.Bounds.Height),Primary,
+                TextFormatFlags.VerticalCenter);
+        };
+        languagePage.Controls.Add(languageSelector);
+
         // Settings use the same dark palette as the workspace. The battery
         // priority editor is hosted here, not in a separate top-level window.
+        Button? batteryButton=null;
+        Panel? batteryPage=null;
         if (batteryPreferences is not null && snapshotGetter is not null &&
             refresh is not null && onApply is not null)
         {
-            var batteryButton = new Button
+            batteryButton = new DarkButton
             {
                 Text = "◫   Pil ve öncelik", Left = 13, Top = 140,
                 Width = 178, Height = 49,
@@ -160,7 +230,7 @@ internal sealed class SettingsDialog : Form
             batteryButton.FlatAppearance.BorderSize = 0;
             menu.Controls.Add(batteryButton);
 
-            var batteryPage = new Panel { Dock = DockStyle.Fill, BackColor = Background };
+            batteryPage = new Panel { Dock = DockStyle.Fill, BackColor = Background };
             batteryEditor = new BatteryStatusDialog(
                 batteryPreferences, snapshotGetter, refresh, onApply)
             {
@@ -170,35 +240,70 @@ internal sealed class SettingsDialog : Form
             batteryPage.Controls.Add(batteryEditor);
             contentHost.Controls.Add(batteryPage);
             batteryEditor.Show();
-            batteryPage.Hide();
-            content.BringToFront();
-
-            void SwitchPage(bool showAbout)
-            {
-                aboutActive = showAbout;
-                content.Visible = showAbout;
-                batteryPage.Visible = !showAbout;
-                aboutItem.BackColor = showAbout ? Color.FromArgb(38, 68, 82) : Surface;
-                aboutItem.ForeColor = showAbout ? Accent : Muted;
-                batteryButton.BackColor = showAbout ? Surface : Color.FromArgb(38, 68, 82);
-                batteryButton.ForeColor = showAbout ? Muted : Accent;
-                if (!showAbout) batteryEditor.UpdateRows();
-            }
-            aboutItem.Click += (_, _) => SwitchPage(true);
-            batteryButton.Click += (_, _) => SwitchPage(false);
         }
+
+        void SwitchPage(int page)
+        {
+            aboutActive=page==2;
+            content.Visible=aboutActive;
+            languagePage.Visible=page==0;
+            if(batteryPage!=null)batteryPage.Visible=page==1;
+            foreach(var (button,active) in new[]{
+                (languageItem,page==0),(aboutItem,page==2),
+                (batteryButton,page==1)})
+            {
+                if(button==null)continue;
+                button.BackColor=active?Color.FromArgb(38,68,82):Surface;
+                button.ForeColor=active?Accent:Muted;
+            }
+            if(page==1)batteryEditor?.UpdateRows();
+        }
+        languageItem.Click+=(_,_)=>SwitchPage(0);
+        aboutItem.Click+=(_,_)=>SwitchPage(2);
+        if(batteryButton!=null)batteryButton.Click+=(_,_)=>SwitchPage(1);
+        languageSelector.SelectedIndexChanged+=(_,_)=>
+        {
+            bool english=languageSelector.SelectedIndex==1;
+            if(UiLanguage.English==english)return;
+            UiLanguage.Select(english);
+            UiLanguage.ApplyTree(this);
+            this.onLanguageChanged();
+            languageSelector.Invalidate();
+            batteryEditor?.ApplyLanguage();
+        };
+        languageSelector.SelectedIndex=UiLanguage.English?1:0;
+        UiLanguage.ApplyTree(this);
+        SwitchPage(0);
     }
 
     private void AdvanceSecret(Keys key)
     {
         if (aboutActive && secret.Feed(key))
         {
-            BeginInvoke(new Action(() =>
+            BeginInvoke(new Action(async () =>
             {
                 Hide();
-                using var game = new DoomModeForm(otherOledWriterActive);
-                game.ShowDialog(Owner);
-                Close(); // ESC from the game returns to the normal editor.
+                bool wasLive=false;
+                try
+                {
+                    wasLive=await suspendLive();
+                    using var game=new DoomModeForm(otherOledWriterActive,autoStart:true);
+                    game.ShowDialog(Owner);
+                }
+                catch(Exception ex)
+                {
+                    MessageBox.Show(Owner,"OLED: "+ex.Message,"DOOM MODE",
+                        MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                }
+                finally
+                {
+                    try{await resumeLive(wasLive);}catch(Exception ex)
+                    {
+                        MessageBox.Show(Owner,ex.Message,"OLED restore",
+                            MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                    }
+                    Close();
+                }
             }));
         }
     }

@@ -12,6 +12,21 @@ namespace SteelseriesDockCustomiser;
 
 internal sealed partial class PixelStudioForm : Form
 {
+    private bool captureMode;
+    internal void EnableOffscreenCapture()
+    {
+        captureMode=true;
+        StartPosition=FormStartPosition.Manual;
+        Location=new Point(-5000,-5000);
+        ShowInTaskbar=false;
+    }
+    internal void SelectCaptureMode(ScreenMode mode)
+    {
+        SwitchEditingMode(mode);
+        selected=state.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
+        RefreshWidgetList();
+    }
+    protected override bool ShowWithoutActivation=>captureMode;
     private const int CanvasWidth=128, CanvasHeight=64;
     private int Zoom=6;
     private int LockedRows=>project.ProtectHeader?10:0;
@@ -22,10 +37,10 @@ internal sealed partial class PixelStudioForm : Form
     private int gameCounter,controllerCounter;
     private readonly TabControl modeTabs=new(){
         Left=18,Top=8,Width=544,Height=38,SizeMode=TabSizeMode.Fixed,ItemSize=new Size(180,25)};
-    private readonly CheckBox headerProtect=new(){
+    private readonly DarkCheckBox headerProtect=new(){
         Left=570,Top=13,Width=240,Text="Üst 10 pikseli koru",Checked=true};
-    private readonly NumericUpDown strokeWidth=new(){Minimum=1,Maximum=3,Width=50};
-    private readonly NumericUpDown miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=62};
+    private readonly DarkNumberBox strokeWidth=new(){Minimum=1,Maximum=3,Width=85};
+    private readonly DarkNumberBox miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=100};
     private readonly string savePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","studio-v05.json");
@@ -40,7 +55,7 @@ internal sealed partial class PixelStudioForm : Form
     private bool batteryPolling;
     private bool fastBatteryPolling;
     private int batteryRefreshCounter;
-    private readonly CheckBox autoMedia = new(){Text="Otomatik medya",Checked=true,AutoSize=true};
+    private readonly DarkCheckBox autoMedia = new(){Text="Otomatik medya",Checked=true,AutoSize=true};
     private MediaSnapshot mediaSnapshot = MediaSnapshot.Empty;
     private bool mediaPolling;
     private bool MediaActive => autoMedia.Checked ? mediaSnapshot.IsPlaying : media.Checked;
@@ -58,18 +73,19 @@ internal sealed partial class PixelStudioForm : Form
     private readonly PictureBox editor = new() { Left = 18, Top = 16, Width = CanvasWidth*6, Height = CanvasHeight*6, BackColor = Color.Black, BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Cross };
     private readonly ComboBox tool = new() { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox kind = new() { Width = 134, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox dialStyle = new() { Width=153,DropDownStyle=ComboBoxStyle.DropDownList };
     private readonly ComboBox source = new() { Width = 116, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ListBox widgets = new() { Width = 232, Height = 106 };
     private readonly TextBox customText = new() { Width = 166,MaxLength=160 };
-    private readonly NumericUpDown fontSize = new() { Minimum=7,Maximum=24,Value=10,Width=49 };
-    private readonly NumericUpDown xPos = new() { Minimum=0,Maximum=127,Width=48 };
-    private readonly NumericUpDown yPos = new() { Minimum=10,Maximum=63,Width=48 };
-    private readonly CheckBox widgetVisible = new() { Text="Görünür", Checked=true,AutoSize=true };
+    private readonly DarkNumberBox fontSize = new() { Minimum=7,Maximum=24,Value=10,Width=85 };
+    private readonly DarkNumberBox xPos = new() { Minimum=0,Maximum=127,Width=85 };
+    private readonly DarkNumberBox yPos = new() { Minimum=10,Maximum=63,Width=85 };
+    private readonly DarkCheckBox widgetVisible = new() { Text="Görünür", Checked=true,AutoSize=true };
     private readonly CheckBox media = new() { Text="Medya çalıyor (demo)", Checked=true, AutoSize=true };
     private readonly CheckBox showDate = new() { Text="Tarihi göster", Checked=true, AutoSize=true };
-    private readonly CheckBox showGrid = new() { Text="Piksel kılavuzu", AutoSize=true };
-    private readonly Button undoButton = new() { Text="↶ Geri al", Width=96,Height=30 };
-    private readonly Button redoButton = new() { Text="↷ İleri al", Width=96,Height=30 };
+    private readonly DarkCheckBox showGrid = new() { Text="Piksel kılavuzu", AutoSize=true };
+    private readonly Button undoButton = new DarkButton() { Text="↶ Geri al", Width=96,Height=30 };
+    private readonly Button redoButton = new DarkButton() { Text="↷ İleri al", Width=96,Height=30 };
     private readonly Label status = new() { Width=755,Height=52,ForeColor=Color.FromArgb(44,170,104) };
     private readonly System.Windows.Forms.Timer ticker = new() { Interval=1000 };
 
@@ -110,6 +126,15 @@ internal sealed partial class PixelStudioForm : Form
         };
         kind.Items.AddRange(AllWidgetKinds);
         kind.SelectedIndex=0;
+        dialStyle.Items.AddRange(["Bar","Wheel"]);
+        dialStyle.Format+=(_,e)=>
+        {
+            if(e.ListItem is string name)
+                e.Value=name=="Wheel"?UiLanguage.T("Dairesel tekerlek"):
+                    UiLanguage.T("Düz çubuk");
+        };
+        dialStyle.FormattingEnabled=true;
+        dialStyle.SelectedIndex=0;
         source.Items.AddRange(["Spotify","Diğer medya"]);
         source.SelectedIndex=0;
 
@@ -225,6 +250,14 @@ internal sealed partial class PixelStudioForm : Form
         {
             if(changeUi||selected==null||selected.Visible==widgetVisible.Checked)return;
             Record();selected.Visible=widgetVisible.Checked;Redraw();
+        };
+        dialStyle.SelectedIndexChanged+=(_,_)=>
+        {
+            if(changeUi||selected?.Kind!="VolumeChatMix")return;
+            string value=dialStyle.SelectedItem?.ToString()??"Bar";
+            if(value==selected.DialStyle)return;
+            Record();selected.DialStyle=value;
+            RefreshWidgetList();Redraw();
         };
 
         editor.MouseDown += BeginGesture;
@@ -452,7 +485,7 @@ internal sealed partial class PixelStudioForm : Form
         _=RefreshBatteriesAsync();
     }
 
-    private static Button B(string text,int width) => new(){Text=text,Width=width,Height=30};
+    private static Button B(string text,int width) => new DarkButton(){Text=text,Width=width,Height=30};
     private static Label L(string text) => new(){Text=text,AutoSize=true,Padding=new Padding(2,8,2,0)};
     private void SetStatus(string message) => status.Text=message;
     private void Redraw()
@@ -499,6 +532,7 @@ internal sealed partial class PixelStudioForm : Form
             "GameMiniPlayer" or "Custom text";
         strokeWidth.Enabled=fontSize.Enabled;
         miniWidth.Enabled=has && selected!.Kind is "GameMiniPlayer" or "VolumeChatMix";
+        dialStyle.Enabled=has && selected!.Kind=="VolumeChatMix";
         widgetVisible.Enabled=has && !StudioProject.IsLocked(editingMode,selected!.Kind);
         xPos.Enabled=has;yPos.Enabled=has;
         if(selected!=null)
@@ -508,6 +542,7 @@ internal sealed partial class PixelStudioForm : Form
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
             miniWidth.Minimum=selected.Kind=="VolumeChatMix"?60:35;
             miniWidth.Value=Math.Clamp(selected.MiniWidth,(int)miniWidth.Minimum,128);
+            dialStyle.SelectedItem=selected.DialStyle=="Wheel"?"Wheel":"Bar";
             xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
         }
@@ -551,7 +586,7 @@ internal sealed partial class PixelStudioForm : Form
         }
         if(type=="VolumeChatMix")
         {
-            w.X=7;w.Y=23;w.MiniWidth=104;
+            w.X=2;w.Y=11;w.MiniWidth=104;w.DialStyle="Wheel";
         }
         if(type=="GameLabel")w.Text="NOW PLAYING:";
         state.Widgets.Add(w);selected=w;RefreshWidgetList();Redraw();tool.SelectedIndex=2;

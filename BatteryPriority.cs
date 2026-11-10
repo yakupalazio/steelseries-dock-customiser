@@ -12,7 +12,7 @@ internal static class BatteryPriority
     public static readonly string[] DefaultKinds =
         ["Mouse","Phone","DualSense","Laptop","Headset","SpareBattery"];
 
-    public static string DisplayName(string kind)=>kind switch
+    public static string DisplayName(string kind)=>UiLanguage.T(kind switch
     {
         "Mouse"=>"Aerox Mouse",
         "Phone"=>"Galaxy S24+",
@@ -21,7 +21,7 @@ internal static class BatteryPriority
         "Headset"=>"Nova Pro Kulaklık",
         "SpareBattery"=>"Nova Pro Yedek Pil",
         _=>kind
-    };
+    });
 
     public static string[] Sanitize(IEnumerable<string>? priority)
     {

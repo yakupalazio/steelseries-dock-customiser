@@ -12,8 +12,8 @@ internal sealed class IconEditorDialog : Form
     private readonly ComboBox iconNames=new(){Left=20,Top=48,Width=205,DropDownStyle=ComboBoxStyle.DropDownList};
     private readonly PictureBox pixelGrid=new(){Left=20,Top=93,Width=Cell*MaxCells,Height=Cell*MaxCells,BackColor=Color.FromArgb(25,28,31),BorderStyle=BorderStyle.FixedSingle};
     private readonly PictureBox preview=new(){Left=488,Top=112,Width=145,Height=145,BackColor=Color.Black,BorderStyle=BorderStyle.FixedSingle};
-    private readonly NumericUpDown iconWidth=new(){Minimum=4,Maximum=20,Width=60};
-    private readonly NumericUpDown iconHeight=new(){Minimum=4,Maximum=20,Width=60};
+    private readonly DarkNumberBox iconWidth=new(){Minimum=4,Maximum=20,Width=75};
+    private readonly DarkNumberBox iconHeight=new(){Minimum=4,Maximum=20,Width=75};
     private readonly Label info=new(){Left=20,Top=564,Width=615,Height=35,Text="Sol tık: piksel aç  |  Sağ tık: sil  |  Ctrl+Z / Ctrl+Y: geri al / ileri al"};
     private readonly Stack<string[]> undo=new();
     private readonly Stack<string[]> redo=new();
@@ -72,20 +72,22 @@ internal sealed class IconEditorDialog : Form
             else if(e.Control&&e.KeyCode==Keys.Y){Redo();e.SuppressKeyPress=true;}
         };
         FormClosing+=(sender,e)=>{
-            if(dirty && MessageBox.Show("Kaydedilmemiş ikon değişiklikleri var. Çıkılsın mı?",
-                "İkon editörü",MessageBoxButtons.YesNo,MessageBoxIcon.Warning)!=DialogResult.Yes)
+            if(dirty && MessageBox.Show(UiLanguage.T("Kaydedilmemiş ikon değişiklikleri var. Çıkılsın mı?"),
+                UiLanguage.T("İkon editörü"),MessageBoxButtons.YesNo,MessageBoxIcon.Warning)!=DialogResult.Yes)
                 e.Cancel=true;
         };
         iconNames.SelectedIndex=0;
+        UiSkin.ApplyDark(this);
+        UiLanguage.ApplyTree(this);
     }
 
-    private static Button ButtonOf(string label,int width)=>new(){Text=label,Width=width,Height=31};
+    private static Button ButtonOf(string label,int width)=>new DarkButton(){Text=label,Width=width,Height=31};
     private string CurrentIconName=>iconNames.SelectedItem?.ToString()??"Mouse";
     private void ChangeIcon()
     {
         if(changing)return;
-        if(dirty && MessageBox.Show("Kaydedilmemiş çizimi atlayıp başka ikona geçilsin mi?",
-            "İkon düzenleyici",MessageBoxButtons.YesNo)!=DialogResult.Yes)
+        if(dirty && MessageBox.Show(UiLanguage.T("Kaydedilmemiş çizimi atlayıp başka ikona geçilsin mi?"),
+            UiLanguage.T("İkon düzenleyici"),MessageBoxButtons.YesNo)!=DialogResult.Yes)
         {
             changing=true;
             iconNames.SelectedItem=loadedIcon;
@@ -152,7 +154,7 @@ internal sealed class IconEditorDialog : Form
         Record();
         var rows=OledRenderer.GetOriginalIconRows(CurrentIconName);
         Restore(rows);
-        info.Text="Orijinal sprite yüklendi. Kaydet ile değişikliği uygula.";
+        info.Text=UiLanguage.T("Orijinal sprite yüklendi. Kaydet ile değişikliği uygula.");
     }
     private void Paste()
     {
@@ -160,10 +162,10 @@ internal sealed class IconEditorDialog : Form
         {
             var rows=Clipboard.GetText().Trim().Split(['\r','\n'],StringSplitOptions.RemoveEmptyEntries);
             if(rows.Length<4||rows.Length>20||rows.Any(r=>r.Length<4||r.Length>20||r.Length!=rows[0].Length||r.Any(c=>c!='0'&&c!='1')))
-                throw new FormatException("Geçersiz 0/1 sprite matrisi.");
-            Record();Restore(rows);info.Text="Yapıştırıldı. Kaydet ile uygula.";
+                throw new FormatException(UiLanguage.T("Geçersiz 0/1 sprite matrisi."));
+            Record();Restore(rows);info.Text=UiLanguage.T("Yapıştırıldı. Kaydet ile uygula.");
         }
-        catch(Exception ex){MessageBox.Show(ex.Message,"Yapıştırma başarısız");}
+        catch(Exception ex){MessageBox.Show(ex.Message,UiLanguage.T("Yapıştırma başarısız"));}
     }
     private void Save()
     {
@@ -171,9 +173,9 @@ internal sealed class IconEditorDialog : Form
         {
             IconLibrary.Set(CurrentIconName,CaptureRows());dirty=false;
             onSaved();
-            info.Text=CurrentIconName+" ikonu kaydedildi ve önizlemeye uygulandı.";
+            info.Text=UiLanguage.T(CurrentIconName+" ikonu kaydedildi ve önizlemeye uygulandı.");
         }
-        catch(Exception ex){MessageBox.Show(ex.Message,"Kaydetme hatası");}
+        catch(Exception ex){MessageBox.Show(ex.Message,UiLanguage.T("Kaydetme hatası"));}
     }
     private void InvalidatePixels(){pixelGrid.Invalidate();preview.Invalidate();}
     private void DrawGrid(object? sender,PaintEventArgs e)

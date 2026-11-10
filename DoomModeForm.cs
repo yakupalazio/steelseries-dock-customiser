@@ -42,7 +42,7 @@ internal sealed class DoomModeForm : Form
     };
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 40 };
     private readonly Bitmap frame = new(OledWidth, OledHeight);
-    private readonly Button hardwareButton = new()
+    private readonly Button hardwareButton = new DarkButton()
     {
         Text = "▶ DOCK'TA CANLI OYNA",
         Width = 254, Height = 33,
@@ -52,6 +52,7 @@ internal sealed class DoomModeForm : Form
         Cursor = Cursors.Hand
     };
     private readonly Func<bool> otherOledWriterActive;
+    private readonly bool autoStart;
     private readonly DockHardwareTest restore = new();
     private FastOledTransport? physicalTransport;
     private bool physicalActive;
@@ -68,9 +69,10 @@ internal sealed class DoomModeForm : Form
     private int health, kills, respawnFrames, damageCooldown, flashFrames;
     private bool enemyAlive;
 
-    public DoomModeForm(Func<bool>? otherOledWriterActive = null)
+    public DoomModeForm(Func<bool>? otherOledWriterActive = null,bool autoStart = false)
     {
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
+        this.autoStart=autoStart;
         Text = "DOOM MODE — Secret OLED Mini FPS";
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Color.FromArgb(13, 18, 26);
@@ -121,7 +123,7 @@ internal sealed class DoomModeForm : Form
             UpdateGame();
             DrawGame();
             if(++frameCounter % 2 == 0)QueuePhysicalFrame();
-            status.Text="DOCK CANLI · W/S hareket  A/D dön  SPACE ateş  R yeniden başla  ESC çıkış";
+            status.Text=UiLanguage.T("DOCK CANLI · W/S hareket  A/D dön  SPACE ateş  R yeniden başla  ESC çıkış");
         };
         hardwareButton.Click += (_, _) =>
         {
@@ -134,27 +136,41 @@ internal sealed class DoomModeForm : Form
         Deactivate += (_, _) =>
         {
             held.Clear();
-            // An unfocused window cannot receive game controls. Prevent a
-            // stale OLED frame by restoring the factory screen.
-            if(physicalActive)StopPhysical();
+            // Leaving the game also closes its exclusive OLED session,
+            // allowing the caller to resume its previously-live layout.
+            if(physicalActive && IsHandleCreated)
+                BeginInvoke(new Action(Close));
         };
-        Shown += (_, _) => { ActiveControl = null; Focus(); timer.Start(); };
+        Shown += (_, _) =>
+        {
+            ActiveControl=null;Focus();timer.Start();
+            if(this.autoStart)
+                BeginInvoke(new Action(()=>StartPhysical(skipConsent:true)));
+        };
         FormClosing += (_, _) => StopPhysical();
         FormClosed += (_, _) => timer.Stop();
         ResetGame();
         DrawGame();
+        UiLanguage.ApplyTree(this);
     }
 
     internal Bitmap SnapshotForTest() => new(frame);
 
     private void TogglePhysical()
     {
-        if (physicalActive) { StopPhysical(); return; }
+        if (physicalActive) { Close(); return; }
+        StartPhysical(skipConsent:false);
+    }
+
+    private void StartPhysical(bool skipConsent)
+    {
+        if(physicalActive)return;
         if (otherOledWriterActive())
         {
             MessageBox.Show(this,
-                "Önce ana penceredeki Dock Canlı modunu durdur.",
-                "OLED zaten kullanılıyor", MessageBoxButtons.OK,
+                UiLanguage.English?"Stop the main Dock Live mode first.":
+                    "Önce ana penceredeki Dock Canlı modunu durdur.",
+                UiLanguage.English?"OLED in use":"OLED zaten kullanılıyor", MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             return;
         }
@@ -164,12 +180,16 @@ internal sealed class DoomModeForm : Form
         {
             MessageBox.Show(this,
                 restorationCheck.Length != 0 ? restorationCheck : deviceCheck,
-                "Güvenli OLED testi yapılamıyor", MessageBoxButtons.OK,
+                UiLanguage.English?"OLED connection unavailable":"Güvenli OLED testi yapılamıyor", MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             return;
         }
-        if (MessageBox.Show(this,
-            "Deneysel 128×64 oyun aktarımı Nova Pro Wireless OLED'in TÜM ekranını " +
+        string consent=UiLanguage.English
+            ?"The experimental 128×64 game temporarily replaces the entire OLED, "+
+                "including the OEM battery strip. No firmware or brightness settings are changed.\n\n"+
+                "There is no time limit. Avoid leaving an unchanged OLED frame on for long periods.\n"+
+                "ESC or closing the window restores the SteelSeries screen. Continue?"
+            :"Deneysel 128×64 oyun aktarımı Nova Pro Wireless OLED'in TÜM ekranını " +
             "geçici olarak değiştirecek (orijinal üst pil şeridi dahil).\n\n" +
             "Yalnızca doğrulanan HID çizim komutları gönderilir; firmware ve " +
             "parlaklık değiştirilmez. Otomatik süre sınırı yoktur; " +
@@ -177,8 +197,9 @@ internal sealed class DoomModeForm : Form
             "ESC, Durdur veya pencereyi kapatma ardından doğrulanmış ggoled aracı " +
             "ile SteelSeries'in orijinal ekranına dönüş komutu gönderilir. " +
             "GG Now Playing açıkken çakışabilir.\n\n" +
-            "Gerçek cihaza gönderilsin mi?",
-            "DOOM MODE — deneysel donanım testi",
+            "Gerçek cihaza gönderilsin mi?";
+        if (!skipConsent && MessageBox.Show(this,consent,
+            UiLanguage.English?"DOOM MODE — experimental OLED":"DOOM MODE — deneysel donanım testi",
             MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
@@ -189,7 +210,7 @@ internal sealed class DoomModeForm : Form
             physicalTransport = transport;
             physicalActive = true;
             frameCounter = 0;
-            hardwareButton.Text = "■ DURDUR / OLED RESET";
+            hardwareButton.Text = UiLanguage.T("■ DURDUR / OLED RESET");
             QueuePhysicalFrame();
         }
         catch (Exception ex)
@@ -197,7 +218,8 @@ internal sealed class DoomModeForm : Form
             physicalTransport?.Dispose();
             physicalTransport = null;
             physicalActive = false;
-            MessageBox.Show(this, "OLED bağlantısı açılamadı: " + ex.Message,
+            MessageBox.Show(this, (UiLanguage.English?"OLED connection failed: ":
+                "OLED bağlantısı açılamadı: ") + ex.Message,
                 "DOOM MODE", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
@@ -233,15 +255,21 @@ internal sealed class DoomModeForm : Form
     {
         if (!physicalActive && physicalTransport is null) return;
         physicalActive = false;
-        hardwareButton.Text = "▶ DOCK'TA CANLI OYNA";
+        hardwareButton.Text = UiLanguage.T("▶ DOCK'TA CANLI OYNA");
+        // Drain a queued HID frame before releasing the stream and running
+        // the OEM restore command. A late game frame must never overwrite
+        // the ordinary display after the caller resumes its live loop.
+        if(!SpinWait.SpinUntil(()=>Volatile.Read(ref sendingFrame)==0,
+            TimeSpan.FromSeconds(3)))
+            error??="OLED frame drain timed out";
         try { physicalTransport?.Dispose(); }
         catch (Exception ex) { error ??= ex.Message; }
         finally { physicalTransport = null; }
         // This bounded, SHA-verified CLI 'return' path is also used by the
         // existing on-demand physical test. ESC must not leave a custom frame.
         string restored = restore.RestoreNow();
-        status.Text = (error is null ? "" : "OLED aktarım hatası: " + error + " | ") +
-            restored + "   |   ESC: çıkış";
+        status.Text = UiLanguage.T((error is null ? "" : "OLED aktarım hatası: " + error + " | ") +
+            restored + "   |   ESC: çıkış");
     }
 
     private void ResetGame()
@@ -431,14 +459,18 @@ internal sealed class DoomModeForm : Form
             Math.Max(1,bounds.Width-40),78);
         var helpBox=new Rectangle(bounds.X+20,bounds.Y+bounds.Height/2-3,
             Math.Max(1,bounds.Width-40),108);
-        TextRenderer.DrawText(e.Graphics,"DOCK EKRANINA BAK 👀",
+        TextRenderer.DrawText(e.Graphics,UiLanguage.T("DOCK EKRANINA BAK 👀"),
             headingFont,titleBox,accent,
             TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|
             TextFormatFlags.WordBreak);
         TextRenderer.DrawText(e.Graphics,
-            "Oyun yalnızca Nova Pro Wireless OLED ekranında görünecek.\n"+
-            "Yukarıdan Canlı Oyna'ya bas, sonra W / A / S / D ve SPACE kullan.\n"+
-            "ESC ile çıkıp SteelSeries ekranına dönebilirsin.",
+            UiLanguage.English
+                ?"Gameplay is on the Nova Pro Wireless OLED only.\n"+
+                 "The game starts on the dock automatically. Use W / A / S / D and SPACE.\n"+
+                 "Press ESC to exit and restore the previous screen."
+                :"Oyun yalnızca Nova Pro Wireless OLED ekranında görünecek.\n"+
+                 "Oyun dock üzerinde otomatik açılır. W / A / S / D ve SPACE kullan.\n"+
+                 "ESC ile çıkıp önceki ekrana dönebilirsin.",
             smallFont,helpBox,Color.FromArgb(190,209,224),
             TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|
             TextFormatFlags.WordBreak);
