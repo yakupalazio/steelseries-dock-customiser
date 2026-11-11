@@ -245,7 +245,7 @@ internal static class Program
                     bool dialTail=fastReclaim && lastDialAt>0 &&
                         sinceDial>=0 && sinceDial<=750;
                     bool pending=System.Threading.Volatile.Read(ref reclaimPending)!=0;
-                    int limit=fastReclaim?24:12;
+                    int limit=fastReclaim?150:12;
                     int cooldown=fastReclaim?180:700;
                     if(reclaim && reclaimAttempts<limit &&
                        stopwatch.ElapsedMilliseconds-lastReclaim>=cooldown &&
