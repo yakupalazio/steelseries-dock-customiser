@@ -155,6 +155,8 @@ internal static class SelfTests
             {
                 UiLanguage.PreviewOnly(true);
                 if(UiLanguage.T("Dairesel tekerlek")!="Radial wheel" ||
+                   UiLanguage.T("Tekerleği piksel piksel düzenle")!="Edit wheel pixels" ||
+                   UiLanguage.T("Düz çubuğa geç")!="Switch to flat bar" ||
                    UiLanguage.T("◉   Dil / Language")!="◉   Language" ||
                    UiLanguage.T("Tekerlek bekleniyor")!="Waiting for wheel input" ||
                    BatteryPriority.DisplayName("Headset")!="Nova Pro Headset")
@@ -198,6 +200,9 @@ internal static class SelfTests
                     throw new Exception("Dial widget unavailable in "+mode);
             var radialDesign=StudioProject.Defaults(ScreenMode.Idle);
             var wheelWidget=radialDesign.Widgets.Single(w=>w.Kind=="VolumeChatMix");
+            if(OledRenderer.GetBounds(wheelWidget).Width!=WheelArtwork.Width ||
+               !WheelArtwork.IsValid(WheelArtwork.Factory))
+                throw new Exception("Original-style wheel sprite has invalid geometry");
             using(var radialZero=OledRenderer.Render(radialDesign,false,true,false,
                 layoutMode:ScreenMode.Idle,
                 dial:new DialSnapshot(DialView.Volume,0,null,null,
@@ -235,6 +240,18 @@ internal static class SelfTests
                         throw new Exception("Radial wheel overwrote the OEM header");
             }
             radialDesign.Widgets.Remove(wheelWidget);
+            // The wheel's one-bit artwork is fully serialized per widget.
+            var userPixels=WheelArtwork.Factory.ToCharArray();
+            userPixels[2*WheelArtwork.Width+2]='1';
+            wheelWidget.WheelPixels=new string(userPixels);
+            wheelWidget.WheelAutoLabel=false;
+            var customPixels=System.Text.Json.JsonSerializer.Deserialize<DockWidget>(
+                System.Text.Json.JsonSerializer.Serialize(wheelWidget));
+            if(customPixels?.WheelPixels!=wheelWidget.WheelPixels ||
+               customPixels.WheelAutoLabel ||
+               !WheelArtwork.IsValid(customPixels.WheelPixels) ||
+               WheelArtwork.IsValid("wrong"))
+                throw new Exception("Wheel pixel artwork failed persistence check");
             using(var dateOnly=OledRenderer.Render(radialDesign,false,true,false,
                 layoutMode:ScreenMode.Idle))
             using(var withWheel=OledRenderer.Render(StudioProject.Defaults(ScreenMode.Idle),
@@ -631,6 +648,16 @@ internal static class SelfTests
 
             // Fast OLED reports are tested entirely in memory: the HID
             // device is never opened and nothing is sent to hardware.
+            var sampleTime=DateTimeOffset.UtcNow;
+            if(DockPreviewPanel.NeedsReassert("same","same",sampleTime,
+                    sampleTime.AddSeconds(1),false) ||
+               !DockPreviewPanel.NeedsReassert("same","same",sampleTime,
+                    sampleTime.AddMilliseconds(2010),false) ||
+               !DockPreviewPanel.NeedsReassert("same","same",sampleTime,
+                    sampleTime.AddMilliseconds(100),true) ||
+               !DockPreviewPanel.NeedsReassert("previous","changed",sampleTime,
+                    sampleTime.AddMilliseconds(100),false))
+                throw new Exception("Native OLED overlay reassert scheduling regression");
             using(var pattern=new Bitmap(128,64))
             {
                 pattern.SetPixel(0,0,Color.White);
@@ -646,6 +673,18 @@ internal static class SelfTests
                    first[6]!=1 || first[6+63*8]!=128 ||
                    second[6+1]!=1 || second[6+63*8+7]!=128)
                     throw new Exception("Fast OLED feature report bit packing regression");
+                pattern.SetPixel(12,10,Color.White);
+                pattern.SetPixel(65,57,Color.White);
+                pattern.SetPixel(127,63,Color.White);
+                var topLeft=FastOledTransport.EncodePatch(pattern,0,10,48);
+                var topRight=FastOledTransport.EncodePatch(pattern,64,10,48);
+                var tailRight=FastOledTransport.EncodePatch(pattern,64,56,8);
+                if(topLeft[3]!=10||topLeft[5]!=48||
+                   topLeft[6+12*6]!=1 ||
+                   topRight[6+1*6+47/8]!=(1<<(47%8)) ||
+                   tailRight[3]!=56||tailRight[5]!=8||
+                   tailRight[6+63]!=128)
+                    throw new Exception("Protected live OLED patch encoding regression");
             }
 
             // Charging bolt: only a provider-confirmed true value makes pixels.

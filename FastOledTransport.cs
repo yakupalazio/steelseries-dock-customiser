@@ -74,20 +74,34 @@ internal sealed class FastOledTransport : IDisposable
         if (image.Width != 128 || image.Height != 64 ||
             startX is not (0 or 64))
             throw new ArgumentException("Only 128×64 images, halves 0/64, are supported.");
+        return EncodePatch(image,startX,0,64);
+    }
+
+    /// <summary>
+    /// Feature-report crop. This is exactly the same 0x93 drawing command
+    /// used by the existing ggoled patches; the frame is never handed back
+    /// to the OEM unless the user stops Live or starts the secret game.
+    /// In protected mode, Y=10..63 only: no report addresses header pixels.
+    /// </summary>
+    public static byte[] EncodePatch(Bitmap image,int startX,int y,int height)
+    {
+        if(image.Width!=128||image.Height!=64||startX is not (0 or 64) ||
+           y<0||height<=0||height>64||height%8!=0||y+height>64)
+            throw new ArgumentException("Invalid 128×64 OLED patch.");
         var report = new byte[PacketLength];
         report[0] = ScreenReportId;
         report[1] = 0x93; // OLED draw command; never changes firmware.
         report[2] = (byte)startX;
-        report[3] = 0;
+        report[3] = (byte)y;
         report[4] = 64;
-        report[5] = 64;
+        report[5] = (byte)height;
         for (int x = 0; x < 64; x++)
-        for (int y = 0; y < 64; y++)
+        for (int row = 0; row < height; row++)
         {
-            var color = image.GetPixel(startX + x, y);
+            var color = image.GetPixel(startX + x, y+row);
             if (color.R < 128 && color.G < 128 && color.B < 128) continue;
-            int offset = 6 + x * 8 + y / 8;
-            report[offset] |= (byte)(1 << (y % 8));
+            int offset = 6 + x * (height/8) + row/8;
+            report[offset] |= (byte)(1 << (row%8));
         }
         return report;
     }
@@ -103,6 +117,19 @@ internal sealed class FastOledTransport : IDisposable
             if (stream is null) throw new InvalidOperationException("OLED bağlantısı kapalı.");
             stream.SetFeature(left);
             stream.SetFeature(right);
+        }
+    }
+
+    public void SendLiveFrame(Bitmap image,bool protectHeader)
+    {
+        byte[][] reports=protectHeader
+            ?[EncodePatch(image,0,10,48),EncodePatch(image,64,10,48),
+              EncodePatch(image,0,56,8),EncodePatch(image,64,56,8)]
+            :[EncodeHalf(image,0),EncodeHalf(image,64)];
+        lock(gate)
+        {
+            if(stream is null)throw new InvalidOperationException("OLED connection is closed.");
+            foreach(var report in reports)stream.SetFeature(report);
         }
     }
 

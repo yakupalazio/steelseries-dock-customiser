@@ -34,6 +34,9 @@ internal sealed class ArctisDialMonitor : IDisposable
     private DialSnapshot current = new(DialView.Volume, null, null, null,
         DateTimeOffset.MinValue, "Tekerlek bekleniyor");
 
+    /// <summary>Unsolicited hardware event. Handlers must marshal to the UI.</summary>
+    public event Action? Updated;
+
     public DialSnapshot Snapshot
     {
         get { lock (gate) return current; }
@@ -164,6 +167,9 @@ internal sealed class ArctisDialMonitor : IDisposable
                             ev.Chat ?? current.Chat,
                             DateTimeOffset.UtcNow, "Dock tekerleği (canlı)");
                     }
+                    try{Updated?.Invoke();}
+                    catch(ObjectDisposedException){ /* Form is closing. */ }
+                    catch(InvalidOperationException){ /* Form handle is gone. */ }
                 }
             }
             catch (Exception ex)

@@ -203,6 +203,7 @@ internal sealed class StudioProject
             w.StrokeWidth=Math.Clamp(w.StrokeWidth,1,3);
             w.MiniWidth=Math.Clamp(w.MiniWidth,35,128);
             w.DialStyle=w.DialStyle=="Wheel"?"Wheel":"Bar";
+            if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }

@@ -188,7 +188,7 @@ internal static class OledRenderer
             Math.Clamp(w.MiniWidth,35,128)),Math.Max(14,
             7*Scale(w.FontSize)+Math.Clamp(w.StrokeWidth,1,3)+2)),
         "VolumeChatMix" when w.DialStyle=="Wheel" => new(w.X,w.Y,
-            Math.Min(Width-w.X,76),42),
+            Math.Min(Width-w.X,WheelArtwork.Width),WheelArtwork.Height),
         "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,60,128)),25),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
@@ -360,6 +360,7 @@ internal static class OledRenderer
     {
         var bounds=GetBounds(widget);
         var tile=new bool[Width*Height];
+        var mask=new bool[Width*Height];
         int x=widget.X,y=widget.Y;
         var snapshot=current??new DialSnapshot(DialView.Volume,null,null,null,
             DateTimeOffset.MinValue,"Veri yok");
@@ -369,7 +370,8 @@ internal static class OledRenderer
 
         if(widget.DialStyle=="Wheel")
         {
-            DrawRadialDial(tile,x,y,snapshot,fresh);
+            WheelArtwork.Draw(tile,mask,x,y,widget.WheelPixels,
+                WheelArtwork.Value(snapshot,fresh),snapshot.View,widget.WheelAutoLabel);
         }
         else
         {
@@ -398,74 +400,15 @@ internal static class OledRenderer
         for(int xx=Math.Max(0,bounds.Left);xx<Math.Min(Width,bounds.Right);xx++)
             if(EditableHeader.Value||yy>=ReservedTop)
             {
-                // A wheel has curved transparent corners. Do not wipe the
-                // date or text that legitimately occupies those corners.
+                // A wheel is a transparent 1-bit sprite except where it
+                // explicitly draws lit or black pixels. Other widgets can
+                // occupy its curved corners without being wiped away.
                 if(widget.DialStyle=="Wheel")
                 {
-                    if(tile[yy*Width+xx])px[yy*Width+xx]=true;
+                    if(mask[yy*Width+xx])px[yy*Width+xx]=tile[yy*Width+xx];
                 }
                 else px[yy*Width+xx]=tile[yy*Width+xx];
             }
-    }
-
-    /// <summary>
-    /// Monochrome, native-pixel wheel inspired by the SteelSeries OLED:
-    /// a broken annular sweep, hollow inactive ticks, central mode badge and
-    /// a small percentage readout. Intentionally recreated in code rather
-    /// than taken from SteelSeries software/firmware or a photographed image.
-    /// Every illuminated point is an integer OLED pixel (no antialiasing).
-    /// The 42px high ring fits between the OEM top strip and the battery row.
-    /// </summary>
-    private static void DrawRadialDial(bool[] tile,int x,int y,
-        DialSnapshot snapshot,bool fresh)
-    {
-        int cx=x+22,cy=y+21;
-        int? percent=snapshot.View==DialView.ChatMix
-            ?(fresh && snapshot.Game.HasValue && snapshot.Chat.HasValue
-                ?(snapshot.Game.Value+snapshot.Chat.Value>0
-                    ?(int)Math.Round(snapshot.Game.Value*100d/
-                        (snapshot.Game.Value+snapshot.Chat.Value)):50)
-                :null)
-            :(fresh?snapshot.Volume:null);
-        const int segments=61;
-        int active=percent.HasValue
-            ?Math.Clamp((int)Math.Round(percent.Value*segments/100d),0,segments)
-            :0;
-        for(int i=0;i<segments;i++)
-        {
-            double angle=(140d+260d*i/(segments-1))*Math.PI/180d;
-            if(i<active)
-            {
-                // Filled 6px radial thickness with a one-pixel rhythmic
-                // separation between angular ticks, as on the OEM display.
-                for(int radius=16;radius<=21;radius++)
-                {
-                    int px=cx+(int)Math.Round(radius*Math.Cos(angle));
-                    int py=cy+(int)Math.Round(radius*Math.Sin(angle));
-                    Dot(tile,px,py);
-                }
-            }
-            else if(i%2==0)
-            {
-                // The dotted 1-bit outer scale remains visible at 0%.
-                Dot(tile,cx+(int)Math.Round(20*Math.Cos(angle)),
-                    cy+(int)Math.Round(20*Math.Sin(angle)));
-            }
-        }
-        // Keep the center visually separated from the wheel track.
-        if(snapshot.View==DialView.ChatMix)
-        {
-            DrawText(tile,"CH",cx-6,cy-8,1);
-            DrawText(tile,"MIX",cx-8,cy+1,1);
-            DrawText(tile,"MIX",x+48,y+13,1);
-        }
-        else
-        {
-            DrawText(tile,"VOL",cx-8,cy-3,1);
-            DrawText(tile,"VOL",x+48,y+13,1);
-        }
-        DrawText(tile,percent.HasValue?$"{percent.Value}%":"--%",
-            x+48,y+26,1);
     }
 
     // Hand-drawn 3x7 native OLED lightning glyph shown only for confirmed charging.

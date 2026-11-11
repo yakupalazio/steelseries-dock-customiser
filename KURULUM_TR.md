@@ -27,7 +27,9 @@ Bu paket .NET 10 çalışma zamanını içinde taşır; ayrıca .NET yüklemen g
 
 **Boşta** ve **Oyun** modlarında dairesel widget varsayılan olarak eklidir. Sağdan widget'ı seçip **Gösterge tipi → Dairesel tekerlek / Düz çubuk** arasında geçebilirsin. İstemiyorsan öğeyi silebilirsin; kaydettikten sonra kendiliğinden geri gelmez. Ses modunda yüzdeyi, ChatMix modunda Game/Chat dengesini gösterir; Windows sesini veya kulaklık ayarını değiştirmez. Fiziksel tekerlek hareketinden gelen salt-okunur HID bildirimlerini dinler. İlk gerçek tekerlek hareketine kadar `--` görünmesi normaldir. Bazı cihazlarda tuşa basmak yeni bir HID bildirimi üretmeyebilir; görünüm bir sonraki tekerlek hareketiyle güncellenir.
 
-Bu gösterge SteelSeries'in resmî görselinden **esinlenilmiş, yerel 128×64 piksellerle yeniden çizilmiş** bir tasarımdır; firmware veya GG içinden alınmış hazır sprite içermez. Üstteki orijinal 10 pikseli değiştirmez.
+Bu gösterge SteelSeries'in resmî görselinden **esinlenilmiş, 45×42 gerçek OLED pikseliyle yeniden çizilmiş** bir tasarımdır; firmware veya GG içinden alınmış hazır sprite içermez. Ortadaki beyaz disk, siyah `VOL` / `MIX` yazısı ve halkası dışında yüzde metni yoktur. Görseli birebir kendi cihazına uyarlamak için dairesel widget seçiliyken **Tekerleği piksel piksel düzenle** düğmesine bas. Beyaz/Siyah/Silgi fırçalarını ve sese göre dolan mavi katmanı kullanıp 0–100 örnek sürgüsüyle dene. İstersen otomatik orta yazıyı kapatıp onu da elle çizebilirsin. Değişiklikler widget'a kaydedilir; **Orijinal tasarıma dön** ile şablona dönebilirsin. Aynı menüde **Düz çubuğa geç** seçeneği de bulunur.
+
+**Fiziksel tekerlek sorunu için düzeltme:** Canlı mod artık doğrudan OLED çizim oturumunu yeniden kullanır, tekerlek hareketinden kısa süre sonra tasarımı tekrar gösterir ve GG olayı saklarsa iki saniyede bir ekranı geri alır. Tekerlek döndüğünde orijinal SteelSeries göstergesi çok kısa görünebilir; bağlantı veya HID bildirimlerinin GG tarafından tüketilmesi hâlinde görünümün hareketi gerçek donanımda doğrulanmalıdır. Ses seviyesini ayarlayan hiçbir komut gönderilmez. OLED'in orijinal üst 10 pikseli değiştirilmez.
 
 ## Dil
 

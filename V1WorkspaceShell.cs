@@ -30,7 +30,7 @@ internal sealed partial class PixelStudioForm
     private Panel? modernCanvasHost;
     private Control? modernTextRow,modernFontRow,modernStrokeRow;
     private Control? modernVisibleRow,modernXRow,modernYRow;
-    private Control? modernDialStyleRow,modernDialWidthRow;
+    private Control? modernDialStyleRow,modernDialWidthRow,modernWheelEditRow;
     private bool modernShellInitialized;
 
     private void BuildModernShell(TabPage legacyEditTab,
@@ -320,6 +320,8 @@ internal sealed partial class PixelStudioForm
         modernDialStyleRow=PropertyRow("Gösterge tipi",dialStyle);
         DecorateCombo(dialStyle);
         inspector.Controls.Add(modernDialStyleRow);
+        modernWheelEditRow=wheelEditorButton;
+        inspector.Controls.Add(modernWheelEditRow);
         modernDialWidthRow=PropertyRow("Widget eni",miniWidth);
         inspector.Controls.Add(modernDialWidthRow);
         inspector.Controls.Add(Spacer(12,268));
@@ -474,6 +476,9 @@ internal sealed partial class PixelStudioForm
         if(modernYRow!=null)modernYRow.Visible=selected!=null;
         if(modernDialStyleRow!=null)
             modernDialStyleRow.Visible=selected?.Kind=="VolumeChatMix";
+        if(modernWheelEditRow!=null)
+            modernWheelEditRow.Visible=selected?.Kind=="VolumeChatMix" &&
+                selected.DialStyle=="Wheel";
         if(modernDialWidthRow!=null)
             modernDialWidthRow.Visible=selected?.Kind=="GameMiniPlayer" ||
                 (selected?.Kind=="VolumeChatMix"&&selected.DialStyle!="Wheel");

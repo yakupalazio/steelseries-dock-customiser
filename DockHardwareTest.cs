@@ -24,6 +24,7 @@ internal sealed class DockHardwareTest
         "Documents","Codex","DockHardwareResearch","ggoled-v0.3.0.exe");
     private volatile bool staticApplied,staticApplying;
     private readonly SemaphoreSlim liveGate=new(1,1);
+    private FastOledTransport? directLive;
     public bool Active=>staticApplied||staticApplying;
     public const int EditableY=10;
     public const int EditableHeight=54;
@@ -125,18 +126,45 @@ internal sealed class DockHardwareTest
         string full=Path.Combine(folder,"live-dock-full-128x64.png");
         try
         {
-            using(var top=ExtractEditableArea(frame))top.Save(main,ImageFormat.Png);
-            using(var end=ExtractBottomTail(frame))end.Save(tail,ImageFormat.Png);
-            if(protectHeader)
+            // A persistent OLED HID session is substantially faster than
+            // spawning two separate ggoled.exe processes per frame. Its
+            // 0x93 feature writes are the same bounded drawing operations;
+            // audio and the knob's vendor-input interface are untouched.
+            bool sentDirect=false;
+            try
+            {
                 await Task.Run(()=>
                 {
-                    RunCli("img","-x","0","-y","10",main);
-                    RunCli("img","-x","0","-y","56",tail);
+                    if(directLive==null)
+                    {
+                        var device=new FastOledTransport();
+                        try{device.Open();directLive=device;}
+                        catch{device.Dispose();throw;}
+                    }
+                    directLive.SendLiveFrame(frame,protectHeader);
                 }).ConfigureAwait(false);
-            else
+                sentDirect=true;
+            }
+            catch
             {
-                frame.Save(full,ImageFormat.Png);
-                await Task.Run(()=>RunCli("img","-C",full)).ConfigureAwait(false);
+                directLive?.Dispose();
+                directLive=null;
+            }
+            if(!sentDirect)
+            {
+                using(var top=ExtractEditableArea(frame))top.Save(main,ImageFormat.Png);
+                using(var end=ExtractBottomTail(frame))end.Save(tail,ImageFormat.Png);
+                if(protectHeader)
+                    await Task.Run(()=>
+                    {
+                        RunCli("img","-x","0","-y","10",main);
+                        RunCli("img","-x","0","-y","56",tail);
+                    }).ConfigureAwait(false);
+                else
+                {
+                    frame.Save(full,ImageFormat.Png);
+                    await Task.Run(()=>RunCli("img","-C",full)).ConfigureAwait(false);
+                }
             }
         }
         finally
@@ -156,6 +184,8 @@ internal sealed class DockHardwareTest
             return "Dock güncellemesi sürüyor; dönüş komutu henüz gönderilemedi.";
         try
         {
+            directLive?.Dispose();
+            directLive=null;
             RunCli("return");
             staticApplied=false;
             return "SteelSeries varsayılan OLED ekranına dönüş komutu başarılı.";

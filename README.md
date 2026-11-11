@@ -2,6 +2,8 @@
 
 ## New in 1.1: dark OLED Studio, radial wheel and seamless DOOM takeover
 
+- **Physical wheel fix, same 1.1.0 version:** Live mode now reasserts the custom OLED after hardware wheel events and periodically recovers from the dock's native overlay. A persistent OLED-only HID sender reduces redraw latency; the verified ggoled sender remains a fallback. This never changes hardware audio, wheel mode, or firmware configuration. The factory overlay may still appear briefly on turning the physical knob.
+- **Smaller native-style wheel:** 45×42 with filled white `VOL` / `MIX` centre and no right-hand duplicate text/percentage. Exact factory firmware pixel data was not extracted. To match a particular dock revision, select the wheel and open **Edit wheel pixels** to paint a custom 1-bit design, including a dynamic segment layer, optional centre text, instant sample-percentage preview and factory reset. **Flat bar** is accessible from both the pixel editor and Display style. Custom wheel art saves per widget and can be undone.
 - Rebuilt the right-side property inspector using properly spaced, context-sensitive rows and dark native controls. Pixel editor and dock preview remain on one responsive page.
 - Added a **radial wheel** option for hardware **Volume / ChatMix** (the earlier flat bar remains available). The black-and-white 1-bit design is an original, pixel-addressed recreation inspired by the factory ring. Default **Idle** and **Game** layouts now include a removable radial wheel, while existing layouts migrate only once and remember intentional removal.
 - Added **Settings → Language** with persistent English/Turkish selection. **About** now sits at the bottom of the Settings navigation. UI labels, menus, dialogs, settings and editor actions support English.
@@ -15,7 +17,7 @@
 - Moved **Battery & Priority** into the dark-styled **Settings → Pil ve öncelik** page; the separate left-sidebar shortcut is gone.
 - Fixed the Turkish Microsoft Phone Link accessibility label **“Piliniz şu anda %54”** by recognizing localized suffixes. Verified on the connected Galaxy S24+ without ADB. A phone's displayed status may still lag real battery sync.
 - The wheel widget decodes Nova Pro Wireless HID **read-only** notifications: `07 25 raw` for hardware volume, `07 45 game chat` for ChatMix balance. It never writes mixer settings. It shows `--` until a wheel event and labels an inaccessible device rather than guessing data. A button press itself does not supply a guaranteed standalone event; the view changes with the first volume/ChatMix dial movement.
-- Wheel HID detection and read-only open/close succeeded on the actual Windows PC while SteelSeries GG was running. The user reports that the physical dial already updates the widget; the newly added radial drawing and DOOM handoff still need final device-side visual acceptance.
+- Wheel HID detection and read-only open/close succeeded on the actual Windows PC while SteelSeries GG was running. The user reported a regression where the native OLED wheel took over and the old custom wheel did not update; this release addresses the display-ownership race, but event delivery under GG and the visual response still need hands-on verification.
 
 Independent Windows 11 desktop designer for the SteelSeries Arctis Nova Pro Wireless base station's **128×64 monochrome OLED**. This is a personal project and is not an official SteelSeries product.
 

@@ -164,6 +164,18 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             Application.SetColorMode(SystemColorMode.Dark);
             if(args.Contains("--capture-english"))UiLanguage.PreviewOnly(true);
+            if(args.Contains("--capture-wheel"))
+            {
+                using var wheel=new WheelArtworkDialog(null);
+                wheel.Show();
+                Application.DoEvents();
+                using var wheelCapture=new System.Drawing.Bitmap(wheel.Width,wheel.Height);
+                wheel.DrawToBitmap(wheelCapture,new System.Drawing.Rectangle(0,0,
+                    wheelCapture.Width,wheelCapture.Height));
+                wheelCapture.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                wheel.Close();
+                return;
+            }
             if(args.Contains("--capture-settings"))
             {
                 using var settings=new SettingsDialog(()=>false,new BatteryPreferences(),
@@ -213,6 +225,10 @@ public sealed class DockWidget
     // "Wheel" renders the OEM-inspired 1-bit radial gauge; "Bar" preserves
     // older designs without requiring a layout-file format migration.
     public string DialStyle { get; set; } = "Bar";
+    // Optional user-authored 45×42 one-bit sprite. Empty means native-style
+    // factory template; saved along with this widget, not globally.
+    public string WheelPixels { get; set; } = "";
+    public bool WheelAutoLabel { get; set; } = true;
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;

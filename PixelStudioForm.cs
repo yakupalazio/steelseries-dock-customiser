@@ -74,6 +74,10 @@ internal sealed partial class PixelStudioForm : Form
     private readonly ComboBox tool = new() { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox kind = new() { Width = 134, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox dialStyle = new() { Width=153,DropDownStyle=ComboBoxStyle.DropDownList };
+    private readonly Button wheelEditorButton=new DarkButton(){
+        Text="Tekerleği piksel piksel düzenle",Width=265,Height=34,
+        BackColor=Color.FromArgb(34,58,76),
+        ForeColor=Color.FromArgb(134,220,249),Cursor=Cursors.Hand};
     private readonly ComboBox source = new() { Width = 116, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ListBox widgets = new() { Width = 232, Height = 106 };
     private readonly TextBox customText = new() { Width = 166,MaxLength=160 };
@@ -135,6 +139,21 @@ internal sealed partial class PixelStudioForm : Form
         };
         dialStyle.FormattingEnabled=true;
         dialStyle.SelectedIndex=0;
+        wheelEditorButton.Click+=(_,_)=>EditWheelArtwork();
+        dialMonitor.Updated+=() =>
+        {
+            if(IsDisposed||!IsHandleCreated)return;
+            try
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    if(IsDisposed)return;
+                    dockPreview?.OnPhysicalDialEvent();
+                    Redraw();
+                }));
+            }
+            catch(InvalidOperationException){ /* UI may be closing. */ }
+        };
         source.Items.AddRange(["Spotify","Diğer medya"]);
         source.SelectedIndex=0;
 
@@ -554,6 +573,25 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(changeUi||selected==null||selected.Kind is not ("Custom text" or "GameLabel")||selected.Text==customText.Text)return;
         Record();selected.Text=customText.Text;RefreshWidgetList();Redraw();
+    }
+    private void EditWheelArtwork()
+    {
+        if(selected?.Kind!="VolumeChatMix"||selected.DialStyle!="Wheel")return;
+        using var dialog=new WheelArtworkDialog(selected.WheelPixels,selected.WheelAutoLabel);
+        if(dialog.ShowDialog(this)!=DialogResult.OK)return;
+        if(dialog.UseBar)
+        {
+            Record();selected.DialStyle="Bar";
+            RefreshWidgetList();Redraw();
+            return;
+        }
+        if(selected.WheelPixels==dialog.Artwork &&
+           selected.WheelAutoLabel==dialog.AutoLabel)return;
+        Record();
+        selected.WheelPixels=dialog.Artwork;
+        selected.WheelAutoLabel=dialog.AutoLabel;
+        Redraw();
+        SetStatus(UiLanguage.T("Tekerlek pikselleri güncellendi. Kaydet ile sakla."));
     }
     private void ChangeNumber()
     {

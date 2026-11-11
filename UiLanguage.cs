@@ -74,6 +74,26 @@ internal static class UiLanguage
         ["Y konumu"]="Y position",["Widget eni"]="Widget width",
         ["Gösterge tipi"]="Display style",["Dairesel tekerlek"]="Radial wheel",
         ["Düz çubuk"]="Flat bar",
+        ["Tekerleği piksel piksel düzenle"]="Edit wheel pixels",
+        ["Tekerlek tasarım atölyesi"]="Wheel pixel workshop",
+        ["45 × 42 OLED PİKSELİ  •  TEKERLEK TASARIMI"]=
+            "45 × 42 OLED PIXELS  •  WHEEL DESIGN",
+        ["Boyama aracı"]="Paint tool",
+        ["Beyaz piksel"]="White pixel",
+        ["Sesle değişen halka"]="Dynamic volume ring",
+        ["Siyah piksel"]="Black pixel",
+        ["Saydam / Silgi"]="Transparent / Eraser",
+        ["Orta yazı (otomatik)"]="Centre label (automatic)",
+        ["Otomatik VOL / MIX yazısı"]="Automatic VOL / MIX label",
+        ["Örnek doluluk"]="Sample fill",
+        ["Önizleme"]="Preview",
+        ["Orijinal tasarıma dön"]="Restore original style",
+        ["Düz çubuğa geç"]="Switch to flat bar",
+        ["Sol tık: seçilen piksel  •  Sağ tık: sil\nMavi katman, ses/ChatMix ile hareket eder."]=
+            "Left click: paint  •  Right click: erase\nBlue layer follows volume/ChatMix.",
+        ["Vazgeç"]="Cancel",
+        ["Tekerlek pikselleri güncellendi. Kaydet ile sakla."]=
+            "Wheel pixels updated. Choose Save to keep changes.",
         ["EKRAN KORUMASI"]="SCREEN PROTECTION",
         ["Orijinal üst 10 pikseli koru"]="Preserve top 10 OEM pixels",
         ["Kapalıysa tam 128×64 OLED alanını düzenlersin. Dock'a göndermeden önce onay istenir."]=
@@ -200,6 +220,9 @@ internal static class UiLanguage
     private static readonly (string Turkish,string English)[] Fragments =
     [
         ("Canlı dock modu etkin","Live dock mode active"),
+        ("Tekerlek hareketi bekleniyor","Waiting for a wheel event"),
+        ("Dock tekerleği (canlı)","Dock wheel (live)"),
+        ("Tekerlek okunamıyor:","Wheel not accessible:"),
         ("Canlı mod durdu","Live mode stopped"),
         ("SteelSeries ekranı geri yükleniyor","Restoring SteelSeries display"),
         ("Tasarım dock'a uygulandı","Design applied to dock"),
