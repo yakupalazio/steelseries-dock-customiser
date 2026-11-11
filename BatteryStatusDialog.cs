@@ -20,8 +20,7 @@ internal sealed class BatteryPreferences
     public Dictionary<string,int> LowBatteryThresholds {get;set;}=new();
     public bool AutoMinimizePhoneLink {get;set;}=false;
     public static string FilePath=>Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","batteries-v098.json");
+        Beta5Sandbox.SettingsDirectory,"batteries-v098.json");
 
     public static BatteryPreferences Load()
     {

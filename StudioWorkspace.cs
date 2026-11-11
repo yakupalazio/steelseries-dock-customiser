@@ -26,8 +26,7 @@ internal sealed class StudioWorkspace
     }
 
     public static string FilePath=>Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","studio-v098.json");
+        Beta5Sandbox.SettingsDirectory,"studio-v098.json");
 
     public static StudioWorkspace Create()=>new();
 

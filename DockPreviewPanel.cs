@@ -73,8 +73,7 @@ internal sealed class DockPreviewPanel : UserControl
 
     private readonly string _assetDefault = Path.Combine(AppContext.BaseDirectory, "dock-photo-local.png");
     private readonly string _settingsFile = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","dock-preview-v07.json");
+        Beta5Sandbox.SettingsDirectory,"dock-preview-v07.json");
     private Image? _photo;
     private Color[]? _cachedGlassBackground;
     private PhotoSettings _settings = new();

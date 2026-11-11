@@ -17,8 +17,7 @@ internal static class UiLanguage
     private sealed class Original { public string Text {get;set;}=""; }
     private static readonly ConditionalWeakTable<Control,Original> Origins=new();
     private static readonly string PathName=Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","language.json");
+        Beta5Sandbox.SettingsDirectory,"language.json");
     public static bool English {get;private set;}=ReadPreference();
     private static bool ReadPreference()
     {

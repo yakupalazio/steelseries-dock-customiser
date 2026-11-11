@@ -17,8 +17,7 @@ namespace SteelseriesDockCustomiser;
 internal static class AdbPhoneBatteryProvider
 {
     public static string PreferredPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","platform-tools","adb.exe");
+        Beta5Sandbox.SettingsDirectory,"platform-tools","adb.exe");
 
     private static string? FindAdb()
     {

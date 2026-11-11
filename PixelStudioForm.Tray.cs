@@ -16,8 +16,7 @@ internal sealed partial class PixelStudioForm
     private bool hiddenByTrayClose;
     private ContextMenuStrip? trayMenu;
     private static string TrayPreferencesPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","tray-prefs.json");
+        Beta5Sandbox.SettingsDirectory,"tray-prefs.json");
     private void LoadMediaPreference()
     {
         try

@@ -23,8 +23,7 @@ internal sealed class LayoutProfileLibrary
 {
     public List<SavedLayoutProfile> Profiles { get; set; } = [];
     public static string FilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","profiles-v1.json");
+        Beta5Sandbox.SettingsDirectory,"profiles-v1.json");
 
     public static LayoutProfileLibrary Load()
     {

@@ -45,8 +45,7 @@ internal sealed class StudioProject
     }
 
     public static string FilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","studio-v100.json");
+        Beta5Sandbox.SettingsDirectory,"studio-v100.json");
 
     public static StudioProject Load()
     {
@@ -274,10 +273,10 @@ internal sealed class StudioProject
             w.DialStyle=w.DialStyle is "Wheel" or "MiniWheel" ? w.DialStyle : "Bar";
             if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
             w.WheelGapAngle=Math.Clamp(w.WheelGapAngle,-180,180);
-            w.WheelGameOffsetX=Math.Clamp(w.WheelGameOffsetX,-15,15);
-            w.WheelGameOffsetY=Math.Clamp(w.WheelGameOffsetY,-15,15);
-            w.WheelChatOffsetX=Math.Clamp(w.WheelChatOffsetX,-15,15);
-            w.WheelChatOffsetY=Math.Clamp(w.WheelChatOffsetY,-15,15);
+            w.WheelGameOffsetX=Math.Clamp(w.WheelGameOffsetX,-45,45);
+            w.WheelGameOffsetY=Math.Clamp(w.WheelGameOffsetY,-45,45);
+            w.WheelChatOffsetX=Math.Clamp(w.WheelChatOffsetX,-45,45);
+            w.WheelChatOffsetY=Math.Clamp(w.WheelChatOffsetY,-45,45);
             w.WheelRingThickness=Math.Clamp(w.WheelRingThickness,1,7);
             w.BarFrameThickness=Math.Clamp(w.BarFrameThickness,1,2);
             w.BarFillThickness=Math.Clamp(w.BarFillThickness,1,5);

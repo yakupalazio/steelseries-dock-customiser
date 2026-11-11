@@ -45,6 +45,8 @@ internal sealed class DockHardwareTest
     }
     public string Validate()
     {
+        if(!Beta5Sandbox.AllowPhysicalDockWrites)
+            return "Beta 5 geliştirme modunda fiziksel dock çıkışı kapalı. Ayrı donanım testi izni gerekir.";
         if(!File.Exists(cliPath))
             return "ggoled v0.3.0 aracı bulunamadı. Araç yalnızca resmî GitHub sürümünden edinilmeli.";
         string hash=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(cliPath)));

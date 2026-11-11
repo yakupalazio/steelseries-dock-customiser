@@ -54,8 +54,7 @@ internal sealed partial class PixelStudioForm : Form
     private readonly DarkNumberBox barFrame=new(){Minimum=1,Maximum=2,Width=85};
     private readonly DarkNumberBox barFill=new(){Minimum=1,Maximum=5,Width=85};
     private readonly string savePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","studio-v05.json");
+        Beta5Sandbox.SettingsDirectory,"studio-v05.json");
 
     private LayoutState state = LayoutDefaults.Create();
     private BatteryPreferences batteryPreferences = BatteryPreferences.Load();

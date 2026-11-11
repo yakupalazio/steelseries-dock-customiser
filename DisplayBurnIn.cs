@@ -9,8 +9,7 @@ internal sealed class DisplayPreferences
 {
     public bool BurnInDrift { get; set; }
     public static string FilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SteelseriesDockCustomiser","display-v1.json");
+        Beta5Sandbox.SettingsDirectory,"display-v1.json");
     public static DisplayPreferences Load()
     {
         try{return File.Exists(FilePath)
