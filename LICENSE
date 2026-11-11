@@ -1,0 +1,53 @@
+Steelseries Dock Customiser — Proprietary Freeware License
+Version 1.0 — 12 November 2026
+
+Copyright (c) 2026 Yakup Can Palaz. All rights reserved.
+
+1. Scope
+This license covers the original Steelseries Dock Customiser application,
+source code, user interface, and original assets for which Yakup Can Palaz
+owns the applicable rights ("Software"). Components identified in
+THIRD_PARTY_NOTICES.md remain subject to their own licenses. No copyright
+ownership over third-party components or trademarks is claimed.
+
+2. Free permission to use
+You may download an official, unmodified executable release, install it,
+and use it without charge, for personal or professional purposes.
+You may retain reasonable local copies needed for installation and backup.
+
+3. Rights not granted
+Without the copyright owner's prior written permission, you may not:
+  (a) modify, adapt, or create derivative versions of the owner's Software;
+  (b) distribute, mirror, republish, sublicense, sell, rent, or repackage
+      the Software or modified versions, including as part of another bundle;
+  (c) present it as your own work, remove ownership notices, or imply
+      endorsement by its author or SteelSeries; or
+  (d) use the source code to make or distribute competing derivative software.
+These restrictions apply only to the owner's rights, subject to applicable
+law and any mandatory statutory exceptions. This license does not override
+rights independently granted by any third-party license.
+
+4. Ownership and trademarks
+The Software is licensed, not sold. All rights not expressly granted are
+reserved. SteelSeries, Arctis, Nova Pro, Windows, and other marks belong to
+their respective owners. This project is independent and not endorsed by
+SteelSeries.
+
+5. Earlier versions
+This license applies to copies and releases expressly accompanied by it.
+It does not retroactively revoke licenses or other permissions validly
+granted for prior versions. Earlier original code without an express
+license remains subject to applicable copyright law. Prior third-party
+rights and notices remain unaffected.
+
+6. No warranty
+To the maximum extent permitted by law, the Software is provided "AS IS",
+without warranty of any kind. The author is not liable for damages arising
+from use of the Software to the extent permitted by applicable law.
+
+7. Permission and contact
+Written permission is required for modification or redistribution not
+expressly allowed here. Permission may be requested through the official
+project repository: https://github.com/yakupalazio/steelseries-dock-customiser
+
+This license is not an open-source license.

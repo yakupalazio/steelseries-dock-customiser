@@ -1,4 +1,32 @@
-# Steelseries Dock Customiser 1.1.1-beta.2 — OLED Studio
+# Steelseries Dock Customiser — Beta 5 local development
+
+> **Not a public release.** This isolated development branch uses
+> `%LOCALAPPDATA%\SteelseriesDockCustomiser-Beta5-Development` and disables
+> physical OLED writes unless explicitly unlocked for a supervised test.
+> Beta 4's personalized layouts and stable dock handoff are not modified.
+
+## Beta 5 changes under verification
+
+- Drag Game/Chat logo targets in the large and mini radial previews, or use
+  per-icon X/Y adjustments. Icons are constrained to their own rotated audio
+  arc sector and are excluded from the dial ring and each other.
+- Split ChatMix bar: Game left / Chat right, empty at the equal-gain midpoint,
+  independent frames and icons; a single bar still represents Volume.
+- Read-only Windows BLE/GATT 0x180F/0x2A19 and SetupAPI diagnostics, automatic
+  discovery, dynamic verified battery devices, stable device labels and low
+  battery notifications with configurable repeat intervals. No BQC dependency.
+- Compact wheel and revised bold clock/date glyphs; 10-second slow battery
+  polling with faster supported event-driven refreshes.
+- Physical OLED acceptance, handset/first-pair DualSense tests and copyright
+  audit remain outstanding. No firmware modification or GitHub release.
+
+**Copyright © 2026 Yakup Can Palaz. All rights reserved.**
+Official unmodified releases are free to use. Modification and
+redistribution require permission under [LICENSE](LICENSE). See
+[TERMS.md](TERMS.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+Earlier valid license grants, if any, are not retroactively revoked.
+
+## Previous versions and background
 
 > **Beta / experimental OLED handoff:** While Live mode is authorized, the app tries one `0x95 → 0x93` recovery after 450 ms of silence following a decoded physical dial event, with a 900 ms cooldown. This is **not** a firmware-level priority override. Physical mode-button presses can remain undetected, so the factory overlay may still persist for around 5 seconds. Repeated 5 Hz release/draw pulses are **not** used in normal Live mode because hardware testing showed partial flicker and native-screen takeover. For reproducible results, unsuccessful tests, risks and contributor ideas, see [OLED known issues](OLED_KNOWN_ISSUES_BETA.md).
 

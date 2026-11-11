@@ -5,6 +5,9 @@
     <Version>1.1.1-beta.5-dev</Version>
     <ApplicationIcon>dock-customiser.ico</ApplicationIcon>
     <Product>Steelseries Dock Customiser</Product>
+    <Authors>Yakup Can Palaz</Authors>
+    <Copyright>Copyright © 2026 Yakup Can Palaz. All rights reserved.</Copyright>
+    <Description>Independent proprietary freeware OLED studio. Third-party components retain their licenses.</Description>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
@@ -18,5 +21,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Update="dock-photo-local.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="TERMS.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD_PARTY_LICENSES\HidSharp-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD_PARTY_LICENSES\HidSharp-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -125,3 +125,63 @@ relicensing, GitHub privacy changes, tags, pushes or public releases performed.
 4. Check small bold date/time visibility on the real 128×64 panel.
 5. Treat OEM top ten rows and mode-only button delay as isolated research.
 6. Perform licensing audit and decide whether future releases publish source.
+
+## Implementation against the final user-approved Beta 5 requirements
+
+Date: 12 November 2026, local Windows engineering branch.
+This checkpoint is limited to an isolated development worktree.
+See [BETA5_ACCEPTANCE_CHECKLIST.md](BETA5_ACCEPTANCE_CHECKLIST.md)
+for complete completed/pending acceptance criteria.
+
+**Stage 1 — Data and hardware safety.**
+`Beta5Sandbox` changes all Beta 5 app configuration reads/writes to its
+own AppData development folder, cloned from the preserved user default.
+A guarded `DockHardwareTest.Validate()` denies real HID/OLED writes unless
+an explicit command-line hardware-test flag is passed. All new smoke tests
+were run WITHOUT that flag. A SHA-256 comparison of the original Beta 4
+studio/profile/icon/battery files with the independent protected snapshot
+showed exact matches at the end of the engineering session.
+
+**Stage 2 — ChatMix and compact wheel.**
+Independent icon drag handles now move Game/Chat desired positions in the
+native 128x64 preview. Nearest-legal placement strictly enforces own
+rotating audio sector and zero overlap with ring/other icon. X/Y values
+persist in widget layout; miniature wheel at 70–100% size uses original
+V/X glyphs and independently adjustable ring thickness. Larger user's
+45x42 painted ring art is neither replaced nor auto-rescaled.
+Split ChatMix bar and bold date/time regression tests pass.
+
+**Stage 3 — battery infrastructure and alerts.**
+Existing Windows GATT read-only polling, SetupAPI diagnostic-only fallback,
+GG/Phone Link/HID providers, 10s refresh and event watcher retained.
+Low/critical battery warnings provide 20%/10% defaults, device overrides
+and 5–240-minute user-configurable repeats. Unknown/old Windows battery
+values are never advertised as current; Android S24+ and first-time DualSense
+live-GATT support still require hardware acceptance. No BQC helper installed.
+
+**Stage 4 — original OEM top ten rows.**
+Research was documented in
+[NATIVE_HEADER_RESEARCH_BETA5.md](NATIVE_HEADER_RESEARCH_BETA5.md).
+The firmware-managed native battery display was not forcibly redrawn and
+its underlying update route is still unverified. The proven Beta 4 450ms
+one-shot reclaim and the unresolved approximately five-second mode-button
+overlay were left unchanged; no firmware modifications were made.
+
+**Stage 5 — draft owner licensing and distribution rights.**
+Created proposed proprietary-freeware [LICENSE](LICENSE), [TERMS.md](TERMS.md),
+[COPYRIGHT_AUDIT_BETA5.md](COPYRIGHT_AUDIT_BETA5.md) and expanded
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Hakkında/About and .NET
+metadata include owner copyright. Local staging publish copies license,
+terms and HidSharp Apache2 NOTICE/LICENSE; no GitHub tags, previous versions,
+public licensing, branch privacy or release assets were changed.
+
+**Stage 6 — automated acceptance / local staging.**
+Off-screen UI smoke captures of both mini and full wheel editors were
+visually reviewed. A footer overlap and narrow-size numeric clipping
+were found and fixed; re-capture shows controls readable and inside the
+window. Build: 0 errors and 0 warnings. Existing self-tests and new
+Beta 5 constraints, size serialization, source deduplication, warning
+interval and safety tests: PASS.
+A local staging publish was created in `artifacts/beta5-staging`, not
+installed or publicly distributed. Further physical device acceptance
+is necessary before any release.
