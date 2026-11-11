@@ -152,6 +152,14 @@ internal sealed class BatteryStatusDialog : Form
         minimizePhoneLink.Enabled=false;
         minimizePhoneLink.Visible=false;
         Controls.Add(experimental);Controls.Add(adb);
+        var phoneGuide=new DarkButton{
+            Left=17,Top=538,Width=300,Height=30,
+            Text="Telefon pilini arka planda bağla"};
+        phoneGuide.Click+=(_,_)=>{
+            using var setup=new PhoneBatterySetupDialog(adb.Checked);
+            setup.ShowDialog(this);
+        };
+        Controls.Add(phoneGuide);
         Controls.Add(new Label{
             Left=17,Top=569,Width=832,Height=42,
             Text="Phone Link veri kaynağı: yalnızca pil durumunun erişilebilirlik metni. "+

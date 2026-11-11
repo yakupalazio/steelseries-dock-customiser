@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace SteelseriesDockCustomiser;
 
@@ -13,7 +14,9 @@ internal static class WheelArtwork
 {
     public const int Width=45, Height=42, StartAngle=210, Sweep=300;
     public const int CenterX=22, CenterY=21;
-    private static readonly string Default=CreateDefault();
+    private static readonly string[] ThicknessTemplates=Enumerable.Range(1,7)
+        .Select(CreateDefault).ToArray();
+    private static readonly string Default=ThicknessTemplates[2];
     public static string Factory=>Default;
 
     public static bool IsValid(string? pixels)
@@ -25,8 +28,12 @@ internal static class WheelArtwork
     }
 
     public static string Resolve(string? pixels)=>IsValid(pixels)?pixels!:Default;
+    private static string ResolveWithThickness(string? pixels,int thickness)
+        => IsValid(pixels)?pixels!:ThicknessTemplates[Math.Clamp(thickness,1,7)-1];
+    internal static string PreviewSource(string? pixels,int thickness)
+        => ResolveWithThickness(pixels,thickness);
 
-    private static string CreateDefault()
+    private static string CreateDefault(int thickness)
     {
         var pixels=new char[Width*Height];
         Array.Fill(pixels,'0');
@@ -38,12 +45,15 @@ internal static class WheelArtwork
             bool onSweep=angle<=Sweep;
             if(distance<=9.1)
                 pixels[y*Width+x]='1';
-            else if(onSweep &&
-                (distance>=19.25 && distance<=20.5 ||
-                 distance>=15.1 && distance<16.2))
-                pixels[y*Width+x]='1';
-            else if(onSweep && distance>=16.2 && distance<19.25)
-                pixels[y*Width+x]='2';
+            else if(onSweep)
+            {
+                double inner=19.25-thickness;
+                if(distance>=19.25 && distance<=20.5 ||
+                   distance>=inner-1.1 && distance<inner)
+                    pixels[y*Width+x]='1';
+                else if(distance>=inner && distance<19.25)
+                    pixels[y*Width+x]='2';
+            }
         }
         return new string(pixels);
     }
@@ -112,9 +122,11 @@ internal static class WheelArtwork
         string? artwork,int? percent,DialView view,bool autoLabel=true,
         int gapAngle=0,int? attenuationSteps=null,bool transientAttenuation=false,
         bool followModeIcons=true,int gameOffsetX=0,int gameOffsetY=0,
-        int chatOffsetX=0,int chatOffsetY=0)
+        int chatOffsetX=0,int chatOffsetY=0,bool showGame=true,
+        bool showChat=true,bool closeEnds=true,int ringThickness=3)
     {
-        string src=Resolve(artwork);
+        ringThickness=Math.Clamp(ringThickness,1,7);
+        string src=ResolveWithThickness(artwork,ringThickness);
         for(int sy=0;sy<Height;sy++)for(int sx=0;sx<Width;sx++)
         {
             int px=x+sx,py=y+sy;
@@ -126,6 +138,13 @@ internal static class WheelArtwork
             int dest=py*128+px;
             coverage[dest]=true;
             output[dest]=IsOn(value,fromX,fromY,percent,view);
+        }
+        // Draw short radial caps only at the two arc endpoints. These
+        // are independently controllable and never alter saved user pixels.
+        if(closeEnds)
+        {
+            DrawCap(output,coverage,x,y,StartAngle+gapAngle,ringThickness);
+            DrawCap(output,coverage,x,y,StartAngle+Sweep+gapAngle,ringThickness);
         }
         // The original Nova Pro badge is a *filled* white disc with black
         // lettering, unlike the previous hollow badge with text to its right.
@@ -139,34 +158,109 @@ internal static class WheelArtwork
         }
         if(view==DialView.ChatMix)
         {
-            // Icons stay upright, while their positions track the ring's
-            // actual start/end angles. Manual offsets remain independently
-            // editable and follow each endpoint when rotating.
-            if(followModeIcons)
+            // Position in the *free area outside* the two arc endpoints.
+            // Every rotation changes the anchor, not the upright icon bitmap.
+            if(showGame)
             {
-                DrawEndpointIcon(output,coverage,x,y,"Game",
-                    StartAngle+gapAngle,gameOffsetX,gameOffsetY);
-                DrawEndpointIcon(output,coverage,x,y,"Chat",
-                    StartAngle+Sweep+gapAngle,chatOffsetX,chatOffsetY);
+                if(followModeIcons)
+                    DrawEndpointIcon(output,coverage,x,y,"Game",
+                        StartAngle+gapAngle,gameOffsetX,gameOffsetY);
+                else DrawModeIcon(output,coverage,x+1+gameOffsetX,
+                    y+1+gameOffsetY,"Game",false);
             }
-            else
+            if(showChat)
             {
-                DrawModeIcon(output,coverage,x+1+gameOffsetX,y+1+gameOffsetY,"Game",false);
-                DrawModeIcon(output,coverage,x+Width-1+chatOffsetX,
+                if(followModeIcons)
+                    DrawEndpointIcon(output,coverage,x,y,"Chat",
+                        StartAngle+Sweep+gapAngle,chatOffsetX,chatOffsetY);
+                else DrawModeIcon(output,coverage,x+Width-1+chatOffsetX,
                     y+1+chatOffsetY,"Chat",true);
             }
         }
+    }
+
+    private static void DrawCap(bool[] output,bool[] coverage,
+        int x,int y,double angle,int thickness)
+    {
+        double rad=angle*Math.PI/180d;
+        double inner=19.25-thickness-1.1;
+        for(double r=inner;r<=20.6;r+=0.25)
+        {
+            int px=x+CenterX+(int)Math.Round(r*Math.Cos(rad));
+            int py=y+CenterY+(int)Math.Round(r*Math.Sin(rad));
+            Put(output,coverage,px,py,true);
+        }
+    }
+
+    /// <summary>
+    /// Find the nearest completely external icon placement, with one OLED
+    /// pixel clearance around the actual ring bitmap. An endpoint close to
+    /// the display edge slides along the free area rather than clipping.
+    /// Icon pixels remain upright. Bounded computation: 37x37 positions.
+    /// </summary>
+    internal static (int X,int Y) EndpointIconPosition(
+        int wheelX,int wheelY,string name,double angle,
+        bool[] coverage,int offsetX=0,int offsetY=0)
+    {
+        var rows=IconLibrary.GetCurrent(name);
+        int width=rows[0].Length,height=rows.Length;
+        double rad=angle*Math.PI/180d;
+        double cx=wheelX+CenterX,cy=wheelY+CenterY;
+        const double radius=29;
+        double wantX=cx+radius*Math.Cos(rad)-width/2d+offsetX;
+        double wantY=cy+radius*Math.Sin(rad)-height/2d+offsetY;
+        // Build a compact obstacle mask ONCE. Bitmap collision checks in
+        // candidate loops were previously O(candidates × pixels × 9).
+        var obstacles=new byte[128*64];
+        for(int py=10;py<53;py++)for(int px=0;px<128;px++)
+        {
+            byte flags=0;
+            double dx0=px-cx,dy0=py-cy;
+            if(dx0*dx0+dy0*dy0<21.5*21.5)flags|=2;
+            for(int by=Math.Max(0,py-1);by<=Math.Min(63,py+1);by++)
+            for(int bx=Math.Max(0,px-1);bx<=Math.Min(127,px+1);bx++)
+                if(coverage[by*128+bx])flags|=1;
+            obstacles[py*128+px]=flags;
+        }
+        double best=double.PositiveInfinity;
+        int bestX=0,bestY=10;
+        int aroundX=Math.Clamp((int)Math.Round(wantX),0,128-width);
+        int aroundY=Math.Clamp((int)Math.Round(wantY),10,53-height);
+        // Search the free strip surrounding the ring, not just a small
+        // square around the ideal anchor: at an OLED edge the ideal radial
+        // position may be physically unavailable at some rotation angles.
+        for(int top=10;top<=53-height;top++)
+        for(int left=Math.Max(0,wheelX-25);
+            left<=Math.Min(128-width,wheelX+Width+23);left++)
+        {
+            int conflict=0,interior=0;
+            for(int yy=0;yy<height;yy++)for(int xx=0;xx<width;xx++)
+            {
+                if(rows[yy][xx]!='1')continue;
+                int px=left+xx,py=top+yy;
+                byte flags=obstacles[py*128+px];
+                if((flags&2)!=0)interior++;
+                if((flags&1)!=0)conflict++;
+            }
+            // If there's no perfect place near a screen edge, prefer a
+            // fully visible icon with the fewest collisions.
+            double displacement=(left-wantX)*(left-wantX)+
+                (top-wantY)*(top-wantY);
+            double score=conflict*1000000+interior*100000+displacement;
+            if(score<best)
+            {
+                best=score;bestX=left;bestY=top;
+            }
+        }
+        return (bestX,bestY);
     }
 
     private static void DrawEndpointIcon(bool[] output,bool[] coverage,
         int wheelX,int wheelY,string name,double angle,int offsetX,int offsetY)
     {
         var rows=IconLibrary.GetCurrent(name);
-        double rad=angle*Math.PI/180d;
-        // Place badges inside the 16-20px rim, avoiding the center label.
-        int cx=wheelX+CenterX+(int)Math.Round(13*Math.Cos(rad))+offsetX;
-        int cy=wheelY+CenterY+(int)Math.Round(13*Math.Sin(rad))+offsetY;
-        int left=cx-rows[0].Length/2, top=cy-rows.Length/2;
+        var (left,top)=EndpointIconPosition(wheelX,wheelY,name,angle,
+            coverage,offsetX,offsetY);
         for(int yy=0;yy<rows.Length;yy++)
         for(int xx=0;xx<rows[yy].Length;xx++)
             if(rows[yy][xx]=='1')Put(output,coverage,left+xx,top+yy,true);

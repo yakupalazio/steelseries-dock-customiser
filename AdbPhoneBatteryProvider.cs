@@ -23,6 +23,19 @@ internal static class AdbPhoneBatteryProvider
     private static string? FindAdb()
     {
         if(File.Exists(PreferredPath))return PreferredPath;
+        // Find official Android SDK Platform Tools in common user locations,
+        // without installing, launching or modifying anything.
+        foreach(var folder in new[]{
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Android","Sdk","platform-tools"),
+            Path.Combine(Environment.GetEnvironmentVariable("ANDROID_HOME")??"", "platform-tools"),
+            Path.Combine(Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT")??"", "platform-tools"),
+            @"C:\platform-tools"
+        })
+        {
+            try { var file=Path.Combine(folder,"adb.exe");if(File.Exists(file))return file; }
+            catch { }
+        }
         foreach(var entry in (Environment.GetEnvironmentVariable("PATH")??"").Split(';',
             StringSplitOptions.RemoveEmptyEntries))
         {

@@ -26,6 +26,13 @@ internal sealed class WheelArtworkDialog : Form
         TickFrequency=45,SmallChange=5,LargeChange=15,Width=218};
     private readonly Label angleValue=new(){Width=218,Height=23};
     private readonly DarkCheckBox followIcons=new(){Width=453,Height=30,Checked=true};
+    private readonly PictureBox overview=new(){
+        Width=228,Height=114,BackColor=Color.Black,
+        BorderStyle=BorderStyle.FixedSingle};
+    private readonly DarkCheckBox showGame=new(){Width=190,Height=26,Checked=true};
+    private readonly DarkCheckBox showChat=new(){Width=190,Height=26,Checked=true};
+    private readonly DarkCheckBox closeArcEnds=new(){Width=218,Height=28,Checked=true};
+    private readonly DarkNumberBox ringThickness=new(){Minimum=1,Maximum=7,Width=92,Value=3};
     private readonly DarkNumberBox gameDX=new(){Minimum=-15,Maximum=15,Width=70};
     private readonly DarkNumberBox gameDY=new(){Minimum=-15,Maximum=15,Width=70};
     private readonly DarkNumberBox chatDX=new(){Minimum=-15,Maximum=15,Width=70};
@@ -42,12 +49,20 @@ internal sealed class WheelArtworkDialog : Form
     public int GameDY {get;private set;}
     public int ChatDX {get;private set;}
     public int ChatDY {get;private set;}
+    public bool ShowGameLogo { get;private set; } = true;
+    public bool ShowChatLogo { get;private set; } = true;
+    public bool CloseRingEnds { get;private set; } = true;
+    public int RingThickness { get;private set; } = 3;
+    private bool artworkEdited;
+    private readonly string initialArtwork;
 
     public WheelArtworkDialog(string? saved,bool labelEnabled=true,int gapAngle=0,
-        bool followModeIcons=true,int gameX=0,int gameY=0,int chatX=0,int chatY=0)
+        bool followModeIcons=true,int gameX=0,int gameY=0,int chatX=0,int chatY=0,
+        bool showGameLogo=true,bool showChatLogo=true,bool closeRingEnds=true,int thickness=3)
     {
         pixels=WheelArtwork.Resolve(saved).ToCharArray();
-        Artwork=saved??"";
+        initialArtwork=WheelArtwork.IsValid(saved)?saved!:"";
+        Artwork=initialArtwork;
         AutoLabel=labelEnabled;
         GapAngle=Math.Clamp(gapAngle,-180,180);
         FollowModeIcons=followModeIcons;
@@ -55,11 +70,15 @@ internal sealed class WheelArtworkDialog : Form
         GameDY=Math.Clamp(gameY,-15,15);
         ChatDX=Math.Clamp(chatX,-15,15);
         ChatDY=Math.Clamp(chatY,-15,15);
+        ShowGameLogo=showGameLogo;
+        ShowChatLogo=showChatLogo;
+        CloseRingEnds=closeRingEnds;
+        RingThickness=Math.Clamp(thickness,1,7);
         Text=UiLanguage.T("Tekerlek tasarım atölyesi");
         StartPosition=FormStartPosition.CenterParent;
         FormBorderStyle=FormBorderStyle.FixedDialog;
         MaximizeBox=false;MinimizeBox=false;
-        ClientSize=new Size(758,738);
+        ClientSize=new Size(758,818);
         BackColor=Color.FromArgb(13,18,26);
         ForeColor=Color.FromArgb(235,242,248);
         Font=new Font("Segoe UI",9.3f);
@@ -71,6 +90,8 @@ internal sealed class WheelArtworkDialog : Form
             Left=24,Top=18,Width=700,Height=32});
         canvas.Left=24;canvas.Top=75;
         canvas.Paint+=PaintCanvas;
+        overview.Paint+=PaintOverview;
+        canvas.Invalidated+=(_,_)=>overview.Invalidate();
         canvas.MouseDown+=PaintPoint;
         canvas.MouseMove+=PaintPoint;
         Controls.Add(canvas);
@@ -126,6 +147,23 @@ internal sealed class WheelArtworkDialog : Form
         Controls.Add(previewLabel);
 
         Controls.Add(new Label{
+            Text=UiLanguage.T("Halka kalınlığı (içe doğru)"),
+            Left=right,Top=446,Width=235,Height=23});
+        ringThickness.Left=right;ringThickness.Top=472;
+        ringThickness.Value=RingThickness;
+        ringThickness.ValueChanged+=(_,_)=>{
+            RingThickness=(int)ringThickness.Value;canvas.Invalidate();
+        };
+        Controls.Add(ringThickness);
+        closeArcEnds.Text=UiLanguage.T("Çember uçlarını kapat");
+        closeArcEnds.Left=right;closeArcEnds.Top=500;
+        closeArcEnds.Checked=CloseRingEnds;
+        closeArcEnds.CheckedChanged+=(_,_)=>{
+            CloseRingEnds=closeArcEnds.Checked;canvas.Invalidate();
+        };
+        Controls.Add(closeArcEnds);
+
+        Controls.Add(new Label{
             Text=UiLanguage.T("ChatMix simgeleri: konum ve dönüş"),
             Left=24,Top=505,Width=455,Height=25,
             ForeColor=Color.FromArgb(134,220,249)});
@@ -156,14 +194,25 @@ internal sealed class WheelArtworkDialog : Form
         gameDY.ValueChanged+=(_,_)=>{GameDY=(int)gameDY.Value;canvas.Invalidate();};
         chatDX.ValueChanged+=(_,_)=>{ChatDX=(int)chatDX.Value;canvas.Invalidate();};
         chatDY.ValueChanged+=(_,_)=>{ChatDY=(int)chatDY.Value;canvas.Invalidate();};
+        showGame.Text=UiLanguage.T("Game logosunu göster");
+        showGame.Left=24;showGame.Top=624;showGame.Checked=ShowGameLogo;
+        showGame.CheckedChanged+=(_,_)=>{ShowGameLogo=showGame.Checked;canvas.Invalidate();};
+        Controls.Add(showGame);
+        showChat.Text=UiLanguage.T("Chat logosunu göster");
+        showChat.Left=220;showChat.Top=624;showChat.Checked=ShowChatLogo;
+        showChat.CheckedChanged+=(_,_)=>{ShowChatLogo=showChat.Checked;canvas.Invalidate();};
+        Controls.Add(showChat);
 
         var reset=Button(UiLanguage.T("Orijinal tasarıma dön"),right,536,218);
         reset.Click+=(_,_)=>
         {
             WheelArtwork.Factory.CopyTo(0,pixels,0,pixels.Length);
+            artworkEdited=false;
             automaticLabel.Checked=true;
             rotation.Value=0;
             followIcons.Checked=true;
+            showGame.Checked=true;showChat.Checked=true;
+            closeArcEnds.Checked=true;ringThickness.Value=3;
             gameDX.Value=0;gameDY.Value=0;chatDX.Value=0;chatDY.Value=0;
             canvas.Invalidate();
         };
@@ -176,25 +225,35 @@ internal sealed class WheelArtworkDialog : Form
             Close();
         };
         Controls.Add(flatBar);
+        Controls.Add(new Label{
+            Text=UiLanguage.T("OLED genel önizleme"),
+            Left=500,Top=621,Width=230,Height=23,
+            ForeColor=Color.FromArgb(134,220,249)});
+        overview.Left=500;overview.Top=644;
+        Controls.Add(overview);
 
         Controls.Add(new Label{
             Text=UiLanguage.T("Sol tık: seçilen piksel  •  Sağ tık: sil\nMavi katman, ses/ChatMix ile hareket eder."),
             ForeColor=Color.FromArgb(151,169,187),
-            Left=24,Top=632,Width=452,Height=42});
-        var cancel=Button(UiLanguage.T("Vazgeç"),500,682,100);
+            Left=24,Top=677,Width=452,Height=42});
+        var cancel=Button(UiLanguage.T("Vazgeç"),500,753,100);
         cancel.DialogResult=DialogResult.Cancel;
         Controls.Add(cancel);
-        var save=Button(UiLanguage.T("Kaydet"),610,682,108);
+        var save=Button(UiLanguage.T("Kaydet"),610,753,108);
         save.BackColor=Color.FromArgb(72,194,238);
         save.ForeColor=Color.FromArgb(13,18,26);
         save.Click+=(_,_)=>
         {
             string next=new(pixels);
-            Artwork=next==WheelArtwork.Factory?"":next;
+            Artwork=artworkEdited ? next==WheelArtwork.Factory?"":next :
+                initialArtwork;
             AutoLabel=automaticLabel.Checked;
             FollowModeIcons=followIcons.Checked;
             GameDX=(int)gameDX.Value;GameDY=(int)gameDY.Value;
             ChatDX=(int)chatDX.Value;ChatDY=(int)chatDY.Value;
+            ShowGameLogo=showGame.Checked;ShowChatLogo=showChat.Checked;
+            CloseRingEnds=closeArcEnds.Checked;
+            RingThickness=(int)ringThickness.Value;
             DialogResult=DialogResult.OK;
             Close();
         };
@@ -205,6 +264,9 @@ internal sealed class WheelArtworkDialog : Form
         // UiSkin is intentionally applied after configuring all controls, so
         // both Turkish and English displays get the same dark input chrome.
     }
+
+    internal void SelectPreviewMode(DialView view)
+        => mode.SelectedIndex=view==DialView.ChatMix?1:0;
 
     private static Button Button(string text,int x,int y,int width)=>new DarkButton{
         Text=text,Left=x,Top=y,Width=width,Height=36,
@@ -229,6 +291,7 @@ internal sealed class WheelArtworkDialog : Form
         int index=y*WheelArtwork.Width+x;
         if(pixels[index]==chosen)return;
         pixels[index]=chosen;
+        artworkEdited=true;
         // Rotated source pixels affect different on-screen positions.
         canvas.Invalidate();
         // Centre mode text is also overlaid in the preview. Redraw the entire
@@ -237,15 +300,37 @@ internal sealed class WheelArtworkDialog : Form
            Math.Abs(y-WheelArtwork.CenterY)<=10)canvas.Invalidate();
     }
 
+    private void PaintOverview(object? sender,PaintEventArgs e)
+    {
+        using var bitmap=new Bitmap(128,64);
+        var pixelsBuffer=new bool[128*64];
+        var coverageBuffer=new bool[128*64];
+        WheelArtwork.Draw(pixelsBuffer,coverageBuffer,1,10,
+            artworkEdited?new string(pixels):initialArtwork,sample.Value,
+            mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
+            automaticLabel.Checked,GapAngle,null,false,
+            FollowModeIcons,GameDX,GameDY,ChatDX,ChatDY,
+            ShowGameLogo,ShowChatLogo,CloseRingEnds,RingThickness);
+        for(int yy=0;yy<64;yy++)for(int xx=0;xx<128;xx++)
+            bitmap.SetPixel(xx,yy,pixelsBuffer[yy*128+xx]?Color.White:Color.Black);
+        e.Graphics.InterpolationMode=System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+        e.Graphics.PixelOffsetMode=System.Drawing.Drawing2D.PixelOffsetMode.Half;
+        e.Graphics.DrawImage(bitmap,new Rectangle(0,0,overview.Width,overview.Height),
+            new Rectangle(0,0,128,64),GraphicsUnit.Pixel);
+    }
+
     private void PaintCanvas(object? sender,PaintEventArgs e)
     {
         var bitmap=new bool[128*64];
         var coverage=new bool[128*64];
-        string source=new(pixels);
-        WheelArtwork.Draw(bitmap,coverage,0,0,source,sample.Value,
+        string source=WheelArtwork.PreviewSource(
+            artworkEdited?new string(pixels):initialArtwork,RingThickness);
+        WheelArtwork.Draw(bitmap,coverage,0,0,artworkEdited?source:initialArtwork,
+            sample.Value,
             mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
             automaticLabel.Checked,GapAngle,null,false,FollowModeIcons,
-            GameDX,GameDY,ChatDX,ChatDY);
+            GameDX,GameDY,ChatDX,ChatDY,
+            ShowGameLogo,ShowChatLogo,CloseRingEnds,RingThickness);
         e.Graphics.Clear(Color.FromArgb(6,10,15));
         for(int y=0;y<WheelArtwork.Height;y++)for(int x=0;x<WheelArtwork.Width;x++)
         {

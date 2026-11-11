@@ -113,8 +113,8 @@ internal sealed class IconEditorDialog : Form
     {
         changing=true;
         var rows=IconLibrary.GetCurrent(CurrentIconName);
-        int maxWidth=CurrentIconName is "Game" or "Chat"?11:CurrentIconName=="Charging"?4:20;
-        int maxHeight=CurrentIconName is "Game" or "Chat"?9:CurrentIconName=="Charging"?7:20;
+        int maxWidth=CurrentIconName is "Game" or "Chat"?12:CurrentIconName=="Charging"?4:20;
+        int maxHeight=CurrentIconName is "Game" or "Chat"?10:CurrentIconName=="Charging"?7:20;
         iconWidth.Maximum=maxWidth;iconHeight.Maximum=maxHeight;
         width=Math.Clamp(rows[0].Length,4,maxWidth);
         height=Math.Clamp(rows.Length,4,maxHeight);

@@ -33,34 +33,30 @@ internal static class BatteryPriority
     }
 
     /// <summary>
-    /// Defaults display Mouse + Phone + Laptop.
-    /// DualSense only becomes eligible if its Bluetooth link is positively
-    /// connected or its live HID report was obtained. Phone remains an explicit
-    /// placeholder if Phone Link is unavailable rather than claiming 0%.
-    /// Other peripherals are eligible when a current reliable GG reading exists.
+    /// Strict, ordered selection: never display a placeholder or an obsolete
+    /// cached battery reading. When a higher priority device comes back online
+    /// it automatically displaces the lowest-priority visible device.
     /// </summary>
     public static string[] SelectThree(BatterySnapshot snapshot,
         BatteryPreferences preferences)
+        => SelectThreeAt(snapshot,preferences,DateTimeOffset.Now);
+
+    internal static string[] SelectThreeAt(BatterySnapshot snapshot,
+        BatteryPreferences preferences,DateTimeOffset now)
+        => Sanitize(preferences.PriorityKinds)
+            .Where(kind=>kind!="DualSense" || preferences.AutoDualSense)
+            .Where(kind=>IsCurrent(snapshot[kind],now))
+            .Take(3).ToArray();
+
+    internal static bool IsCurrent(BatteryReading reading,DateTimeOffset now)
     {
-        var active=new List<string>();
-        foreach(var kind in Sanitize(preferences.PriorityKinds))
-        {
-            bool eligible=kind switch
-            {
-                "Phone" or "Laptop"=>true,
-                "DualSense"=>preferences.AutoDualSense &&
-                    (snapshot.DualSenseConnected || snapshot["DualSense"].Available),
-                _=>snapshot[kind].Available
-            };
-            if(eligible)active.Add(kind);
-            if(active.Count==3)break;
-        }
-        // Never leave the UI completely empty when source access is intermittent.
-        foreach(var kind in DefaultKinds)
-        {
-            if(active.Count>=3)break;
-            if(!active.Contains(kind) && kind!="DualSense")active.Add(kind);
-        }
-        return active.Take(3).ToArray();
+        if(!reading.Available || reading.CheckedAt==DateTimeOffset.MinValue)
+            return false;
+        var age=now-reading.CheckedAt;
+        // Readings from Phone Link / ADB / optional controller HID are polled
+        // every 60s; GG and laptop are refreshed in the realtime loop.
+        double ttl=reading.Kind is "Phone" or "DualSense" ? 90 : 12;
+        return age>=TimeSpan.FromSeconds(-5) &&
+            age<=TimeSpan.FromSeconds(ttl);
     }
 }

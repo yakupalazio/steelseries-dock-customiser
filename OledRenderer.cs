@@ -233,7 +233,9 @@ internal static class OledRenderer
         // Custom endpoint icon offsets may extend beyond the 45×42 ring.
         // Expand only the transparent wheel tile clipping area, preserving
         // the rest of the OLED and other widgets.
-        int margin=6+new[]{w.WheelGameOffsetX,w.WheelGameOffsetY,
+        // Placement solver keeps entire icon sprites visible. Reserve
+        // additional surrounding OLED pixels without changing 45x42 source.
+        int margin=35+new[]{w.WheelGameOffsetX,w.WheelGameOffsetY,
             w.WheelChatOffsetX,w.WheelChatOffsetY}.Max(v=>Math.Abs(v));
         int left=Math.Max(0,w.X-margin),top=Math.Max(10,w.Y-margin);
         int right=Math.Min(Width,w.X+WheelArtwork.Width+margin);
@@ -449,7 +451,8 @@ internal static class OledRenderer
                 fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2),
                 widget.WheelIconsFollowRing,widget.WheelGameOffsetX,
                 widget.WheelGameOffsetY,widget.WheelChatOffsetX,
-                widget.WheelChatOffsetY);
+                widget.WheelChatOffsetY,widget.WheelShowGame,widget.WheelShowChat,
+                widget.WheelCloseEnds,widget.WheelRingThickness);
         }
         else
         {

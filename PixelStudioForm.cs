@@ -13,6 +13,14 @@ namespace SteelseriesDockCustomiser;
 internal sealed partial class PixelStudioForm : Form
 {
     private bool captureMode;
+    private bool traySmokeMode;
+    internal void EnableTraySmokeMode()
+    {
+        traySmokeMode=true;
+        StartPosition=FormStartPosition.Manual;
+        Location=new Point(-5000,-5000);
+        ShowInTaskbar=false;
+    }
     internal void EnableOffscreenCapture()
     {
         captureMode=true;
@@ -26,7 +34,7 @@ internal sealed partial class PixelStudioForm : Form
         selected=state.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
         RefreshWidgetList();
     }
-    protected override bool ShowWithoutActivation=>captureMode;
+    protected override bool ShowWithoutActivation=>captureMode||traySmokeMode;
     private const int CanvasWidth=128, CanvasHeight=64;
     private int Zoom=6;
     private int LockedRows=>project.ProtectHeader?10:0;
@@ -104,7 +112,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 3 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 4 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -257,7 +265,7 @@ internal sealed partial class PixelStudioForm : Form
         load.Click += (_,_) => LoadLayout();
         reset.Click += (_,_)=>{
             Record();
-            state=StudioProject.Defaults(editingMode);
+            state=StudioProject.UserDefault(editingMode);
             project.Set(editingMode,state);
             selected=null;RefreshWidgetList();Redraw();
             SetStatus("Yalnızca açık mod varsayılana döndürüldü.");
@@ -366,11 +374,14 @@ internal sealed partial class PixelStudioForm : Form
             if(!captureMode){InitializeTray();LoadMediaPreference();}
             // Start the explicitly requested Live mode immediately on launch,
             // before slower optional phone/media polling can delay the OLED.
-            if(!captureMode && !IsDisposed && dockPreview is not null)
+            if(!captureMode && !traySmokeMode && !IsDisposed && dockPreview is not null)
                 await dockPreview.StartLiveOnLaunchAsync();
-            await RefreshGameAsync();
-            await RefreshMediaAsync();
-            await RefreshBatteriesAsync();
+            if(!traySmokeMode)
+            {
+                await RefreshGameAsync();
+                await RefreshMediaAsync();
+                await RefreshBatteriesAsync();
+            }
         };
         RefreshWidgetList();UpdateHistoryButtons();Redraw();
         tabs.SelectedIndex=1; // Open the photographic preview first.
@@ -673,7 +684,9 @@ internal sealed partial class PixelStudioForm : Form
             selected.WheelAutoLabel,selected.WheelGapAngle,
             selected.WheelIconsFollowRing,selected.WheelGameOffsetX,
             selected.WheelGameOffsetY,selected.WheelChatOffsetX,
-            selected.WheelChatOffsetY);
+            selected.WheelChatOffsetY,selected.WheelShowGame,
+            selected.WheelShowChat,selected.WheelCloseEnds,
+            selected.WheelRingThickness);
         if(dialog.ShowDialog(this)!=DialogResult.OK)return;
         if(dialog.UseBar)
         {
@@ -688,7 +701,11 @@ internal sealed partial class PixelStudioForm : Form
            selected.WheelGameOffsetX==dialog.GameDX &&
            selected.WheelGameOffsetY==dialog.GameDY &&
            selected.WheelChatOffsetX==dialog.ChatDX &&
-           selected.WheelChatOffsetY==dialog.ChatDY)return;
+           selected.WheelChatOffsetY==dialog.ChatDY &&
+           selected.WheelShowGame==dialog.ShowGameLogo &&
+           selected.WheelShowChat==dialog.ShowChatLogo &&
+           selected.WheelCloseEnds==dialog.CloseRingEnds &&
+           selected.WheelRingThickness==dialog.RingThickness)return;
         Record();
         selected.WheelPixels=dialog.Artwork;
         selected.WheelAutoLabel=dialog.AutoLabel;
@@ -698,6 +715,10 @@ internal sealed partial class PixelStudioForm : Form
         selected.WheelGameOffsetY=dialog.GameDY;
         selected.WheelChatOffsetX=dialog.ChatDX;
         selected.WheelChatOffsetY=dialog.ChatDY;
+        selected.WheelShowGame=dialog.ShowGameLogo;
+        selected.WheelShowChat=dialog.ShowChatLogo;
+        selected.WheelCloseEnds=dialog.CloseRingEnds;
+        selected.WheelRingThickness=dialog.RingThickness;
         Redraw();
         SetStatus(UiLanguage.T("Tekerlek pikselleri güncellendi. Kaydet ile sakla."));
     }

@@ -13,6 +13,7 @@ internal sealed partial class PixelStudioForm
 {
     private NotifyIcon? tray;
     private bool exitRequested;
+    private bool hiddenByTrayClose;
     private ContextMenuStrip? trayMenu;
     private static string TrayPreferencesPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -132,6 +133,7 @@ internal sealed partial class PixelStudioForm
     private void OpenFromTray()
     {
         if(IsDisposed)return;
+        hiddenByTrayClose=false;
         ShowInTaskbar=true;
         Show();
         if(WindowState==FormWindowState.Minimized)
@@ -157,7 +159,7 @@ internal sealed partial class PixelStudioForm
 
     private void RestartFromTray()
     {
-        SaveLayout();
+        if(!traySmokeMode)SaveLayout();
         exitRequested=true;
         if(tray!=null)tray.Visible=false;
         Application.Restart();
@@ -165,7 +167,7 @@ internal sealed partial class PixelStudioForm
 
     private void QuitFromTray()
     {
-        SaveLayout();
+        if(!traySmokeMode)SaveLayout();
         exitRequested=true;
         Close();
     }
@@ -173,11 +175,59 @@ internal sealed partial class PixelStudioForm
     private void HandleTrayClosing(object? sender,FormClosingEventArgs e)
     {
         if(captureMode || exitRequested || e.CloseReason!=CloseReason.UserClosing)return;
+        // WinForms can reassert window visibility *after* a cancelled close.
+        // Hide on the following dispatcher turn, after close processing ends,
+        // so the FIRST X always sends the window straight to the tray.
         e.Cancel=true;
-        SaveLayout();
+        hiddenByTrayClose=true;
+        if(!traySmokeMode)SaveLayout();
         Hide();
         ShowInTaskbar=false;
-        if(tray!=null)tray.BalloonTipTitle="Steelseries Dock Customiser";
+        if(IsHandleCreated)
+        {
+            BeginInvoke((Action)(()=>
+            {
+                if(IsDisposed || !hiddenByTrayClose)return;
+                Hide();
+                ShowInTaskbar=false;
+            }));
+        }
+    }
+
+    // An outstanding Shown/Activate callback must not revive a window that
+    // the user deliberately closed to tray.
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if(Visible && hiddenByTrayClose && IsHandleCreated)
+            BeginInvoke((Action)(()=>
+            {
+                if(!IsDisposed && hiddenByTrayClose)Hide();
+            }));
+    }
+
+    // No HID, Phone Link, file writes or live timers in this acceptance
+    // check. One WinForms close should hide, not dispose/reopen; tray Quit
+    // should exit the same instance.
+    internal static void RunTraySmoke()
+    {
+        using var form=new PixelStudioForm();
+        form.EnableTraySmokeMode();
+        form.Show();
+        Application.DoEvents();
+        form.Close();
+        Application.DoEvents();
+        if(form.Visible || form.IsDisposed)
+            throw new InvalidOperationException("First X did not hide the window.");
+        form.OpenFromTray();
+        Application.DoEvents();
+        if(!form.Visible)
+            throw new InvalidOperationException("Tray open did not restore window.");
+        form.QuitFromTray();
+        Application.DoEvents();
+        if(!form.IsDisposed)
+            throw new InvalidOperationException("Tray Quit did not terminate window.");
+        Console.WriteLine("PASS: one-click tray hide, restore and real quit.");
     }
 
     private void DisposeTray()

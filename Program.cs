@@ -435,6 +435,8 @@ internal static class Program
             if(args.Contains("--capture-wheel"))
             {
                 using var wheel=new WheelArtworkDialog(null);
+                if(args.Contains("--capture-wheel-mix"))
+                    wheel.SelectPreviewMode(DialView.ChatMix);
                 wheel.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
                 wheel.Location=new System.Drawing.Point(-5000,-5000);
                 wheel.ShowInTaskbar=false;
@@ -497,6 +499,11 @@ internal static class Program
         }
         ApplicationConfiguration.Initialize();
         Application.SetColorMode(SystemColorMode.Dark);
+        if(args.Contains("--tray-smoke"))
+        {
+            PixelStudioForm.RunTraySmoke();
+            return;
+        }
         Application.Run(new PixelStudioForm());
     }
 }
@@ -526,6 +533,11 @@ public sealed class DockWidget
     public int WheelGameOffsetY { get; set; }
     public int WheelChatOffsetX { get; set; }
     public int WheelChatOffsetY { get; set; }
+    public bool WheelShowGame { get; set; } = true;
+    public bool WheelShowChat { get; set; } = true;
+    public bool WheelCloseEnds { get; set; } = true;
+    // 3 is the original inner-fill width; higher values only extend inward.
+    public int WheelRingThickness { get; set; } = 3;
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;

@@ -21,6 +21,11 @@ internal sealed class StudioProject
     // A one-time migration keeps pre-1.1 layouts intact and, crucially,
     // remembers when a user deliberately removes either default dial.
     public bool RadialDefaultsMigrated { get; set; }
+    // One-time startup alignment only: the two wheels remain independently
+    // editable afterwards. Never synchronize user edits between modes.
+    public bool WheelDefaultsAligned { get; set; }
+    public static string PersonalDefaultPath => Path.Combine(
+        Path.GetDirectoryName(FilePath)!,"personal-default-studio-v1.json");
 
     public LayoutState For(ScreenMode mode) => mode switch
     {
@@ -52,6 +57,7 @@ internal sealed class StudioProject
             string folder=Path.GetDirectoryName(FilePath)!;
             string? source=new[]{
                 FilePath,
+                PersonalDefaultPath,
                 Path.Combine(folder,"studio-v099.json"),
                 Path.Combine(folder,"studio-v098.json")
             }.FirstOrDefault(File.Exists);
@@ -63,12 +69,64 @@ internal sealed class StudioProject
                     foreach(var mode in Enum.GetValues<ScreenMode>())
                         Sanitize(result.For(mode),mode,result.ProtectHeader);
                     result.MigrateRadialDefaults();
+                    result.AlignWheelDefaultsOnce();
                     return result;
                 }
             }
         }
         catch{}
-        return new StudioProject { RadialDefaultsMigrated=true };
+        return new StudioProject { RadialDefaultsMigrated=true, WheelDefaultsAligned=true };
+    }
+
+    // The user's last confirmed design is a *personal* reset baseline,
+    // backed up outside the repository. Factory defaults remain separate.
+    public static LayoutState UserDefault(ScreenMode mode)
+    {
+        try
+        {
+            if(File.Exists(PersonalDefaultPath))
+            {
+                var project=JsonSerializer.Deserialize<StudioProject>(
+                    File.ReadAllText(PersonalDefaultPath));
+                if(project is not null)
+                {
+                    project.AlignWheelDefaultsOnce();
+                    var layout=project.For(mode).DeepClone();
+                    Sanitize(layout,mode,project.ProtectHeader);
+                    return layout;
+                }
+            }
+        }
+        catch { }
+        return Defaults(mode);
+    }
+
+    private void AlignWheelDefaultsOnce()
+    {
+        if(WheelDefaultsAligned)return;
+        var idle=Idle.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
+        var game=Game.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
+        if(idle is { DialStyle:"Wheel" } && game is { DialStyle:"Wheel" })
+        {
+            // Align only presentation and position. Saved artwork, mode
+            // layouts and user-drawn pixels remain untouched.
+            game.X=idle.X;
+            game.Y=idle.Y;
+            game.WheelGapAngle=idle.WheelGapAngle;
+            game.WheelAutoLabel=idle.WheelAutoLabel;
+            game.WheelIconsFollowRing=idle.WheelIconsFollowRing;
+            game.WheelGameOffsetX=idle.WheelGameOffsetX;
+            game.WheelGameOffsetY=idle.WheelGameOffsetY;
+            game.WheelChatOffsetX=idle.WheelChatOffsetX;
+            game.WheelChatOffsetY=idle.WheelChatOffsetY;
+            game.WheelShowGame=idle.WheelShowGame;
+            game.WheelShowChat=idle.WheelShowChat;
+            game.WheelCloseEnds=idle.WheelCloseEnds;
+            game.WheelRingThickness=idle.WheelRingThickness;
+            if(string.IsNullOrEmpty(game.WheelPixels))
+                game.WheelPixels=idle.WheelPixels;
+        }
+        WheelDefaultsAligned=true;
     }
 
     public void Save()
@@ -77,9 +135,19 @@ internal sealed class StudioProject
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         foreach(var mode in Enum.GetValues<ScreenMode>())
             Sanitize(For(mode),mode,ProtectHeader);
-        File.WriteAllText(FilePath,JsonSerializer.Serialize(this,new JsonSerializerOptions{
+        string json=JsonSerializer.Serialize(this,new JsonSerializerOptions{
             WriteIndented=true
-        }));
+        });
+        File.WriteAllText(FilePath,json);
+        // Last explicitly saved artwork is this user's personal default.
+        // A second atomic copy survives accidental deletion or file damage.
+        try
+        {
+            string temporary=PersonalDefaultPath+".tmp";
+            File.WriteAllText(temporary,json);
+            File.Move(temporary,PersonalDefaultPath,true);
+        }
+        catch { /* Primary save has already succeeded. */ }
     }
 
     public static LayoutState Defaults(ScreenMode mode)
@@ -210,6 +278,7 @@ internal sealed class StudioProject
             w.WheelGameOffsetY=Math.Clamp(w.WheelGameOffsetY,-15,15);
             w.WheelChatOffsetX=Math.Clamp(w.WheelChatOffsetX,-15,15);
             w.WheelChatOffsetY=Math.Clamp(w.WheelChatOffsetY,-15,15);
+            w.WheelRingThickness=Math.Clamp(w.WheelRingThickness,1,7);
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }

@@ -298,6 +298,74 @@ internal static class SelfTests
             if(roundtripWheel?.WheelIconsFollowRing!=false ||
                roundtripWheel.WheelGameOffsetX!=4 || roundtripWheel.WheelChatOffsetY!=8)
                 throw new Exception("ChatMix endpoint customization did not persist");
+            // Beta4: endpoints are closed, and thickness expands inward
+            // without altering the outer circumference or factory badge.
+            var openEnd=new bool[128*64];var closedEnd=new bool[128*64];
+            var thinRing=new bool[128*64];var thickRing=new bool[128*64];
+            var clear=new bool[128*64];
+            WheelArtwork.Draw(openEnd,clear,1,10,null,0,DialView.Volume,
+                autoLabel:false,closeEnds:false,ringThickness:3);
+            Array.Clear(clear);
+            WheelArtwork.Draw(closedEnd,clear,1,10,null,0,DialView.Volume,
+                autoLabel:false,closeEnds:true,ringThickness:3);
+            Array.Clear(clear);
+            WheelArtwork.Draw(thinRing,clear,1,10,null,100,DialView.Volume,
+                autoLabel:false,ringThickness:1);
+            Array.Clear(clear);
+            WheelArtwork.Draw(thickRing,clear,1,10,null,100,DialView.Volume,
+                autoLabel:false,ringThickness:7);
+            if(closedEnd.Count(x=>x)<=openEnd.Count(x=>x) ||
+               thickRing.Count(x=>x)<=thinRing.Count(x=>x))
+                throw new Exception("Wheel end caps or inward thickness not applied");
+            int centerX=1+WheelArtwork.CenterX,centerY=10+WheelArtwork.CenterY;
+            for(int row=0;row<64;row++)for(int col=0;col<128;col++)
+            {
+                double radius=Math.Sqrt((col-centerX)*(col-centerX)+
+                    (row-centerY)*(row-centerY));
+                if(radius>21 && thickRing[row*128+col] && !thinRing[row*128+col])
+                    throw new Exception("Wheel thickness expanded outside radius");
+            }
+            // User-edited Game / Chat icons must be visible outside the ring
+            // and remain fully on the device for all tested rotations.
+            foreach(int rotationAngle in new[]{-180,-135,-90,-45,0,45,90,135,180})
+            {
+                var alone=new bool[128*64];var ringMask=new bool[128*64];
+                WheelArtwork.Draw(alone,ringMask,1,10,null,50,DialView.ChatMix,
+                    autoLabel:false,gapAngle:rotationAngle,
+                    showGame:false,showChat:false);
+                foreach(var (name,angle) in new[]{
+                    ("Game",WheelArtwork.StartAngle+rotationAngle),
+                    ("Chat",WheelArtwork.StartAngle+WheelArtwork.Sweep+rotationAngle)
+                })
+                {
+                    var point=WheelArtwork.EndpointIconPosition(
+                        1,10,name,angle,ringMask);
+                    var sprite=IconLibrary.GetCurrent(name);
+                    if(point.X<0||point.Y<10||
+                       point.X+sprite[0].Length>128||point.Y+sprite.Length>53)
+                        throw new Exception(name+" icon clipped outside OLED");
+                    for(int yy=0;yy<sprite.Length;yy++)
+                    for(int xx=0;xx<sprite[yy].Length;xx++)
+                    {
+                        if(sprite[yy][xx]!='1')continue;
+                        int dx=point.X+xx-centerX,dy=point.Y+yy-centerY;
+                        if(dx*dx+dy*dy < 21.5*21.5)
+                            throw new Exception(name+" icon entered the ring at "+rotationAngle);
+                    }
+                }
+            }
+            var noMixIcons=new bool[128*64];var noMixMask=new bool[128*64];
+            var gameOnly=new bool[128*64];var gameOnlyMask=new bool[128*64];
+            var bothMix=new bool[128*64];var bothMixMask=new bool[128*64];
+            WheelArtwork.Draw(noMixIcons,noMixMask,1,10,null,50,DialView.ChatMix,
+                autoLabel:false,showGame:false,showChat:false);
+            WheelArtwork.Draw(gameOnly,gameOnlyMask,1,10,null,50,DialView.ChatMix,
+                autoLabel:false,showGame:true,showChat:false);
+            WheelArtwork.Draw(bothMix,bothMixMask,1,10,null,50,DialView.ChatMix,
+                autoLabel:false,showGame:true,showChat:true);
+            if(noMixIcons.SequenceEqual(gameOnly) ||
+               gameOnly.SequenceEqual(bothMix))
+                throw new Exception("Game / Chat icon visibility switches ignored");
             // Physical native ChatMix sends independent 0..100 channel gains.
             // G=100,C=100 is neutral, not G=50,C=50.
             static int? MixAt(int game,int chat)=>WheelArtwork.Value(
@@ -450,12 +518,47 @@ internal static class SelfTests
             if(!BatteryPriority.SelectThree(trios,priority)
                 .SequenceEqual(new[]{"Mouse","Phone","Laptop"}))
                 throw new Exception("Default Mouse / Phone / Laptop selection failed");
+            // A connected device without a verified percent is not eligible.
             var dsConnected=new BatterySnapshot{
                 Values=trios.Values,DualSenseConnected=true
             };
             if(!BatteryPriority.SelectThree(dsConnected,priority)
+                .SequenceEqual(new[]{"Mouse","Phone","Laptop"}))
+                throw new Exception("A battery-less DualSense occupied a visible slot");
+            var connectedValues=new Dictionary<string,BatteryReading>(trios.Values,
+                StringComparer.OrdinalIgnoreCase)
+            {
+                ["DualSense"]=new("DualSense",70,"Bluetooth HID",
+                    "verified",DateTimeOffset.Now)
+            };
+            var dsWithBattery=new BatterySnapshot{
+                Values=connectedValues,DualSenseConnected=true
+            };
+            if(!BatteryPriority.SelectThree(dsWithBattery,priority)
                 .SequenceEqual(new[]{"Mouse","Phone","DualSense"}))
-                throw new Exception("Connected DualSense did not replace Laptop");
+                throw new Exception("Verified DualSense did not replace Laptop");
+            // If Phone disappears, the next *measured* battery takes its slot.
+            var missingPhone=new Dictionary<string,BatteryReading>(connectedValues,
+                StringComparer.OrdinalIgnoreCase);
+            missingPhone.Remove("Phone");
+            var fallbackSnap=new BatterySnapshot{ Values=missingPhone };
+            if(!BatteryPriority.SelectThree(fallbackSnap,priority)
+                .SequenceEqual(new[]{"Mouse","DualSense","Laptop"}))
+                throw new Exception("Unavailable phone was not skipped in priority order");
+            // The phone must automatically return in priority order.
+            if(!BatteryPriority.SelectThree(dsWithBattery,priority)
+                .SequenceEqual(new[]{"Mouse","Phone","DualSense"}))
+                throw new Exception("Recovered phone was not reprioritized");
+            var stale=connectedValues.ToDictionary(x=>x.Key,x=>x.Value,
+                StringComparer.OrdinalIgnoreCase);
+            stale["Mouse"]=stale["Mouse"] with {
+                CheckedAt=DateTimeOffset.Now.AddMinutes(-4)
+            };
+            if(BatteryPriority.SelectThree(new BatterySnapshot{Values=stale},priority)
+                    .Contains("Mouse"))
+                throw new Exception("Stale GG battery was displayed");
+            if(BatteryPriority.SelectThree(new BatterySnapshot{},priority).Length!=0)
+                throw new Exception("Unknown devices must not create placeholder slots");
             using(var statusJson=JsonDocument.Parse(
                 """{"type":"primary_and_backup_battery","primaryStatusKnown":true,"percent":97,"backupPercent":82,"backupCharging":true}"""))
             {
