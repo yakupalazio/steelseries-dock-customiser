@@ -17,9 +17,10 @@ internal static class MiniWheelArtwork
     public static void Draw(bool[] output,bool[] mask,int left,int top,
         int? value,DialView view,int rotation=0,int thickness=3,
         bool showGame=true,bool showChat=true,int gameDX=0,int gameDY=0,
-        int chatDX=0,int chatDY=0)
+        int chatDX=0,int chatDY=0,int sizePercent=100)
     {
         thickness=Math.Clamp(thickness,1,5);
+        double scale=Math.Clamp(sizePercent,70,100)/100d;
         for(int sy=0;sy<Height;sy++)
         for(int sx=0;sx<Width;sx++)
         {
@@ -28,14 +29,15 @@ internal static class MiniWheelArtwork
             double angle=(Math.Atan2(dy,dx)*180d/Math.PI-
                 WheelArtwork.StartAngle-rotation+1440d)%360d;
             bool onArc=angle<=WheelArtwork.Sweep;
-            bool badge=r<6.5;
-            bool ring=onArc&&r>=13.3-thickness&&r<=13.4;
+            bool badge=r<6.5*scale;
+            bool ring=onArc&&r>=(13.3-thickness)*scale&&r<=13.4*scale;
             bool endcap=onArc &&
                 (angle<3.5||angle>WheelArtwork.Sweep-3.5)&&
-                r>=12.5-thickness&&r<=13.6;
+                r>=(12.5-thickness)*scale&&r<=13.6*scale;
             if(!badge&&!ring&&!endcap)continue;
             bool lit=true;
-            if(ring&&r<13.3 && r>=13.3-thickness+0.8)
+            if(ring&&r<13.3*scale &&
+               r>=(13.3-thickness+0.8)*scale)
             {
                 double target=WheelArtwork.Sweep*
                     Math.Clamp(value??0,0,100)/100d;
@@ -55,22 +57,22 @@ internal static class MiniWheelArtwork
         if(showGame)
             PlaceIcon(output,mask,"Game",left+CenterX,top+CenterY,
                 WheelArtwork.StartAngle+rotation+WheelArtwork.Sweep*.75,
-                gameDX,gameDY,WheelArtwork.StartAngle+rotation,true);
+                gameDX,gameDY,WheelArtwork.StartAngle+rotation,true,scale);
         if(showChat)
             PlaceIcon(output,mask,"Chat",left+CenterX,top+CenterY,
                 WheelArtwork.StartAngle+rotation+WheelArtwork.Sweep*.25,
-                chatDX,chatDY,WheelArtwork.StartAngle+rotation,false);
+                chatDX,chatDY,WheelArtwork.StartAngle+rotation,false,scale);
     }
 
     private static void PlaceIcon(bool[] output,bool[] mask,string kind,
         int centerX,int centerY,double angle,int dx,int dy,
-        double startAngle,bool gameSide)
+        double startAngle,bool gameSide,double scale)
     {
         var sprite=IconLibrary.GetCurrent(kind);
         double rad=angle*Math.PI/180d;
-        int intendedX=(int)Math.Round(centerX+18*Math.Cos(rad)-
+        int intendedX=(int)Math.Round(centerX+18*scale*Math.Cos(rad)-
             sprite[0].Length/2d+dx);
-        int intendedY=(int)Math.Round(centerY+18*Math.Sin(rad)-
+        int intendedY=(int)Math.Round(centerY+18*scale*Math.Sin(rad)-
             sprite.Length/2d+dy);
         int bestX=-1,bestY=-1;double best=double.PositiveInfinity;
         // Prefer available locations within the display. Do not overlay
@@ -91,7 +93,7 @@ internal static class MiniWheelArtwork
                 bool ownChannel=gameSide
                     ?progress>=WheelArtwork.Sweep/2d && progress<=WheelArtwork.Sweep
                     :progress>=0 && progress<=WheelArtwork.Sweep/2d;
-                if(r<15.5 || mask[py*128+px] || !ownChannel)errors++;
+                if(r<15.5*scale || mask[py*128+px] || !ownChannel)errors++;
             }
             if(errors>0)continue;
             double score=(x-intendedX)*(x-intendedX)+

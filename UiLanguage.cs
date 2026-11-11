@@ -57,11 +57,11 @@ internal static class UiLanguage
             "Changes apply immediately and persist across restarts.",
         ["SteelSeries Nova Pro Wireless için kişisel OLED stüdyosu"]=
             "Personal OLED studio for SteelSeries Nova Pro Wireless",
-        ["SÜRÜM   1.1.0\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
-            "VERSION   1.1.0\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
+        ["SÜRÜM   1.1.1 Beta 5 DEV\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
+            "VERSION   1.1.1 Beta 5 DEV\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
         ["Tasarlayan ve geliştiren"]="Designed and developed by",
-        ["© 2026 Yakup Can Palaz. Bağımsız bir proje; SteelSeries ile bağlantılı değildir."]=
-            "© 2026 Yakup Can Palaz. Independent project; not affiliated with SteelSeries.",
+        ["© 2026 Yakup Can Palaz. Tüm hakları saklıdır. Ücretsiz kullanım; değiştirme ve yeniden dağıtım izne tabidir. SteelSeries ile bağlantılı değildir."]=
+            "© 2026 Yakup Can Palaz. All rights reserved. Free use; modification and redistribution require permission. Not affiliated with SteelSeries.",
         ["ÇALIŞMA MODU"]="DISPLAY MODE",["♫    Medya çalarken"]="♫    Media playing",
         ["▣    Oyun açıkken"]="▣    In game",["◷    Boştayken"]="◷    Idle",
         ["DÜZENLEME ARAÇLARI"]="EDITING TOOLS",
@@ -134,6 +134,7 @@ internal static class UiLanguage
         ["Chat logosunu göster"]="Show Chat logo",
         ["Çember uçlarını kapat"]="Close ring endpoints",
         ["Mini dairesel tekerlek"]="Mini radial wheel",
+        ["Boyut %"]="Size %",
         ["Çubuk çerçevesi"]="Bar border thickness",
         ["Çubuk dolgusu"]="Bar fill thickness",
         ["Kontrolcü"]="Controller",

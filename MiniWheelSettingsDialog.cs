@@ -20,22 +20,25 @@ internal sealed class MiniWheelSettingsDialog : Form
         Left=330,Top=480,Width=151,DropDownStyle=ComboBoxStyle.DropDownList};
     private bool draggingIcon;
     private readonly DarkNumberBox angle=new(){
-        Minimum=-180,Maximum=180,Width=80
+        Minimum=-180,Maximum=180,Width=105
     };
     private readonly DarkNumberBox thickness=new(){
         Minimum=1,Maximum=5,Width=80
     };
+    private readonly DarkNumberBox sizePercent=new(){
+        Minimum=70,Maximum=100,Width=105
+    };
     private readonly DarkNumberBox gameX=new(){
-        Minimum=-45,Maximum=45,Width=70
+        Minimum=-45,Maximum=45,Width=100
     };
     private readonly DarkNumberBox gameY=new(){
-        Minimum=-45,Maximum=45,Width=70
+        Minimum=-45,Maximum=45,Width=100
     };
     private readonly DarkNumberBox chatX=new(){
-        Minimum=-45,Maximum=45,Width=70
+        Minimum=-45,Maximum=45,Width=100
     };
     private readonly DarkNumberBox chatY=new(){
-        Minimum=-45,Maximum=45,Width=70
+        Minimum=-45,Maximum=45,Width=100
     };
     private readonly DarkCheckBox showGame=new(){
         Width=182,Height=25,Text="Game simgesini göster"
@@ -46,13 +49,14 @@ internal sealed class MiniWheelSettingsDialog : Form
     private readonly ComboBox view=new(){
         Width=180,Height=30,DropDownStyle=ComboBoxStyle.DropDownList
     };
-    public int GapAngle=0,Thickness=3,GameX,GameY,ChatX,ChatY;
+    public int GapAngle=0,Thickness=3,SizePercent=100,GameX,GameY,ChatX,ChatY;
     public bool ShowGame=true,ShowChat=true;
 
     public MiniWheelSettingsDialog(DockWidget source)
     {
         GapAngle=source.WheelGapAngle;
         Thickness=Math.Clamp(source.WheelRingThickness,1,5);
+        SizePercent=Math.Clamp(source.MiniWheelSize,70,100);
         GameX=source.WheelGameOffsetX;GameY=source.WheelGameOffsetY;
         ChatX=source.WheelChatOffsetX;ChatY=source.WheelChatOffsetY;
         ShowGame=source.WheelShowGame;ShowChat=source.WheelShowChat;
@@ -86,7 +90,8 @@ internal sealed class MiniWheelSettingsDialog : Form
                 (int)angle.Value,(int)thickness.Value,
                 showGame.Checked,showChat.Checked,
                 (int)gameX.Value,(int)gameY.Value,
-                (int)chatX.Value,(int)chatY.Value);
+                (int)chatX.Value,(int)chatY.Value,
+                (int)sizePercent.Value);
             using var bitmap=new Bitmap(128,64);
             for(int y=0;y<64;y++)for(int x=0;x<128;x++)
                 bitmap.SetPixel(x,y,px[y*128+x]?Color.White:Color.Black);
@@ -106,12 +111,13 @@ internal sealed class MiniWheelSettingsDialog : Form
             Controls.Add(control);
         }
         view.Items.AddRange([UiLanguage.T("Ses"),UiLanguage.T("ChatMix")]);
-        view.Left=22;view.Top=306;
+        view.Left=22;view.Top=306;view.Width=125;
         view.SelectedIndexChanged+=(_,_)=>preview.Invalidate();
         view.SelectedIndex=1;
         Controls.Add(view);
-        AddNumber("Açı",angle,227,300,GapAngle);
-        AddNumber("Kalınlık",thickness,370,300,Thickness);
+        AddNumber("Açı",angle,158,300,GapAngle);
+        AddNumber("Kalınlık",thickness,265,300,Thickness);
+        AddNumber("Boyut %",sizePercent,379,300,SizePercent);
         AddNumber("Game X",gameX,22,363,GameX);
         AddNumber("Game Y",gameY,137,363,GameY);
         AddNumber("Chat X",chatX,252,363,ChatX);
@@ -134,6 +140,7 @@ internal sealed class MiniWheelSettingsDialog : Form
         save.Click+=(_,_)=>
         {
             GapAngle=(int)angle.Value;Thickness=(int)thickness.Value;
+            SizePercent=(int)sizePercent.Value;
             GameX=(int)gameX.Value;GameY=(int)gameY.Value;
             ChatX=(int)chatX.Value;ChatY=(int)chatY.Value;
             ShowGame=showGame.Checked;ShowChat=showChat.Checked;
@@ -153,9 +160,10 @@ internal sealed class MiniWheelSettingsDialog : Form
         var sprite=IconLibrary.GetCurrent(game?"Game":"Chat");
         double theta=(WheelArtwork.StartAngle+(int)angle.Value+
             WheelArtwork.Sweep*(game ? 0.75d : 0.25d))*Math.PI/180d;
-        double baseX=27+MiniWheelArtwork.CenterX+18*Math.Cos(theta)-
+        double scale=(int)sizePercent.Value/100d;
+        double baseX=27+MiniWheelArtwork.CenterX+18*scale*Math.Cos(theta)-
             sprite[0].Length/2d;
-        double baseY=15+MiniWheelArtwork.CenterY+18*Math.Sin(theta)-
+        double baseY=15+MiniWheelArtwork.CenterY+18*scale*Math.Sin(theta)-
             sprite.Length/2d;
         int dx=Math.Clamp((int)Math.Round(px-sprite[0].Length/2d-baseX),-45,45);
         int dy=Math.Clamp((int)Math.Round(py-sprite.Length/2d-baseY),-45,45);

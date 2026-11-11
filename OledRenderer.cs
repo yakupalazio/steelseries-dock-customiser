@@ -290,7 +290,7 @@ internal static class OledRenderer
         "VolumeChatMix" when w.DialStyle=="MiniWheel" =>
             new(Math.Max(0,w.X-26),Math.Max(10,w.Y-14),
                 Math.Min(128,MiniWheelArtwork.Width+75),
-                Math.Min(53-Math.Max(10,w.Y-14),MiniWheelArtwork.Height+27)),
+                Math.Min(64-Math.Max(10,w.Y-14),MiniWheelArtwork.Height+27)),
         "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,60,128)),25),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
@@ -518,7 +518,8 @@ internal static class OledRenderer
                 snapshot.View,widget.WheelGapAngle,
                 widget.WheelRingThickness,widget.WheelShowGame,widget.WheelShowChat,
                 widget.WheelGameOffsetX,widget.WheelGameOffsetY,
-                widget.WheelChatOffsetX,widget.WheelChatOffsetY);
+                widget.WheelChatOffsetX,widget.WheelChatOffsetY,
+                widget.MiniWheelSize);
         }
         else if(widget.DialStyle=="Wheel")
         {

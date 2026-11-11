@@ -546,6 +546,8 @@ public sealed class DockWidget
     public int FontSize { get; set; } = 10;
     public int StrokeWidth { get; set; } = 1;
     public int MiniWidth { get; set; } = 88;
+    // Independent compact radial gauge scale (70-100%).
+    public int MiniWheelSize { get; set; } = 100;
     // "Wheel" renders the OEM-inspired 1-bit radial gauge; "Bar" preserves
     // older designs without requiring a layout-file format migration.
     public string DialStyle { get; set; } = "Bar";

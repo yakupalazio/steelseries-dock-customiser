@@ -133,7 +133,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 4 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 DEV | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -723,6 +723,7 @@ internal sealed partial class PixelStudioForm : Form
             Record();
             selected.WheelGapAngle=compact.GapAngle;
             selected.WheelRingThickness=compact.Thickness;
+            selected.MiniWheelSize=compact.SizePercent;
             selected.WheelShowGame=compact.ShowGame;
             selected.WheelShowChat=compact.ShowChat;
             selected.WheelGameOffsetX=compact.GameX;

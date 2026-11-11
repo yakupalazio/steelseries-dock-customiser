@@ -29,6 +29,16 @@ internal static class Beta5SelfTests
 
     public static void Run()
     {
+        // A development build must not share Beta 4's save directory or
+        // silently send a frame to its actively used hardware.
+        if(!StudioProject.FilePath.StartsWith(
+                Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase) ||
+           !BatteryPreferences.FilePath.StartsWith(
+                Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
+            throw new Exception("Beta 5 accidentally shares Beta 4's settings");
+        if(!Beta5Sandbox.AllowPhysicalDockWrites &&
+           string.IsNullOrWhiteSpace(new DockHardwareTest().Validate()))
+            throw new Exception("Beta 5 physical OLED write guard is not active");
         using(var neutral=DrawDial("Bar",100,100))
         using(var game=DrawDial("Bar",100,0))
         using(var chat=DrawDial("Bar",0,100))
@@ -56,6 +66,34 @@ internal static class Beta5SelfTests
             if(miniCount==0||fullCount==0||miniCount>=fullCount)
                 throw new Exception("Mini wheel was not smaller than full ring");
         }
+        // Compact geometry belongs to its own saved widget; cloning must
+        // preserve it without rewriting a user-authored large wheel sprite.
+        var miniOriginal=new DockWidget{
+            Kind="VolumeChatMix",DialStyle="MiniWheel",
+            MiniWheelSize=70,WheelRingThickness=2
+        };
+        var bigOriginal=new DockWidget{
+            Kind="VolumeChatMix",DialStyle="Wheel",
+            WheelPixels=WheelArtwork.Factory
+        };
+        var clonedLayout=new LayoutState{
+            Widgets=[miniOriginal,bigOriginal]
+        }.DeepClone();
+        if(clonedLayout.Widgets[0].MiniWheelSize!=70 ||
+           clonedLayout.Widgets[1].WheelPixels!=WheelArtwork.Factory)
+            throw new Exception("Compact sizing modified full wheel artwork");
+        // Compact size is independent of the original 45x42 pixel artwork.
+        var smallWheel=new bool[128*64];
+        var smallMask=new bool[128*64];
+        var regularWheel=new bool[128*64];
+        var regularMask=new bool[128*64];
+        MiniWheelArtwork.Draw(smallWheel,smallMask,40,14,50,
+            DialView.Volume,showGame:false,showChat:false,sizePercent:70);
+        MiniWheelArtwork.Draw(regularWheel,regularMask,40,14,50,
+            DialView.Volume,showGame:false,showChat:false,sizePercent:100);
+        if(smallWheel.Count(p=>p)==0 ||
+           smallWheel.Count(p=>p)>=regularWheel.Count(p=>p))
+            throw new Exception("Independent compact wheel size had no effect");
         // Both compact ChatMix icons must remain in their own rotating arc
         // sectors and may never paint onto pre-existing dial pixels.
         foreach(int rotation in new[]{-90,0,90})

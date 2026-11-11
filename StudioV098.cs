@@ -270,6 +270,7 @@ internal sealed class StudioProject
             w.Y=Math.Clamp(w.Y,0,63);
             w.StrokeWidth=Math.Clamp(w.StrokeWidth,1,3);
             w.MiniWidth=Math.Clamp(w.MiniWidth,35,128);
+            w.MiniWheelSize=Math.Clamp(w.MiniWheelSize,70,100);
             w.DialStyle=w.DialStyle is "Wheel" or "MiniWheel" ? w.DialStyle : "Bar";
             if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
             w.WheelGapAngle=Math.Clamp(w.WheelGapAngle,-180,180);

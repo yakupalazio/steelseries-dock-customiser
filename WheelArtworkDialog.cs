@@ -36,10 +36,10 @@ internal sealed class WheelArtworkDialog : Form
     private readonly DarkCheckBox showChat=new(){Width=190,Height=26,Checked=true};
     private readonly DarkCheckBox closeArcEnds=new(){Width=218,Height=28,Checked=true};
     private readonly DarkNumberBox ringThickness=new(){Minimum=1,Maximum=7,Width=92,Value=3};
-    private readonly DarkNumberBox gameDX=new(){Minimum=-45,Maximum=45,Width=70};
-    private readonly DarkNumberBox gameDY=new(){Minimum=-45,Maximum=45,Width=70};
-    private readonly DarkNumberBox chatDX=new(){Minimum=-45,Maximum=45,Width=70};
-    private readonly DarkNumberBox chatDY=new(){Minimum=-45,Maximum=45,Width=70};
+    private readonly DarkNumberBox gameDX=new(){Minimum=-45,Maximum=45,Width=100};
+    private readonly DarkNumberBox gameDY=new(){Minimum=-45,Maximum=45,Width=100};
+    private readonly DarkNumberBox chatDX=new(){Minimum=-45,Maximum=45,Width=100};
+    private readonly DarkNumberBox chatDY=new(){Minimum=-45,Maximum=45,Width=100};
     private readonly DarkCheckBox automaticLabel=new(){
         Width=218,Height=32,Checked=true,AutoSize=false};
 
@@ -254,10 +254,10 @@ internal sealed class WheelArtworkDialog : Form
             Text=UiLanguage.T("Sol tık: seçilen piksel  •  Sağ tık: sil\nMavi katman, ses/ChatMix ile hareket eder."),
             ForeColor=Color.FromArgb(151,169,187),
             Left=24,Top=677,Width=452,Height=42});
-        var cancel=Button(UiLanguage.T("Vazgeç"),500,753,100);
+        var cancel=Button(UiLanguage.T("Vazgeç"),500,767,100);
         cancel.DialogResult=DialogResult.Cancel;
         Controls.Add(cancel);
-        var save=Button(UiLanguage.T("Kaydet"),610,753,108);
+        var save=Button(UiLanguage.T("Kaydet"),610,767,108);
         save.BackColor=Color.FromArgb(72,194,238);
         save.ForeColor=Color.FromArgb(13,18,26);
         save.Click+=(_,_)=>
