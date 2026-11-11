@@ -113,6 +113,17 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--chatmix-probe-list"))
+        {
+            ChatMixHandshakeProbe.Inspect();
+            return;
+        }
+        if(args.Contains("--chatmix-enable-only-probe") ||
+           args.Contains("--chatmix-handshake-probe"))
+        {
+            ChatMixHandshakeProbe.Run(args.Contains("--chatmix-handshake-probe"));
+            return;
+        }
         if(args.Contains("--dial-hid-open-test"))
         {
             Console.WriteLine(ArctisDialMonitor.ReadOnlyOpenCheck());
