@@ -184,9 +184,11 @@ internal static class Program
         if(args.Contains("--oled-retention-watch")||
            args.Contains("--oled-full-retention-watch")||
            args.Contains("--oled-reclaim-watch")||
-           args.Contains("--oled-reclaim-fast-watch"))
+           args.Contains("--oled-reclaim-fast-watch")||
+           args.Contains("--oled-reclaim-burst-watch"))
         {
-            bool fastReclaim=args.Contains("--oled-reclaim-fast-watch");
+            bool burstReclaim=args.Contains("--oled-reclaim-burst-watch");
+            bool fastReclaim=burstReclaim||args.Contains("--oled-reclaim-fast-watch");
             bool reclaim=fastReclaim||args.Contains("--oled-reclaim-watch");
             bool fullScreen=reclaim||args.Contains("--oled-full-retention-watch");
             // Persist diagnostics even in a WinExe process with no console attached.
@@ -208,15 +210,21 @@ internal static class Program
             // audio or configuration writes are made. Always hand back.
             using var monitor=new ArctisDialMonitor();
             int seen=0, reclaimPending=0, reclaimAttempts=0;
-            long lastDialAt=0;
+            long lastDialAt=0, reclaimWindowStartedAt=0;
+            string lastDialView="";
             monitor.Updated+=()=>
             {
                 var value=monitor.Snapshot;
                 System.Threading.Interlocked.Increment(ref seen);
                 if(reclaim)
                 {
+                    long now=Environment.TickCount64;
+                    long previous=System.Threading.Interlocked.Exchange(ref lastDialAt,now);
+                    bool changedView=!string.Equals(lastDialView,value.View.ToString(),StringComparison.Ordinal);
+                    lastDialView=value.View.ToString();
+                    if(burstReclaim && (previous==0||now-previous>1100||changedView))
+                        System.Threading.Interlocked.Exchange(ref reclaimWindowStartedAt,now);
                     System.Threading.Interlocked.Exchange(ref reclaimPending,1);
-                    System.Threading.Interlocked.Exchange(ref lastDialAt,Environment.TickCount64);
                 }
                 Log($"DIAL {value.View}: vol={value.Volume}, "+
                     $"steps={value.VolumeAttenuationSteps}, G={value.Game}, C={value.Chat}");
@@ -233,23 +241,29 @@ internal static class Program
                 transport.Open();
                 monitor.Start();
                 Log("30s OLED retention check ("+
-                    (fastReclaim?"FAST RECLAIM 180ms + 750ms tail":
+                    (burstReclaim?"BURST RECLAIM 180ms for 550ms after dial":
+                     fastReclaim?"FAST RECLAIM 180ms + 750ms tail":
                      reclaim?"RECLAIM 0x95->0x93":
                      fullScreen?"128x64 FULL":"protected 10..63")+
                     ") started. Rotate and press the physical dial now.");
                 while(stopwatch.Elapsed<TimeSpan.FromSeconds(30))
                 {
                     long before=stopwatch.ElapsedMilliseconds;
-                    long sinceDial=Environment.TickCount64-
+                    long now=Environment.TickCount64;
+                    long sinceDial=now-
                         System.Threading.Interlocked.Read(ref lastDialAt);
-                    bool dialTail=fastReclaim && lastDialAt>0 &&
+                    long burstStart=System.Threading.Interlocked.Read(ref reclaimWindowStartedAt);
+                    bool burstWindow=burstReclaim && burstStart>0 &&
+                        now-burstStart>=0 && now-burstStart<=550;
+                    bool dialTail=fastReclaim && !burstReclaim && lastDialAt>0 &&
                         sinceDial>=0 && sinceDial<=750;
                     bool pending=System.Threading.Volatile.Read(ref reclaimPending)!=0;
                     int limit=fastReclaim?150:12;
                     int cooldown=fastReclaim?180:700;
+                    bool shouldReclaim=burstReclaim?burstWindow:(pending||dialTail);
                     if(reclaim && reclaimAttempts<limit &&
                        stopwatch.ElapsedMilliseconds-lastReclaim>=cooldown &&
-                       (pending||dialTail))
+                       shouldReclaim)
                     {
                         System.Threading.Interlocked.Exchange(ref reclaimPending,0);
                         // Bounded, diagnostic-only release/draw burst after wheel input.
