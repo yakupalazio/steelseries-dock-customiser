@@ -55,15 +55,16 @@ internal static class MiniWheelArtwork
         if(showGame)
             PlaceIcon(output,mask,"Game",left+CenterX,top+CenterY,
                 WheelArtwork.StartAngle+rotation+WheelArtwork.Sweep*.75,
-                gameDX,gameDY);
+                gameDX,gameDY,WheelArtwork.StartAngle+rotation,true);
         if(showChat)
             PlaceIcon(output,mask,"Chat",left+CenterX,top+CenterY,
                 WheelArtwork.StartAngle+rotation+WheelArtwork.Sweep*.25,
-                chatDX,chatDY);
+                chatDX,chatDY,WheelArtwork.StartAngle+rotation,false);
     }
 
     private static void PlaceIcon(bool[] output,bool[] mask,string kind,
-        int centerX,int centerY,double angle,int dx,int dy)
+        int centerX,int centerY,double angle,int dx,int dy,
+        double startAngle,bool gameSide)
     {
         var sprite=IconLibrary.GetCurrent(kind);
         double rad=angle*Math.PI/180d;
@@ -85,7 +86,12 @@ internal static class MiniWheelArtwork
                 int px=x+sx,py=y+sy;
                 double r=Math.Sqrt((px-centerX)*(px-centerX)+
                     (py-centerY)*(py-centerY));
-                if(r<15.5 || mask[py*128+px])errors++;
+                double azimuth=Math.Atan2(py-centerY,px-centerX)*180d/Math.PI;
+                double progress=(azimuth-startAngle+7200d)%360d;
+                bool ownChannel=gameSide
+                    ?progress>=WheelArtwork.Sweep/2d && progress<=WheelArtwork.Sweep
+                    :progress>=0 && progress<=WheelArtwork.Sweep/2d;
+                if(r<15.5 || mask[py*128+px] || !ownChannel)errors++;
             }
             if(errors>0)continue;
             double score=(x-intendedX)*(x-intendedX)+

@@ -64,8 +64,7 @@ internal static class BatterySources
         }
         // Only live GATT 0x2A19 reads from already-paired devices may
         // populate additional, dynamically discovered battery slots.
-        foreach(var discovered in await BleBatteryProvider.ReadAsync())
-            snapshot.Values[discovered.Kind]=discovered;
+        MergeVerifiedBleReadings(snapshot,await BleBatteryProvider.ReadAsync());
         // SetupAPI is useful for unsupported Classic Bluetooth hardware,
         // including checking whether Windows has ever seen a phone battery.
         // Its percentages can be stale while the device is disconnected,
@@ -78,6 +77,34 @@ internal static class BatterySources
             CheckedAt=snapshot.CheckedAt,Values=snapshot.Values,
             DualSenseConnected=connected || snapshot["DualSense"].Available
         };
+    }
+
+    /// <summary>
+    /// Merge exactly matched known models with their existing provider slot.
+    /// Other BLE devices keep their stable identities, so a second generic
+    /// mouse or phone is never mistaken for the user's Aerox or Galaxy S24+.
+    /// </summary>
+    internal static void MergeVerifiedBleReadings(BatterySnapshot snapshot,
+        IReadOnlyList<BatteryReading> discovered)
+    {
+        foreach(var value in discovered)
+        {
+            if(!value.Available || !value.Kind.StartsWith("Ble:",
+                StringComparison.OrdinalIgnoreCase))continue;
+            string name=value.FriendlyName.ToLowerInvariant();
+            string? known=name.Contains("aerox 3")?"Mouse":
+                name.Contains("nova pro wireless")?"Headset":
+                name.Contains("galaxy s24")?"Phone":
+                name.Contains("dualsense")?"DualSense":null;
+            if(known is not null)
+            {
+                if(!snapshot[known].Available)
+                    snapshot.Values[known]=value with {Kind=known};
+                // Never append another OLED slot for a known GG/Phone model.
+                continue;
+            }
+            snapshot.Values[value.Kind]=value;
+        }
     }
 
     /// <summary>

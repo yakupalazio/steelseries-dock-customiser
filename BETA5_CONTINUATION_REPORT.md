@@ -77,3 +77,51 @@ dotnet run -c Release --no-build -- --self-test
 
 Only headless tests were performed here; no HID writes, OLED takeovers,
 firmware updates, pairing actions, or changes to SteelSeries GG were made.
+
+## Continuation after receiving the complete Beta 5 plan (02:00 local)
+
+- Retrieved the separate unfinished original-tree changes, created safety
+  checkpoint `4bb00bf` in `feat/beta5-local-validation`, then cherry-picked
+  them into `feat/beta5-resume-safe` as `661dd4b`.
+- Resolved the sole conflict in `Program.cs`, preserving the broader dynamic
+  BLE discovery report. The original recovery code and the old two test
+  patches were not deleted.
+- Recovered the compact MiniWheel settings dialog, ring/bar thickness controls,
+  preview output and accumulated font/ChatMix tests.
+- Further tightened the compact wheel's Game/Chat icon positions so each
+  icon remains strictly inside its own *rotating arc sector*, with no ring
+  bitmap or other-icon overlap. Added rotation fixtures at −90/0/+90.
+- Deduplicated GATT readings for **exactly identified** Galaxy S24+, Aerox 3,
+  Nova Pro Wireless and DualSense models with existing primary-source slots;
+  this deliberately does not merge unrelated generic phones or mice based
+  on device type alone. Verified Phone Link 84% is not overridden by a 40%
+  GATT fixture and that a missing Aerox source may use verified GATT.
+- Latest isolated build: 0 warnings, 0 errors. Headless self-tests: PASS.
+- Event-triggered BLE refresh, ten-second slow polling and fast GG monitoring
+  remain in place. Beta 4's proven dial-triggered recovery was not changed.
+- **Do not publish** until real dock/dual-sense/phone acceptance and third-party
+  distribution review.
+
+### Licensing research checkpoint
+
+The Git-tracked beta.1 and beta.2 tags do not include a top-level LICENSE,
+COPYING or TERMS file. This is **not** by itself proof that no other prior
+release terms, contributor grants or distribution rights exist. The current
+repo includes HidSharp 2.6.4 (Apache-2.0) and documents an externally
+downloaded ggoled utility; packaging/licensing terms need separate verification.
+Source files and user-provided photos should not be included in a claimed
+all-rights-reserved redistributed binary without a rights audit. No automatic
+relicensing, GitHub privacy changes, tags, pushes or public releases performed.
+
+### Remaining acceptance checks
+
+1. Verify OLED output and the original 1s post-volume-wheel handback on the
+   physical dock; observe without changing the firmware or HID flow.
+2. Confirm Game/Chat icon placements, mini wheel and split bar at extreme
+   ChatMix values and all configured rotations.
+3. Test pairing, disconnect/reconnect and GATT battery availability with
+   Galaxy S24+, Aerox, and a newly paired DualSense; document when Windows
+   does not expose a live BLE battery service.
+4. Check small bold date/time visibility on the real 128×64 panel.
+5. Treat OEM top ten rows and mode-only button delay as isolated research.
+6. Perform licensing audit and decide whether future releases publish source.

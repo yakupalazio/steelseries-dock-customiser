@@ -56,6 +56,41 @@ internal static class Beta5SelfTests
             if(miniCount==0||fullCount==0||miniCount>=fullCount)
                 throw new Exception("Mini wheel was not smaller than full ring");
         }
+        // Both compact ChatMix icons must remain in their own rotating arc
+        // sectors and may never paint onto pre-existing dial pixels.
+        foreach(int rotation in new[]{-90,0,90})
+        {
+            var baseFrame=new bool[128*64];
+            var baseMask=new bool[128*64];
+            MiniWheelArtwork.Draw(baseFrame,baseMask,50,15,75,
+                DialView.ChatMix,rotation,3,false,false);
+            foreach(bool gameIcon in new[]{true,false})
+            {
+                var withIcon=(bool[])baseFrame.Clone();
+                var mask=(bool[])baseMask.Clone();
+                MiniWheelArtwork.Draw(withIcon,mask,50,15,75,
+                    DialView.ChatMix,rotation,3,gameIcon,!gameIcon);
+                int added=0;
+                double start=WheelArtwork.StartAngle+rotation;
+                for(int py=10;py<53;py++)for(int px=0;px<128;px++)
+                {
+                    int i=py*128+px;
+                    if(!withIcon[i] || baseFrame[i])continue;
+                    if(baseMask[i])
+                        throw new Exception("Mini icon overlapped ring bitmap");
+                    double azimuth=Math.Atan2(py-(15+MiniWheelArtwork.CenterY),
+                        px-(50+MiniWheelArtwork.CenterX))*180d/Math.PI;
+                    double progress=(azimuth-start+7200d)%360d;
+                    bool own=gameIcon
+                        ?progress>=150d && progress<=300d
+                        :progress>=0d && progress<=150d;
+                    if(!own)throw new Exception("Mini icon entered the wrong channel");
+                    added++;
+                }
+                if(rotation==0 && added==0)
+                    throw new Exception("Mini icon did not render in a clear layout");
+            }
+        }
         string id=BleBatteryProvider.StableKind("test-device-id-1");
         if(!id.StartsWith("Ble:")||id!=BleBatteryProvider.StableKind("test-device-id-1")||
            id==BleBatteryProvider.StableKind("test-device-id-2"))
@@ -76,6 +111,27 @@ internal static class Beta5SelfTests
         };
         if(!BatteryPriority.SelectThree(detected,new BatteryPreferences()).Contains(id))
             throw new Exception("Verified new GATT device did not enter priority");
+        var merged=new BatterySnapshot{
+            Values=new Dictionary<string,BatteryReading>{
+                ["Phone"]=new("Phone",84,"Phone Link","",now){
+                    FriendlyName="Galaxy S24+"}
+            }
+        };
+        BatterySources.MergeVerifiedBleReadings(merged,[
+            new BatteryReading("Ble:galaxy",40,"GATT","",now){
+                FriendlyName="Galaxy S24+"},
+            new BatteryReading("Ble:other",72,"GATT","",now){
+                FriendlyName="Other Bluetooth Mouse"}
+        ]);
+        if(merged["Phone"].Percent!=84 || merged.Values.ContainsKey("Ble:galaxy") ||
+           merged["Ble:other"].Percent!=72)
+            throw new Exception("Known phone BLE/GG source deduplication failed");
+        var fallback=new BatterySnapshot();
+        BatterySources.MergeVerifiedBleReadings(fallback,[
+            new BatteryReading("Ble:aerox",91,"GATT","",now){
+                FriendlyName="Aerox 3 Wireless Gen 2"}]);
+        if(fallback["Mouse"].Percent!=91 || fallback.Values.ContainsKey("Ble:aerox"))
+            throw new Exception("Known mouse BLE fallback did not unify");
         var monitor=new BatteryWarningMonitor();
         var pref=new BatteryPreferences{
             EnableLowBatteryWarnings=true,LowBatteryWarningPercent=20,
