@@ -133,6 +133,29 @@ internal sealed class FastOledTransport : IDisposable
         }
     }
 
+    /// <summary>
+    /// Diagnostic-only display reacquisition. 0x95 is the documented
+    /// 64-byte output report that releases the custom screen to the DAC;
+    /// 0x93 immediately redraws the already validated bitmap. It does not
+    /// change firmware, audio configuration, or persistent device settings.
+    /// Never call this from the ordinary Live renderer.
+    /// </summary>
+    internal void ReclaimNativeOverlay(Bitmap image)
+    {
+        var left = EncodeHalf(image, 0);
+        var right = EncodeHalf(image, 64);
+        lock (gate)
+        {
+            if (stream is null) throw new InvalidOperationException("OLED bağlantısı kapalı.");
+            var release = new byte[64];
+            release[0] = ScreenReportId;
+            release[1] = 0x95;
+            stream.Write(release);
+            stream.SetFeature(left);
+            stream.SetFeature(right);
+        }
+    }
+
     public void Dispose()
     {
         lock (gate)

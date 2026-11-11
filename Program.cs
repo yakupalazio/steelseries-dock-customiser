@@ -182,9 +182,13 @@ internal static class Program
             return;
         }
         if(args.Contains("--oled-retention-watch")||
-           args.Contains("--oled-full-retention-watch"))
+           args.Contains("--oled-full-retention-watch")||
+           args.Contains("--oled-reclaim-watch")||
+           args.Contains("--oled-reclaim-fast-watch"))
         {
-            bool fullScreen=args.Contains("--oled-full-retention-watch");
+            bool fastReclaim=args.Contains("--oled-reclaim-fast-watch");
+            bool reclaim=fastReclaim||args.Contains("--oled-reclaim-watch");
+            bool fullScreen=reclaim||args.Contains("--oled-full-retention-watch");
             // Persist diagnostics even in a WinExe process with no console attached.
             string diagnosticDir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),
                 "SteelseriesDockCustomiser");
@@ -203,17 +207,23 @@ internal static class Program
             // on the OLED while they rotate the hardware knob. No firmware,
             // audio or configuration writes are made. Always hand back.
             using var monitor=new ArctisDialMonitor();
-            int seen=0;
+            int seen=0, reclaimPending=0, reclaimAttempts=0;
+            long lastDialAt=0;
             monitor.Updated+=()=>
             {
                 var value=monitor.Snapshot;
                 System.Threading.Interlocked.Increment(ref seen);
+                if(reclaim)
+                {
+                    System.Threading.Interlocked.Exchange(ref reclaimPending,1);
+                    System.Threading.Interlocked.Exchange(ref lastDialAt,Environment.TickCount64);
+                }
                 Log($"DIAL {value.View}: vol={value.Volume}, "+
                     $"steps={value.VolumeAttenuationSteps}, G={value.Game}, C={value.Chat}");
             };
             var stopwatch=System.Diagnostics.Stopwatch.StartNew();
             int frames=0,slowest=0;
-            long lastProgress=0;
+            long lastProgress=0, lastReclaim=-1000;
             try
             {
                 using var bitmap=OledRenderer.Render(
@@ -223,12 +233,34 @@ internal static class Program
                 transport.Open();
                 monitor.Start();
                 Log("30s OLED retention check ("+
-                    (fullScreen?"128x64 FULL":"protected 10..63")+
+                    (fastReclaim?"FAST RECLAIM 180ms + 750ms tail":
+                     reclaim?"RECLAIM 0x95->0x93":
+                     fullScreen?"128x64 FULL":"protected 10..63")+
                     ") started. Rotate and press the physical dial now.");
                 while(stopwatch.Elapsed<TimeSpan.FromSeconds(30))
                 {
                     long before=stopwatch.ElapsedMilliseconds;
-                    transport.SendLiveFrame(bitmap,!fullScreen);
+                    long sinceDial=Environment.TickCount64-
+                        System.Threading.Interlocked.Read(ref lastDialAt);
+                    bool dialTail=fastReclaim && lastDialAt>0 &&
+                        sinceDial>=0 && sinceDial<=750;
+                    bool pending=System.Threading.Volatile.Read(ref reclaimPending)!=0;
+                    int limit=fastReclaim?24:12;
+                    int cooldown=fastReclaim?180:700;
+                    if(reclaim && reclaimAttempts<limit &&
+                       stopwatch.ElapsedMilliseconds-lastReclaim>=cooldown &&
+                       (pending||dialTail))
+                    {
+                        System.Threading.Interlocked.Exchange(ref reclaimPending,0);
+                        // Bounded, diagnostic-only release/draw burst after wheel input.
+                        // Subsequent frames use the existing 0x93 transport.
+                        transport.ReclaimNativeOverlay(bitmap);
+                        lastReclaim=stopwatch.ElapsedMilliseconds;
+                        reclaimAttempts++;
+                        Log($"RECLAIM attempt={reclaimAttempts} at={lastReclaim}ms "+
+                            "0x95 output -> 0x93 full frame");
+                    }
+                    else transport.SendLiveFrame(bitmap,!fullScreen);
                     slowest=Math.Max(slowest,(int)(stopwatch.ElapsedMilliseconds-before));
                     frames++;
                     if(stopwatch.ElapsedMilliseconds-lastProgress>=500)
@@ -239,7 +271,8 @@ internal static class Program
                     System.Threading.Thread.Sleep(35);
                 }
                 Log($"Completed frames={frames}; worst transfer={slowest}ms; "+
-                    $"dial events={seen}; elapsed={stopwatch.ElapsedMilliseconds}ms");
+                    $"dial events={seen}; reclaim attempts={reclaimAttempts}; "+
+                    $"elapsed={stopwatch.ElapsedMilliseconds}ms");
             }
             catch(Exception ex)
             {
