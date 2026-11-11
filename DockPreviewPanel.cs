@@ -170,6 +170,21 @@ internal sealed class DockPreviewPanel : UserControl
     /// the native overlay duration but cannot stop firmware-priority frames.
     /// Input and device volume continue to work as designed.
     /// </summary>
+    private DateTimeOffset lastBatteryHeaderRefresh=DateTimeOffset.MinValue;
+
+    // Native header rows are firmware-owned. On a *confirmed large*
+    // battery replacement change we can ask firmware to redraw once, then
+    // reclaim the custom view via the existing 450 ms one-shot mechanism.
+    // A 30-second throttle prevents routine changes from flashing the OLED.
+    public void OnBatteryPackChanged()
+    {
+        if(!_liveEnabled||IsDisposed)return;
+        var now=DateTimeOffset.UtcNow;
+        if(now-lastBatteryHeaderRefresh<TimeSpan.FromSeconds(30))return;
+        lastBatteryHeaderRefresh=now;
+        OnPhysicalDialEvent();
+    }
+
     public void OnPhysicalDialEvent()
     {
         if(!_liveEnabled||IsDisposed)return;

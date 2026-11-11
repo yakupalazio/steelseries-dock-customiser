@@ -51,6 +51,8 @@ internal sealed partial class PixelStudioForm : Form
         Width=269,Height=34,Text="Canlıda tam ekran (128×64)",Checked=false};
     private readonly DarkNumberBox strokeWidth=new(){Minimum=1,Maximum=3,Width=85};
     private readonly DarkNumberBox miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=100};
+    private readonly DarkNumberBox barFrame=new(){Minimum=1,Maximum=2,Width=85};
+    private readonly DarkNumberBox barFill=new(){Minimum=1,Maximum=5,Width=85};
     private readonly string savePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","studio-v05.json");
@@ -59,6 +61,25 @@ internal sealed partial class PixelStudioForm : Form
     private BatteryPreferences batteryPreferences = BatteryPreferences.Load();
     private readonly DisplayPreferences displayPreferences = DisplayPreferences.Load();
     private BatterySnapshot batterySnapshot = new();
+    private void CheckNativeHeaderBatteryChange(BatterySnapshot before,
+        BatterySnapshot after)
+    {
+        if(dockPreview is null || !dockPreview.LiveOutputActive)return;
+        // A minor 1% discharge does not justify an OEM-screen takeover.
+        // Battery swaps typically make a much larger confirmed change.
+        foreach(var kind in new[]{"Headset","SpareBattery"})
+        {
+            var old=before[kind];var fresh=after[kind];
+            if(!old.Available||!fresh.Available)continue;
+            if(!BatteryPriority.IsCurrent(old,DateTimeOffset.Now)||
+               !BatteryPriority.IsCurrent(fresh,DateTimeOffset.Now))continue;
+            if(Math.Abs(old.Percent!.Value-fresh.Percent!.Value)>=10)
+            {
+                dockPreview.OnBatteryPackChanged();
+                break;
+            }
+        }
+    }
     private readonly BatteryWarningMonitor warningMonitor=new();
     private BatteryStatusDialog? batteryDialog;
     private SettingsDialog? settingsDialog;
@@ -302,6 +323,8 @@ internal sealed partial class PixelStudioForm : Form
         fontSize.ValueChanged += (_,_) => ChangeNumber();
         strokeWidth.ValueChanged += (_,_) => ChangeNumber();
         miniWidth.ValueChanged += (_,_) => ChangeNumber();
+        barFrame.ValueChanged += (_,_) => ChangeNumber();
+        barFill.ValueChanged += (_,_) => ChangeNumber();
         xPos.ValueChanged += (_,_) => ChangeNumber();
         yPos.ValueChanged += (_,_) => ChangeNumber();
         widgetVisible.CheckedChanged += (_,_) =>
@@ -563,7 +586,9 @@ internal sealed partial class PixelStudioForm : Form
         {
             var updated=await BatterySources.PollRealtimeAsync(batterySnapshot);
             if(IsDisposed)return;
+            var before=batterySnapshot;
             batterySnapshot=updated;
+            CheckNativeHeaderBatteryChange(before,updated);
             batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
             Redraw();
         }
@@ -661,6 +686,8 @@ internal sealed partial class PixelStudioForm : Form
             "GameMiniPlayer" or "Custom text";
         strokeWidth.Enabled=fontSize.Enabled;
         miniWidth.Enabled=has && selected!.Kind is "GameMiniPlayer" or "VolumeChatMix";
+        barFrame.Enabled=has && selected!.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
+        barFill.Enabled=barFrame.Enabled;
         dialStyle.Enabled=has && selected!.Kind=="VolumeChatMix";
         widgetVisible.Enabled=has && !StudioProject.IsLocked(editingMode,selected!.Kind);
         xPos.Enabled=has;yPos.Enabled=has;
@@ -671,6 +698,8 @@ internal sealed partial class PixelStudioForm : Form
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
             miniWidth.Minimum=selected.Kind=="VolumeChatMix"?60:35;
             miniWidth.Value=Math.Clamp(selected.MiniWidth,(int)miniWidth.Minimum,128);
+            barFrame.Value=Math.Clamp(selected.BarFrameThickness,1,2);
+            barFill.Value=Math.Clamp(selected.BarFillThickness,1,5);
             dialStyle.SelectedItem=selected.DialStyle;
             xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
@@ -688,6 +717,22 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(selected?.Kind!="VolumeChatMix"||
             selected.DialStyle is not ("Wheel" or "MiniWheel"))return;
+        if(selected.DialStyle=="MiniWheel")
+        {
+            using var compact=new MiniWheelSettingsDialog(selected);
+            if(compact.ShowDialog(this)!=DialogResult.OK)return;
+            Record();
+            selected.WheelGapAngle=compact.GapAngle;
+            selected.WheelRingThickness=compact.Thickness;
+            selected.WheelShowGame=compact.ShowGame;
+            selected.WheelShowChat=compact.ShowChat;
+            selected.WheelGameOffsetX=compact.GameX;
+            selected.WheelGameOffsetY=compact.GameY;
+            selected.WheelChatOffsetX=compact.ChatX;
+            selected.WheelChatOffsetY=compact.ChatY;
+            Redraw();
+            return;
+        }
         using var dialog=new WheelArtworkDialog(selected.WheelPixels,
             selected.WheelAutoLabel,selected.WheelGapAngle,
             selected.WheelIconsFollowRing,selected.WheelGameOffsetX,
@@ -736,10 +781,14 @@ internal sealed partial class PixelStudioForm : Form
         int newX=(int)xPos.Value,newY=(int)yPos.Value,newSize=(int)fontSize.Value;
         int newWeight=(int)strokeWidth.Value;
         int newMiniWidth=(int)miniWidth.Value;
+        int newFrame=(int)barFrame.Value,newFill=(int)barFill.Value;
         if(selected.X==newX&&selected.Y==newY&&selected.FontSize==newSize&&
-           selected.StrokeWidth==newWeight && selected.MiniWidth==newMiniWidth)return;
+           selected.StrokeWidth==newWeight&&selected.MiniWidth==newMiniWidth&&
+           selected.BarFrameThickness==newFrame&&
+           selected.BarFillThickness==newFill)return;
         Record();selected.X=newX;selected.Y=newY;selected.FontSize=newSize;
         selected.StrokeWidth=newWeight;selected.MiniWidth=newMiniWidth;
+        selected.BarFrameThickness=newFrame;selected.BarFillThickness=newFill;
         RefreshWidgetList();Redraw();
     }
     private void AddWidget()

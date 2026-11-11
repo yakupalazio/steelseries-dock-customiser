@@ -12,15 +12,22 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if(args.Contains("--beta5-preview-output"))
+        {
+            int pos=Array.IndexOf(args,"--beta5-preview-output");
+            if(pos+1>=args.Length)throw new ArgumentException("Missing preview folder");
+            Beta5SelfTests.RenderExamples(args[pos+1]);
+            return;
+        }
         if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
-            // Include dynamically discovered BLE devices; the built-in
-            // six categories alone would hide a successful GATT read.
+            // Include discovered devices without duplicating built-in categories.
             var kinds=BatterySources.Kinds.Concat(snapshot.Values.Keys
                 .Where(kind=>!BatterySources.Kinds.Contains(kind,
                     StringComparer.OrdinalIgnoreCase))
-                .OrderBy(kind=>kind,StringComparer.Ordinal)).ToArray();
+                .OrderBy(kind=>kind,StringComparer.Ordinal))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             var lines=kinds.Select(kind =>
             {
                 var b=snapshot[kind];
@@ -440,6 +447,21 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             Application.SetColorMode(SystemColorMode.Dark);
             if(args.Contains("--capture-english"))UiLanguage.PreviewOnly(true);
+            if(args.Contains("--capture-mini-wheel"))
+            {
+                using var editor=new MiniWheelSettingsDialog(new DockWidget{
+                    Kind="VolumeChatMix",DialStyle="MiniWheel"});
+                editor.StartPosition=FormStartPosition.Manual;
+                editor.Location=new System.Drawing.Point(-5000,-5000);
+                editor.ShowInTaskbar=false;
+                editor.Show();
+                Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(editor.Width,editor.Height);
+                editor.DrawToBitmap(shot,new System.Drawing.Rectangle(0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                editor.Close();
+                return;
+            }
             if(args.Contains("--capture-wheel"))
             {
                 using var wheel=new WheelArtworkDialog(null);

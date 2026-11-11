@@ -169,7 +169,7 @@ internal static class WheelArtwork
                         StartAngle+Sweep*.75+gapAngle,gameOffsetX,gameOffsetY,
                         StartAngle+gapAngle,gameSide:true);
                 else DrawEndpointIcon(output,coverage,x,y,"Game",
-                    StartAngle+Sweep*.75+gapAngle,gameOffsetX,gameOffsetY,
+                    StartAngle+Sweep*.75,gameOffsetX,gameOffsetY,
                     StartAngle+gapAngle,gameSide:true);
             }
             if(showChat)
@@ -179,7 +179,7 @@ internal static class WheelArtwork
                         StartAngle+Sweep*.25+gapAngle,chatOffsetX,chatOffsetY,
                         StartAngle+gapAngle,gameSide:false);
                 else DrawEndpointIcon(output,coverage,x,y,"Chat",
-                    StartAngle+Sweep*.25+gapAngle,chatOffsetX,chatOffsetY,
+                    StartAngle+Sweep*.25,chatOffsetX,chatOffsetY,
                     StartAngle+gapAngle,gameSide:false);
             }
         }
@@ -230,7 +230,7 @@ internal static class WheelArtwork
             obstacles[py*128+px]=flags;
         }
         double best=double.PositiveInfinity;
-        int bestX=0,bestY=10;
+        int bestX=-1,bestY=-1;
         int aroundX=Math.Clamp((int)Math.Round(wantX),0,128-width);
         int aroundY=Math.Clamp((int)Math.Round(wantY),10,53-height);
         // Search the free strip surrounding the ring, not just a small
@@ -260,10 +260,13 @@ internal static class WheelArtwork
             }
             // If there's no perfect place near a screen edge, prefer a
             // fully visible icon with the fewest collisions.
+            // Hard constraints: never show an icon on the wrong audio
+            // channel, or overlap the ring/other icon. If a rotation leaves
+            // no legal pixels, prefer not to show a misleading icon.
+            if(conflict>0||interior>0||wrongChannel>0)continue;
             double displacement=(left-wantX)*(left-wantX)+
                 (top-wantY)*(top-wantY);
-            double score=conflict*100000000d+interior*10000000d+
-                wrongChannel*1000000d+displacement;
+            double score=displacement;
             if(score<best)
             {
                 best=score;bestX=left;bestY=top;
@@ -279,6 +282,7 @@ internal static class WheelArtwork
         var rows=IconLibrary.GetCurrent(name);
         var (left,top)=EndpointIconPosition(wheelX,wheelY,name,angle,
             coverage,offsetX,offsetY,startAngle,gameSide);
+        if(left<0||top<0)return; // no valid non-overlapping position
         for(int yy=0;yy<rows.Length;yy++)
         for(int xx=0;xx<rows[yy].Length;xx++)
             if(rows[yy][xx]=='1')Put(output,coverage,left+xx,top+yy,true);

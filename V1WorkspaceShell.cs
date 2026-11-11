@@ -31,6 +31,7 @@ internal sealed partial class PixelStudioForm
     private Control? modernTextRow,modernFontRow,modernStrokeRow;
     private Control? modernVisibleRow,modernXRow,modernYRow;
     private Control? modernDialStyleRow,modernDialWidthRow,modernWheelEditRow;
+    private Control? modernBarFrameRow,modernBarFillRow;
     private bool modernShellInitialized;
 
     private void BuildModernShell(TabPage legacyEditTab,
@@ -341,6 +342,10 @@ internal sealed partial class PixelStudioForm
         inspector.Controls.Add(modernWheelEditRow);
         modernDialWidthRow=PropertyRow("Widget eni",miniWidth);
         inspector.Controls.Add(modernDialWidthRow);
+        modernBarFrameRow=PropertyRow("Çubuk çerçevesi",barFrame);
+        modernBarFillRow=PropertyRow("Çubuk dolgusu",barFill);
+        inspector.Controls.Add(modernBarFrameRow);
+        inspector.Controls.Add(modernBarFillRow);
         inspector.Controls.Add(Spacer(12,268));
         inspector.Controls.Add(Section("EKRAN KORUMASI",268));
         headerProtect.Text="Orijinal üst 10 pikseli koru";
@@ -506,6 +511,10 @@ internal sealed partial class PixelStudioForm
         if(modernDialWidthRow!=null)
             modernDialWidthRow.Visible=selected?.Kind=="GameMiniPlayer" ||
                 (selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar");
+        if(modernBarFrameRow!=null)modernBarFrameRow.Visible=
+            selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
+        if(modernBarFillRow!=null)modernBarFillRow.Visible=
+            selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
         if(modernDockStatus!=null)
         {
             string message=dockPreview.HardwareStatus;

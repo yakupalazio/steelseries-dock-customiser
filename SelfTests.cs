@@ -1158,6 +1158,7 @@ internal static class SelfTests
             Console.WriteLine("PASS: single-page v1.0 UI, responsive editor, native dock photo");
             Console.WriteLine("PASS: Phone Link battery parser, optional read-only dial widget");
             Console.WriteLine("PASS: charging icon appears only for confirmed charging");
+            Beta5SelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

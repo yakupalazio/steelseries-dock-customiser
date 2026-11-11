@@ -135,6 +135,8 @@ internal static class UiLanguage
         ["Chat logosunu göster"]="Show Chat logo",
         ["Çember uçlarını kapat"]="Close ring endpoints",
         ["Mini dairesel tekerlek"]="Mini radial wheel",
+        ["Çubuk çerçevesi"]="Bar border thickness",
+        ["Çubuk dolgusu"]="Bar fill thickness",
         ["Kontrolcü"]="Controller",
         ["Düşük pil uyarıları"]="Low battery alerts",
         ["Cihaz pil uyarısı eşiği..."]="Device low battery threshold...",

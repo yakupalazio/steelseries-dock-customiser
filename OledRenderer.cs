@@ -549,7 +549,8 @@ internal static class OledRenderer
             int? volume=fresh?snapshot.Volume:null;
             DrawText(tile,volume.HasValue?$"{volume.Value}%":"--%",
                 x+49,y+1,1);
-            DrawProgress(tile,x+1,y+14,width,volume??0);
+            DrawBarWithThickness(tile,x+1,y+14,width,volume??0,
+                widget.BarFrameThickness,widget.BarFillThickness);
         }
         }
         for(int yy=Math.Max(0,bounds.Top);yy<Math.Min(Height,bounds.Bottom);yy++)
@@ -612,6 +613,23 @@ internal static class OledRenderer
         }
     }
 
+    private static void DrawBarWithThickness(bool[] pixels,int left,int top,
+        int width,int value,int frameThickness,int fillThickness)
+    {
+        width=Math.Max(3,Math.Min(width,128-left));
+        const int height=8;
+        int frame=Math.Clamp(frameThickness,1,2),
+            fillH=Math.Clamp(fillThickness,1,5);
+        for(int dx=0;dx<width;dx++)for(int dy=0;dy<height;dy++)
+            if(dx<frame||dx>=width-frame||dy<frame||dy>=height-frame)
+                Dot(pixels,left+dx,top+dy);
+        int amount=(int)Math.Round((width-2*frame)*
+            Math.Clamp(value,0,100)/100d);
+        int insideY=top+(height-fillH)/2;
+        for(int dx=0;dx<amount;dx++)for(int dy=0;dy<fillH;dy++)
+            Dot(pixels,left+frame+dx,insideY+dy);
+    }
+
     // The charging badge is an editable Icon Workshop sprite, not the OEM header icon.
     private static void DrawChargeBolt(bool[] frame,int x,int y,string[] rows)
     {
@@ -638,6 +656,17 @@ internal static class OledRenderer
         int total=width-2;
         for(int a=0;a<Math.Clamp(filled,0,total);a++)
             for(int b=1;b<height-1;b++)Dot(px,x+1+a,y+b,false);
+    }
+
+    internal static Bitmap RenderDateTimeFontSample(string text,int weight,bool clock)
+    {
+        var pixels=new bool[Width*Height];
+        if(clock)DrawClock(pixels,text,4,12,weight);
+        else DrawReadableDateTime(pixels,text,4,12,1,weight);
+        var bmp=new Bitmap(Width,Height);
+        for(int yy=0;yy<Height;yy++)for(int xx=0;xx<Width;xx++)
+            bmp.SetPixel(xx,yy,pixels[yy*Width+xx]?Color.White:Color.Black);
+        return bmp;
     }
 
     public static string[] GetOriginalIconRows(string type)
