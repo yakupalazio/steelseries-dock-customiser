@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -91,7 +92,7 @@ internal static class ChatMixHandshakeProbe
         stream.Write(report);
     }
 
-    public static void Run(bool includeIcon,int durationSeconds=20)
+    public static void Run(bool includeIcon,int durationSeconds=20,bool pollStatus=false)
     {
         string file=LogFile;
         using var writer=new StreamWriter(file) { AutoFlush=true };
@@ -126,7 +127,9 @@ internal static class ChatMixHandshakeProbe
         stream.ReadTimeout=300;
         stream.WriteTimeout=600;
         var watch=Stopwatch.StartNew();
-        int count=0;
+        int count=0, statusDifferences=0;
+        var responseBefore=new Dictionary<byte,byte[]>();
+        object responseGate=new();
         try
         {
             Log("Starting nonpersistent ChatMix handshake; GG must stay closed.");
@@ -152,7 +155,34 @@ internal static class ChatMixHandshakeProbe
                         var data=buffer.AsSpan(0,size);
                         bool parsed=ArctisDialMonitor.TryDecode(data,out var dial);
                         int n=Interlocked.Increment(ref count);
-                        if(n<=80)
+                        bool isStatus=pollStatus && size>=3 && data[0]==0x06 &&
+                            data[1] is 0xb0 or 0x20;
+                        if(isStatus)
+                        {
+                            byte opcode=data[1];
+                            lock(responseGate)
+                            {
+                                if(!responseBefore.TryGetValue(opcode,out var prior))
+                                {
+                                    Log($"T={watch.ElapsedMilliseconds}ms STATUS FIRST "+
+                                        $"{opcode:X2} channel={channel} "+
+                                        Convert.ToHexString(data[..Math.Min(24,size)]));
+                                }
+                                else
+                                {
+                                    var changed=new List<string>();
+                                    for(int k=2;k<Math.Min(size,prior.Length);k++)
+                                        if(prior[k]!=data[k])
+                                            changed.Add($"{k:X2}:{prior[k]:X2}->{data[k]:X2}");
+                                    if(changed.Count>0 && ++statusDifferences<=80)
+                                        Log($"T={watch.ElapsedMilliseconds}ms STATUS DELTA "+
+                                            $"{opcode:X2} channel={channel} "+
+                                            string.Join(" ",changed));
+                                }
+                                responseBefore[opcode]=data.ToArray();
+                            }
+                        }
+                        else if(n<=100)
                             Log($"T={watch.ElapsedMilliseconds}ms RX channel={channel} "+
                                 Convert.ToHexString(data[..Math.Min(16,size)])+
                                 (parsed?$" MODE={dial.View} V={dial.Volume} "+
@@ -180,8 +210,31 @@ internal static class ChatMixHandshakeProbe
                 }
                 catch(Exception ex){Log($"Reader {index+1} unavailable: {ex.GetType().Name}");}
             })).ToArray();
-            Task.WaitAll(reads);
-            Log("Completed, reports observed: "+count);
+            var poller=pollStatus?Task.Run(()=>
+            {
+                int polls=0;
+                while(watch.Elapsed<TimeSpan.FromSeconds(durationSeconds))
+                {
+                    try
+                    {
+                        Send(stream,0xb0,0);
+                        Thread.Sleep(40);
+                        Send(stream,0x20,0);
+                        polls++;
+                        if(polls%10==0)
+                            Log($"T={watch.ElapsedMilliseconds}ms POLL count={polls}");
+                        Thread.Sleep(460);
+                    }
+                    catch(Exception ex)
+                    {
+                        Log("Status polling stopped: "+ex.GetType().Name);
+                        break;
+                    }
+                }
+                Log("Status poll pairs sent: "+polls);
+            }):Task.CompletedTask;
+            Task.WaitAll(reads.Append(poller).ToArray());
+            Log($"Completed, reports observed: {count}; changed status reports: {statusDifferences}");
         }
         catch(Exception e)
         {

@@ -118,6 +118,13 @@ internal static class Program
             ChatMixHandshakeProbe.Inspect();
             return;
         }
+        if(args.Contains("--chatmix-mode-state-probe"))
+        {
+            // Read-only firmware status queries (0xB0, 0x20) while manually
+            // toggling the wheel. The volatile ChatMix handshake is restored.
+            ChatMixHandshakeProbe.Run(includeIcon:true,durationSeconds:90,pollStatus:true);
+            return;
+        }
         if(args.Contains("--chatmix-guided-probe"))
         {
             ChatMixHandshakeProbe.Run(includeIcon:true,durationSeconds:75);
