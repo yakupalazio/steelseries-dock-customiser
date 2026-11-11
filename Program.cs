@@ -185,6 +185,20 @@ internal static class Program
            args.Contains("--oled-full-retention-watch"))
         {
             bool fullScreen=args.Contains("--oled-full-retention-watch");
+            // Persist diagnostics even in a WinExe process with no console attached.
+            string diagnosticDir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "SteelseriesDockCustomiser");
+            System.IO.Directory.CreateDirectory(diagnosticDir);
+            string diagnosticFile=System.IO.Path.Combine(diagnosticDir,
+                "oled-retention-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".log");
+            using var diagnosticLog=new System.IO.StreamWriter(diagnosticFile)
+                { AutoFlush=true };
+            void Log(string message)
+            {
+                Console.WriteLine(message);
+                diagnosticLog.WriteLine(DateTimeOffset.Now.ToString("O")+" "+message);
+            }
+            Log("Diagnostic log: "+diagnosticFile);
             // Interactive diagnostic only: keep the user's normal idle design
             // on the OLED while they rotate the hardware knob. No firmware,
             // audio or configuration writes are made. Always hand back.
@@ -194,11 +208,12 @@ internal static class Program
             {
                 var value=monitor.Snapshot;
                 System.Threading.Interlocked.Increment(ref seen);
-                Console.WriteLine($"DIAL {value.View}: vol={value.Volume}, "+
+                Log($"DIAL {value.View}: vol={value.Volume}, "+
                     $"steps={value.VolumeAttenuationSteps}, G={value.Game}, C={value.Chat}");
             };
             var stopwatch=System.Diagnostics.Stopwatch.StartNew();
             int frames=0,slowest=0;
+            long lastProgress=0;
             try
             {
                 using var bitmap=OledRenderer.Render(
@@ -207,7 +222,7 @@ internal static class Program
                 using var transport=new FastOledTransport();
                 transport.Open();
                 monitor.Start();
-                Console.WriteLine("30s OLED retention check ("+
+                Log("30s OLED retention check ("+
                     (fullScreen?"128x64 FULL":"protected 10..63")+
                     ") started. Rotate and press the physical dial now.");
                 while(stopwatch.Elapsed<TimeSpan.FromSeconds(30))
@@ -216,20 +231,25 @@ internal static class Program
                     transport.SendLiveFrame(bitmap,!fullScreen);
                     slowest=Math.Max(slowest,(int)(stopwatch.ElapsedMilliseconds-before));
                     frames++;
+                    if(stopwatch.ElapsedMilliseconds-lastProgress>=500)
+                    {
+                        lastProgress=stopwatch.ElapsedMilliseconds;
+                        Log($"PROGRESS elapsed={lastProgress}ms frames={frames} slowest={slowest}ms");
+                    }
                     System.Threading.Thread.Sleep(35);
                 }
-                Console.WriteLine($"Full protected writes={frames}; worst transfer={slowest}ms; "+
+                Log($"Completed frames={frames}; worst transfer={slowest}ms; "+
                     $"dial events={seen}; elapsed={stopwatch.ElapsedMilliseconds}ms");
             }
             catch(Exception ex)
             {
-                Console.WriteLine("Retention check failed: "+ex.Message);
+                Log("Retention check failed: "+ex.GetType().Name+": "+ex.Message);
                 Environment.ExitCode=1;
             }
             finally
             {
                 monitor.Stop();
-                Console.WriteLine(new DockHardwareTest().RestoreNow());
+                Log(new DockHardwareTest().RestoreNow());
             }
             return;
         }
