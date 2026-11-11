@@ -146,10 +146,11 @@ internal static class Program
             Environment.ExitCode=count>0?0:2;
             return;
         }
-        if(args.Contains("--dial-raw-watch"))
+        if(args.Contains("--dial-raw-watch")||args.Contains("--dial-raw-all-watch"))
         {
-            try{ArctisDialMonitor.ReadOnlyRawWatch(TimeSpan.FromSeconds(20),
-                line=>Console.WriteLine(line));}
+            bool allInterfaces=args.Contains("--dial-raw-all-watch");
+            try{ArctisDialMonitor.ReadOnlyRawWatch(TimeSpan.FromSeconds(allInterfaces?60:20),
+                line=>Console.WriteLine(line),allInterfaces);}
             catch(Exception ex)
             {
                 Console.WriteLine("Raw HID read failed: "+ex.GetType().Name+

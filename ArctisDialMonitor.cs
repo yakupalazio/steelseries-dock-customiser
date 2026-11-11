@@ -143,7 +143,8 @@ internal sealed class ArctisDialMonitor : IDisposable
     /// Diagnostic only: record the complete raw input notifications, even
     /// those that do not match our decoder. Never sends a device command.
     /// </summary>
-    internal static void ReadOnlyRawWatch(TimeSpan duration,Action<string> log)
+    internal static void ReadOnlyRawWatch(TimeSpan duration,Action<string> log,
+        bool includeAllInterfaces=false)
     {
         var candidates=DeviceList.Local.GetHidDevices(Vendor)
             .Where(Supported).ToArray();
@@ -159,7 +160,13 @@ internal sealed class ArctisDialMonitor : IDisposable
             }
             catch(Exception ex){log("HID inventory: "+ex.GetType().Name);}
         }
-        var found=FindInputs();
+        var found=includeAllInterfaces
+            ?candidates.Where(d=>
+            {
+                try{return d.GetMaxInputReportLength() is >=2 and <=128;}
+                catch{return false;}
+            }).ToArray()
+            :FindInputs();
         if(found.Length==0){log("No candidate input collections");return;}
         int seen=0;
         var expires=DateTimeOffset.UtcNow+duration;
@@ -171,7 +178,10 @@ internal sealed class ArctisDialMonitor : IDisposable
                 using var opened=device.Open();
                 opened.ReadTimeout=300;
                 var buffer=new byte[Math.Max(65,device.GetMaxInputReportLength())];
-                lock(logGate)log($"Opened collection {index+1}, feature={device.GetMaxFeatureReportLength()}");
+                string path=device.DevicePath;
+                int at=path.IndexOf("mi_",StringComparison.OrdinalIgnoreCase);
+                string iface=at>=0&&at+5<=path.Length?path.Substring(at,5):"unknown";
+                lock(logGate)log($"Opened collection {index+1}, {iface}, feature={device.GetMaxFeatureReportLength()}");
                 while(DateTimeOffset.UtcNow<expires)
                 {
                     try
