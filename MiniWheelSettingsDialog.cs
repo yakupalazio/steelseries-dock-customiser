@@ -13,8 +13,12 @@ internal sealed class MiniWheelSettingsDialog : Form
 {
     private readonly PictureBox preview=new(){
         Left=22,Top=56,Width=460,Height=230,
-        BackColor=Color.Black,BorderStyle=BorderStyle.FixedSingle
+        BackColor=Color.Black,BorderStyle=BorderStyle.FixedSingle,
+        Cursor=Cursors.SizeAll
     };
+    private readonly ComboBox dragTarget=new(){
+        Left=330,Top=480,Width=151,DropDownStyle=ComboBoxStyle.DropDownList};
+    private bool draggingIcon;
     private readonly DarkNumberBox angle=new(){
         Minimum=-180,Maximum=180,Width=80
     };
@@ -22,16 +26,16 @@ internal sealed class MiniWheelSettingsDialog : Form
         Minimum=1,Maximum=5,Width=80
     };
     private readonly DarkNumberBox gameX=new(){
-        Minimum=-15,Maximum=15,Width=70
+        Minimum=-45,Maximum=45,Width=70
     };
     private readonly DarkNumberBox gameY=new(){
-        Minimum=-15,Maximum=15,Width=70
+        Minimum=-45,Maximum=45,Width=70
     };
     private readonly DarkNumberBox chatX=new(){
-        Minimum=-15,Maximum=15,Width=70
+        Minimum=-45,Maximum=45,Width=70
     };
     private readonly DarkNumberBox chatY=new(){
-        Minimum=-15,Maximum=15,Width=70
+        Minimum=-45,Maximum=45,Width=70
     };
     private readonly DarkCheckBox showGame=new(){
         Width=182,Height=25,Text="Game simgesini göster"
@@ -65,6 +69,15 @@ internal sealed class MiniWheelSettingsDialog : Form
             Text=UiLanguage.T("Mini dairesel tekerlek"),
             Font=new Font("Segoe UI Semibold",16f,FontStyle.Bold)});
         Controls.Add(preview);
+        preview.MouseDown+=(_,e)=>{
+            if(e.Button!=MouseButtons.Left || view.SelectedIndex!=1)return;
+            draggingIcon=true;MoveIconOnPreview(e);
+        };
+        preview.MouseMove+=(_,e)=>{
+            if(draggingIcon && e.Button==MouseButtons.Left)MoveIconOnPreview(e);
+        };
+        preview.MouseUp+=(_,_)=>draggingIcon=false;
+        preview.MouseLeave+=(_,_)=>draggingIcon=false;
         preview.Paint+=(_,e)=>
         {
             var px=new bool[128*64];var mask=new bool[128*64];
@@ -108,6 +121,11 @@ internal sealed class MiniWheelSettingsDialog : Form
         showGame.CheckedChanged+=(_,_)=>preview.Invalidate();
         showChat.CheckedChanged+=(_,_)=>preview.Invalidate();
         Controls.Add(showGame);Controls.Add(showChat);
+        Controls.Add(new Label{
+            Text=UiLanguage.T("Önizlemede sürüklemek için logo seç:"),
+            Left=22,Top=480,Width=300,Height=24});
+        dragTarget.Items.AddRange(["Game","Chat"]);
+        dragTarget.SelectedIndex=0;Controls.Add(dragTarget);
         var cancel=new DarkButton{Left=265,Top=511,Width=96,Height=37,
             Text=UiLanguage.T("Vazgeç")};
         cancel.Click+=(_,_)=>Close();
@@ -125,5 +143,24 @@ internal sealed class MiniWheelSettingsDialog : Form
         Controls.Add(cancel);Controls.Add(save);
         AcceptButton=save;CancelButton=cancel;
         UiSkin.ApplyDark(this);
+    }
+
+    private void MoveIconOnPreview(MouseEventArgs e)
+    {
+        bool game=dragTarget.SelectedIndex==0;
+        int px=Math.Clamp((int)Math.Round(e.X*128d/preview.ClientSize.Width),0,127);
+        int py=Math.Clamp((int)Math.Round(e.Y*64d/preview.ClientSize.Height),10,63);
+        var sprite=IconLibrary.GetCurrent(game?"Game":"Chat");
+        double theta=(WheelArtwork.StartAngle+(int)angle.Value+
+            WheelArtwork.Sweep*(game ? 0.75d : 0.25d))*Math.PI/180d;
+        double baseX=27+MiniWheelArtwork.CenterX+18*Math.Cos(theta)-
+            sprite[0].Length/2d;
+        double baseY=15+MiniWheelArtwork.CenterY+18*Math.Sin(theta)-
+            sprite.Length/2d;
+        int dx=Math.Clamp((int)Math.Round(px-sprite[0].Length/2d-baseX),-45,45);
+        int dy=Math.Clamp((int)Math.Round(py-sprite.Length/2d-baseY),-45,45);
+        if(game){gameX.Value=dx;gameY.Value=dy;}
+        else{chatX.Value=dx;chatY.Value=dy;}
+        preview.Invalidate();
     }
 }

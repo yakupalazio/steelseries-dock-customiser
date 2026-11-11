@@ -28,15 +28,18 @@ internal sealed class WheelArtworkDialog : Form
     private readonly DarkCheckBox followIcons=new(){Width=453,Height=30,Checked=true};
     private readonly PictureBox overview=new(){
         Width=228,Height=114,BackColor=Color.Black,
-        BorderStyle=BorderStyle.FixedSingle};
+        BorderStyle=BorderStyle.FixedSingle,Cursor=Cursors.SizeAll};
+    private readonly ComboBox dragTarget=new(){
+        Width=104,Height=27,DropDownStyle=ComboBoxStyle.DropDownList};
+    private bool draggingIcon;
     private readonly DarkCheckBox showGame=new(){Width=190,Height=26,Checked=true};
     private readonly DarkCheckBox showChat=new(){Width=190,Height=26,Checked=true};
     private readonly DarkCheckBox closeArcEnds=new(){Width=218,Height=28,Checked=true};
     private readonly DarkNumberBox ringThickness=new(){Minimum=1,Maximum=7,Width=92,Value=3};
-    private readonly DarkNumberBox gameDX=new(){Minimum=-15,Maximum=15,Width=70};
-    private readonly DarkNumberBox gameDY=new(){Minimum=-15,Maximum=15,Width=70};
-    private readonly DarkNumberBox chatDX=new(){Minimum=-15,Maximum=15,Width=70};
-    private readonly DarkNumberBox chatDY=new(){Minimum=-15,Maximum=15,Width=70};
+    private readonly DarkNumberBox gameDX=new(){Minimum=-45,Maximum=45,Width=70};
+    private readonly DarkNumberBox gameDY=new(){Minimum=-45,Maximum=45,Width=70};
+    private readonly DarkNumberBox chatDX=new(){Minimum=-45,Maximum=45,Width=70};
+    private readonly DarkNumberBox chatDY=new(){Minimum=-45,Maximum=45,Width=70};
     private readonly DarkCheckBox automaticLabel=new(){
         Width=218,Height=32,Checked=true,AutoSize=false};
 
@@ -66,10 +69,10 @@ internal sealed class WheelArtworkDialog : Form
         AutoLabel=labelEnabled;
         GapAngle=Math.Clamp(gapAngle,-180,180);
         FollowModeIcons=followModeIcons;
-        GameDX=Math.Clamp(gameX,-15,15);
-        GameDY=Math.Clamp(gameY,-15,15);
-        ChatDX=Math.Clamp(chatX,-15,15);
-        ChatDY=Math.Clamp(chatY,-15,15);
+        GameDX=Math.Clamp(gameX,-45,45);
+        GameDY=Math.Clamp(gameY,-45,45);
+        ChatDX=Math.Clamp(chatX,-45,45);
+        ChatDY=Math.Clamp(chatY,-45,45);
         ShowGameLogo=showGameLogo;
         ShowChatLogo=showChatLogo;
         CloseRingEnds=closeRingEnds;
@@ -91,6 +94,16 @@ internal sealed class WheelArtworkDialog : Form
         canvas.Left=24;canvas.Top=75;
         canvas.Paint+=PaintCanvas;
         overview.Paint+=PaintOverview;
+        overview.MouseDown+=(_,e)=>{
+            if(e.Button!=MouseButtons.Left || mode.SelectedIndex!=1)return;
+            draggingIcon=true;
+            MoveIconOnOverview(e);
+        };
+        overview.MouseMove+=(_,e)=>{
+            if(draggingIcon && e.Button==MouseButtons.Left)MoveIconOnOverview(e);
+        };
+        overview.MouseUp+=(_,_)=>draggingIcon=false;
+        overview.MouseLeave+=(_,_)=>draggingIcon=false;
         canvas.Invalidated+=(_,_)=>overview.Invalidate();
         canvas.MouseDown+=PaintPoint;
         canvas.MouseMove+=PaintPoint;
@@ -167,13 +180,12 @@ internal sealed class WheelArtworkDialog : Form
             Text=UiLanguage.T("ChatMix simgeleri: konum ve dönüş"),
             Left=24,Top=505,Width=455,Height=25,
             ForeColor=Color.FromArgb(134,220,249)});
-        followIcons.Text=UiLanguage.T("Game / Chat simgeleri çemberin uçlarını izlesin");
-        followIcons.Left=24;followIcons.Top=529;
-        followIcons.Checked=FollowModeIcons;
-        followIcons.CheckedChanged+=(_,_)=>{
-            FollowModeIcons=followIcons.Checked;canvas.Invalidate();
-        };
-        Controls.Add(followIcons);
+        // The old auto-follow checkbox was a no-op in the renderer.
+        // In Beta 5 each icon instead has an explicit, constrained target.
+        Controls.Add(new Label{
+            Text=UiLanguage.T("Game ve Chat konumlarını önizlemede sürükle veya X/Y ayarla."),
+            Left=24,Top=529,Width=460,Height=30,
+            ForeColor=Color.FromArgb(151,169,187)});
         var editors=new[]{
             (UiLanguage.T("Game X"),gameDX,GameDX),
             (UiLanguage.T("Game Y"),gameDY,GameDY),
@@ -231,6 +243,12 @@ internal sealed class WheelArtworkDialog : Form
             ForeColor=Color.FromArgb(134,220,249)});
         overview.Left=500;overview.Top=644;
         Controls.Add(overview);
+        Controls.Add(new Label{
+            Text=UiLanguage.T("Sürüklenen logo:"),Left=24,Top=725,
+            Width=173,Height=26,ForeColor=Color.FromArgb(151,169,187)});
+        dragTarget.Items.AddRange(["Game","Chat"]);
+        dragTarget.SelectedIndex=0;dragTarget.Left=190;dragTarget.Top=722;
+        Controls.Add(dragTarget);
 
         Controls.Add(new Label{
             Text=UiLanguage.T("Sol tık: seçilen piksel  •  Sağ tık: sil\nMavi katman, ses/ChatMix ile hareket eder."),
@@ -277,6 +295,25 @@ internal sealed class WheelArtworkDialog : Form
     {
         previewLabel.Text=UiLanguage.T("Önizleme")+$": {sample.Value}%";
         canvas.Invalidate();
+    }
+
+    private void MoveIconOnOverview(MouseEventArgs e)
+    {
+        bool game=dragTarget.SelectedIndex==0;
+        int px=Math.Clamp((int)Math.Round(e.X*128d/overview.ClientSize.Width),0,127);
+        int py=Math.Clamp((int)Math.Round(e.Y*64d/overview.ClientSize.Height),10,63);
+        var sprite=IconLibrary.GetCurrent(game?"Game":"Chat");
+        double angle=(WheelArtwork.StartAngle+GapAngle+
+            WheelArtwork.Sweep*(game ? 0.75d : 0.25d))*Math.PI/180d;
+        double baseX=1+WheelArtwork.CenterX+24*Math.Cos(angle)-sprite[0].Length/2d;
+        double baseY=10+WheelArtwork.CenterY+24*Math.Sin(angle)-sprite.Length/2d;
+        int dx=Math.Clamp((int)Math.Round(px-sprite[0].Length/2d-baseX),-45,45);
+        int dy=Math.Clamp((int)Math.Round(py-sprite.Length/2d-baseY),-45,45);
+        if(game){gameDX.Value=dx;gameDY.Value=dy;}
+        else {chatDX.Value=dx;chatDY.Value=dy;}
+        // Renderer performs nearest-valid placement within the own arc,
+        // and rejects overlapping positions rather than drawing illegally.
+        overview.Invalidate();
     }
 
     private void PaintPoint(object? sender,MouseEventArgs e)

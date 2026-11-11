@@ -468,16 +468,27 @@ internal static class SelfTests
                 WheelArtwork.Draw(alone,ringMask,1,10,null,50,DialView.ChatMix,
                     autoLabel:false,gapAngle:rotationAngle,
                     showGame:false,showChat:false);
-                foreach(var (name,angle) in new[]{
-                    ("Game",WheelArtwork.StartAngle+rotationAngle),
-                    ("Chat",WheelArtwork.StartAngle+WheelArtwork.Sweep+rotationAngle)
+                foreach(var (name,angle,gameSide) in new[]{
+                    ("Game",WheelArtwork.StartAngle+rotationAngle+
+                        WheelArtwork.Sweep*.75,true),
+                    ("Chat",WheelArtwork.StartAngle+rotationAngle+
+                        WheelArtwork.Sweep*.25,false)
                 })
                 {
                     var point=WheelArtwork.EndpointIconPosition(
-                        1,10,name,angle,ringMask);
+                        1,10,name,angle,ringMask,startAngle:
+                        WheelArtwork.StartAngle+rotationAngle,gameSide:gameSide);
                     var sprite=IconLibrary.GetCurrent(name);
-                    if(point.X<0||point.Y<10||
-                       point.X+sprite[0].Length>128||point.Y+sprite.Length>53)
+                    // At extreme rotations near an OLED edge there may be
+                    // no legal location in this channel: hide, never mislabel.
+                    if(point.X<0 || point.Y<0)
+                    {
+                        if(rotationAngle==0)
+                            throw new Exception(name+" icon missing in default layout");
+                        continue;
+                    }
+                    if(point.Y<10||point.X+sprite[0].Length>128||
+                       point.Y+sprite.Length>64)
                         throw new Exception(name+" icon clipped outside OLED");
                     for(int yy=0;yy<sprite.Length;yy++)
                     for(int xx=0;xx<sprite[yy].Length;xx++)

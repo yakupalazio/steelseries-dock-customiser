@@ -213,13 +213,13 @@ internal static class WheelArtwork
         int width=rows[0].Length,height=rows.Length;
         double rad=angle*Math.PI/180d;
         double cx=wheelX+CenterX,cy=wheelY+CenterY;
-        const double radius=29;
+        const double radius=24; // Keep icons close to their own audio arc.
         double wantX=cx+radius*Math.Cos(rad)-width/2d+offsetX;
         double wantY=cy+radius*Math.Sin(rad)-height/2d+offsetY;
         // Build a compact obstacle mask ONCE. Bitmap collision checks in
         // candidate loops were previously O(candidates × pixels × 9).
         var obstacles=new byte[128*64];
-        for(int py=10;py<53;py++)for(int px=0;px<128;px++)
+        for(int py=10;py<64;py++)for(int px=0;px<128;px++)
         {
             byte flags=0;
             double dx0=px-cx,dy0=py-cy;
@@ -232,13 +232,12 @@ internal static class WheelArtwork
         double best=double.PositiveInfinity;
         int bestX=-1,bestY=-1;
         int aroundX=Math.Clamp((int)Math.Round(wantX),0,128-width);
-        int aroundY=Math.Clamp((int)Math.Round(wantY),10,53-height);
+        int aroundY=Math.Clamp((int)Math.Round(wantY),10,64-height);
         // Search the free strip surrounding the ring, not just a small
         // square around the ideal anchor: at an OLED edge the ideal radial
         // position may be physically unavailable at some rotation angles.
-        for(int top=10;top<=53-height;top++)
-        for(int left=Math.Max(0,wheelX-25);
-            left<=Math.Min(128-width,wheelX+Width+23);left++)
+        for(int top=10;top<=64-height;top++)
+        for(int left=0;left<=128-width;left++)
         {
             int conflict=0,interior=0,wrongChannel=0;
             for(int yy=0;yy<height;yy++)for(int xx=0;xx<width;xx++)

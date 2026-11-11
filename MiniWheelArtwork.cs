@@ -68,15 +68,15 @@ internal static class MiniWheelArtwork
     {
         var sprite=IconLibrary.GetCurrent(kind);
         double rad=angle*Math.PI/180d;
-        int intendedX=(int)Math.Round(centerX+21*Math.Cos(rad)-
+        int intendedX=(int)Math.Round(centerX+18*Math.Cos(rad)-
             sprite[0].Length/2d+dx);
-        int intendedY=(int)Math.Round(centerY+21*Math.Sin(rad)-
+        int intendedY=(int)Math.Round(centerY+18*Math.Sin(rad)-
             sprite.Length/2d+dy);
         int bestX=-1,bestY=-1;double best=double.PositiveInfinity;
         // Prefer available locations within the display. Do not overlay
         // the ring, reserved header, battery widgets or the other icon.
-        for(int y=10;y<=53-sprite.Length;y++)
-        for(int x=Math.Max(0,centerX-27);x<=Math.Min(128-sprite[0].Length,centerX+38);x++)
+        for(int y=10;y<=64-sprite.Length;y++)
+        for(int x=0;x<=128-sprite[0].Length;x++)
         {
             int errors=0;
             for(int sy=0;sy<sprite.Length;sy++)
@@ -107,7 +107,7 @@ internal static class MiniWheelArtwork
 
     private static void Set(bool[] pixels,bool[] coverage,int x,int y,bool value)
     {
-        if(x<0||x>=128||y<10||y>=53)return;
+        if(x<0||x>=128||y<10||y>=64)return;
         pixels[y*128+x]=value;
         coverage[y*128+x]=true;
     }

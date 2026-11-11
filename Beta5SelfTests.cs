@@ -91,6 +91,43 @@ internal static class Beta5SelfTests
                     throw new Exception("Mini icon did not render in a clear layout");
             }
         }
+        // Full-size wheel: custom offsets and every checked ring rotation
+        // must never move either icon into the other channel or over the ring.
+        foreach(int rotation in new[]{-180,-90,0,90,180})
+        foreach(bool gameIcon in new[]{true,false})
+        foreach(int dx in new[]{-45,0,45})
+        {
+            var baseFrame=new bool[128*64];
+            var baseMask=new bool[128*64];
+            WheelArtwork.Draw(baseFrame,baseMask,50,13,null,75,
+                DialView.ChatMix,gapAngle:rotation,showGame:false,showChat:false);
+            var withIcon=(bool[])baseFrame.Clone();
+            var mask=(bool[])baseMask.Clone();
+            WheelArtwork.Draw(withIcon,mask,50,13,null,75,
+                DialView.ChatMix,gapAngle:rotation,
+                gameOffsetX:gameIcon?dx:0,chatOffsetX:gameIcon?0:dx,
+                showGame:gameIcon,showChat:!gameIcon);
+            double start=WheelArtwork.StartAngle+rotation;
+            int count=0;
+            for(int y=10;y<64;y++)for(int x=0;x<128;x++)
+            {
+                int i=y*128+x;
+                if(!withIcon[i] || baseFrame[i])continue;
+                if(baseMask[i])
+                    throw new Exception("Large icon painted on wheel");
+                double azimuth=Math.Atan2(y-(13+WheelArtwork.CenterY),
+                    x-(50+WheelArtwork.CenterX))*180d/Math.PI;
+                double progress=(azimuth-start+7200d)%360d;
+                bool own=gameIcon
+                    ? progress>=150d && progress<=300d
+                    : progress>=0d && progress<=150d;
+                if(!own)
+                    throw new Exception("Large icon crossed its ChatMix arc");
+                count++;
+            }
+            if(rotation==0 && dx==0 && count==0)
+                throw new Exception("Large ChatMix icon disappeared");
+        }
         string id=BleBatteryProvider.StableKind("test-device-id-1");
         if(!id.StartsWith("Ble:")||id!=BleBatteryProvider.StableKind("test-device-id-1")||
            id==BleBatteryProvider.StableKind("test-device-id-2"))
