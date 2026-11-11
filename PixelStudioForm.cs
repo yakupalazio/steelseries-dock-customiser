@@ -59,6 +59,7 @@ internal sealed partial class PixelStudioForm : Form
     private BatteryPreferences batteryPreferences = BatteryPreferences.Load();
     private readonly DisplayPreferences displayPreferences = DisplayPreferences.Load();
     private BatterySnapshot batterySnapshot = new();
+    private readonly BatteryWarningMonitor warningMonitor=new();
     private BatteryStatusDialog? batteryDialog;
     private SettingsDialog? settingsDialog;
     private readonly ArctisDialMonitor dialMonitor = new();
@@ -152,12 +153,14 @@ internal sealed partial class PixelStudioForm : Form
         };
         kind.Items.AddRange(AllWidgetKinds);
         kind.SelectedIndex=0;
-        dialStyle.Items.AddRange(["Bar","Wheel"]);
+        dialStyle.Items.AddRange(["Bar","Wheel","MiniWheel"]);
         dialStyle.Format+=(_,e)=>
         {
             if(e.ListItem is string name)
-                e.Value=name=="Wheel"?UiLanguage.T("Dairesel tekerlek"):
-                    UiLanguage.T("Düz çubuk");
+                e.Value=name switch{
+                    "Wheel"=>UiLanguage.T("Dairesel tekerlek"),
+                    "MiniWheel"=>UiLanguage.T("Mini dairesel tekerlek"),
+                    _=>UiLanguage.T("Düz çubuk")};
         };
         dialStyle.FormattingEnabled=true;
         dialStyle.SelectedIndex=0;
@@ -344,7 +347,7 @@ internal sealed partial class PixelStudioForm : Form
                 controllerCounter=0;
                 _=RefreshControllerConnectionAsync();
             }
-            if(++batteryRefreshCounter>=60)
+            if(++batteryRefreshCounter>=10)
             {
                 batteryRefreshCounter=0;
                 _=RefreshBatteriesAsync();
@@ -368,10 +371,11 @@ internal sealed partial class PixelStudioForm : Form
         }
         ticker.Start();
         FormClosing += HandleTrayClosing;
-        FormClosed += (_,_) => {ticker.Stop();dialMonitor.Dispose();DisposeTray();};
+        FormClosed += (_,_) => {ticker.Stop();EndBatteryDeviceWatching();dialMonitor.Dispose();DisposeTray();};
         Shown += async (_,_) =>
         {
             if(!captureMode){InitializeTray();LoadMediaPreference();}
+            if(!captureMode&&!traySmokeMode)BeginBatteryDeviceWatching();
             // Start the explicitly requested Live mode immediately on launch,
             // before slower optional phone/media polling can delay the OLED.
             if(!captureMode && !traySmokeMode && !IsDisposed && dockPreview is not null)
@@ -577,12 +581,15 @@ internal sealed partial class PixelStudioForm : Form
                 batteryPreferences.UseAdbPhoneBattery,batteryPreferences.AutoMinimizePhoneLink);
             if(IsDisposed)return;
             batterySnapshot=newest;
+            foreach(var (kind,pct) in warningMonitor.Evaluate(
+                newest,batteryPreferences,DateTimeOffset.Now))
+                NotifyLowBattery(kind,pct);
             Redraw();
             batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
             SetStatus("Piller: "+
                 string.Join(" · ",BatteryPriority.SelectThree(newest,batteryPreferences)
                     .Select(k=>k+" "+newest[k].Display))+
-                " | GG canlı; telefon/DualSense 60 sn");
+                " | GG canlı; diğer pil kaynakları 10 sn");
         }
         catch(Exception ex)
         {
@@ -664,7 +671,7 @@ internal sealed partial class PixelStudioForm : Form
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
             miniWidth.Minimum=selected.Kind=="VolumeChatMix"?60:35;
             miniWidth.Value=Math.Clamp(selected.MiniWidth,(int)miniWidth.Minimum,128);
-            dialStyle.SelectedItem=selected.DialStyle=="Wheel"?"Wheel":"Bar";
+            dialStyle.SelectedItem=selected.DialStyle;
             xPos.Value=Math.Clamp(selected.X,0,127);yPos.Value=Math.Clamp(selected.Y,LockedRows,63);
             widgetVisible.Checked=selected.Visible;
         }
@@ -679,7 +686,8 @@ internal sealed partial class PixelStudioForm : Form
     }
     private void EditWheelArtwork()
     {
-        if(selected?.Kind!="VolumeChatMix"||selected.DialStyle!="Wheel")return;
+        if(selected?.Kind!="VolumeChatMix"||
+            selected.DialStyle is not ("Wheel" or "MiniWheel"))return;
         using var dialog=new WheelArtworkDialog(selected.WheelPixels,
             selected.WheelAutoLabel,selected.WheelGapAngle,
             selected.WheelIconsFollowRing,selected.WheelGameOffsetX,

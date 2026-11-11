@@ -538,6 +538,8 @@ public sealed class DockWidget
     public bool WheelCloseEnds { get; set; } = true;
     // 3 is the original inner-fill width; higher values only extend inward.
     public int WheelRingThickness { get; set; } = 3;
+    public int BarFrameThickness { get; set; } = 1;
+    public int BarFillThickness { get; set; } = 3;
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;

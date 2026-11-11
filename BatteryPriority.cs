@@ -16,16 +16,17 @@ internal static class BatteryPriority
     {
         "Mouse"=>"Aerox Mouse",
         "Phone"=>"Galaxy S24+",
-        "DualSense"=>"DualSense",
+        "DualSense"=>"Kontrolcü",
         "Laptop"=>"Laptop",
         "Headset"=>"Nova Pro Kulaklık",
         "SpareBattery"=>"Nova Pro Yedek Pil",
-        _=>kind
+        _=>BatteryDeviceCatalog.Name(kind)
     });
 
     public static string[] Sanitize(IEnumerable<string>? priority)
     {
-        var result=(priority??[]).Where(AllKinds.Contains)
+        var result=(priority??[])
+            .Where(k=>AllKinds.Contains(k)||k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.Ordinal).ToList();
         foreach(var kind in DefaultKinds)
             if(!result.Contains(kind)) result.Add(kind);
@@ -44,6 +45,10 @@ internal static class BatteryPriority
     internal static string[] SelectThreeAt(BatterySnapshot snapshot,
         BatteryPreferences preferences,DateTimeOffset now)
         => Sanitize(preferences.PriorityKinds)
+            .Concat(snapshot.Values.Keys
+                .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase))
+                .OrderBy(k=>k,StringComparer.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(kind=>kind!="DualSense" || preferences.AutoDualSense)
             .Where(kind=>IsCurrent(snapshot[kind],now))
             .Take(3).ToArray();
@@ -55,7 +60,8 @@ internal static class BatteryPriority
         var age=now-reading.CheckedAt;
         // Readings from Phone Link / ADB / optional controller HID are polled
         // every 60s; GG and laptop are refreshed in the realtime loop.
-        double ttl=reading.Kind is "Phone" or "DualSense" ? 90 : 12;
+        double ttl=reading.Kind is "Phone" or "DualSense" ? 25 :
+            reading.Kind.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)?25:12;
         return age>=TimeSpan.FromSeconds(-5) &&
             age<=TimeSpan.FromSeconds(ttl);
     }

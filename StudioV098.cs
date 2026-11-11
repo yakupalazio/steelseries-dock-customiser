@@ -271,7 +271,7 @@ internal sealed class StudioProject
             w.Y=Math.Clamp(w.Y,0,63);
             w.StrokeWidth=Math.Clamp(w.StrokeWidth,1,3);
             w.MiniWidth=Math.Clamp(w.MiniWidth,35,128);
-            w.DialStyle=w.DialStyle=="Wheel"?"Wheel":"Bar";
+            w.DialStyle=w.DialStyle is "Wheel" or "MiniWheel" ? w.DialStyle : "Bar";
             if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
             w.WheelGapAngle=Math.Clamp(w.WheelGapAngle,-180,180);
             w.WheelGameOffsetX=Math.Clamp(w.WheelGameOffsetX,-15,15);
@@ -279,6 +279,8 @@ internal sealed class StudioProject
             w.WheelChatOffsetX=Math.Clamp(w.WheelChatOffsetX,-15,15);
             w.WheelChatOffsetY=Math.Clamp(w.WheelChatOffsetY,-15,15);
             w.WheelRingThickness=Math.Clamp(w.WheelRingThickness,1,7);
+            w.BarFrameThickness=Math.Clamp(w.BarFrameThickness,1,2);
+            w.BarFillThickness=Math.Clamp(w.BarFillThickness,1,5);
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }

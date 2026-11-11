@@ -158,23 +158,29 @@ internal static class WheelArtwork
         }
         if(view==DialView.ChatMix)
         {
-            // Position in the *free area outside* the two arc endpoints.
-            // Every rotation changes the anchor, not the upright icon bitmap.
+            // Native 07 45 Game dominance fills the SECOND half of the
+            // source ring (150..300°), Chat dominance the FIRST (0..150°).
+            // The old code incorrectly labelled the opposite endpoints.
+            // Manual offsets are constrained to each channel's own arc sector.
             if(showGame)
             {
                 if(followModeIcons)
                     DrawEndpointIcon(output,coverage,x,y,"Game",
-                        StartAngle+gapAngle,gameOffsetX,gameOffsetY);
-                else DrawModeIcon(output,coverage,x+1+gameOffsetX,
-                    y+1+gameOffsetY,"Game",false);
+                        StartAngle+Sweep*.75+gapAngle,gameOffsetX,gameOffsetY,
+                        StartAngle+gapAngle,gameSide:true);
+                else DrawEndpointIcon(output,coverage,x,y,"Game",
+                    StartAngle+Sweep*.75+gapAngle,gameOffsetX,gameOffsetY,
+                    StartAngle+gapAngle,gameSide:true);
             }
             if(showChat)
             {
                 if(followModeIcons)
                     DrawEndpointIcon(output,coverage,x,y,"Chat",
-                        StartAngle+Sweep+gapAngle,chatOffsetX,chatOffsetY);
-                else DrawModeIcon(output,coverage,x+Width-1+chatOffsetX,
-                    y+1+chatOffsetY,"Chat",true);
+                        StartAngle+Sweep*.25+gapAngle,chatOffsetX,chatOffsetY,
+                        StartAngle+gapAngle,gameSide:false);
+                else DrawEndpointIcon(output,coverage,x,y,"Chat",
+                    StartAngle+Sweep*.25+gapAngle,chatOffsetX,chatOffsetY,
+                    StartAngle+gapAngle,gameSide:false);
             }
         }
     }
@@ -200,7 +206,8 @@ internal static class WheelArtwork
     /// </summary>
     internal static (int X,int Y) EndpointIconPosition(
         int wheelX,int wheelY,string name,double angle,
-        bool[] coverage,int offsetX=0,int offsetY=0)
+        bool[] coverage,int offsetX=0,int offsetY=0,
+        double? startAngle=null,bool? gameSide=null)
     {
         var rows=IconLibrary.GetCurrent(name);
         int width=rows[0].Length,height=rows.Length;
@@ -233,7 +240,7 @@ internal static class WheelArtwork
         for(int left=Math.Max(0,wheelX-25);
             left<=Math.Min(128-width,wheelX+Width+23);left++)
         {
-            int conflict=0,interior=0;
+            int conflict=0,interior=0,wrongChannel=0;
             for(int yy=0;yy<height;yy++)for(int xx=0;xx<width;xx++)
             {
                 if(rows[yy][xx]!='1')continue;
@@ -241,12 +248,22 @@ internal static class WheelArtwork
                 byte flags=obstacles[py*128+px];
                 if((flags&2)!=0)interior++;
                 if((flags&1)!=0)conflict++;
+                if(startAngle.HasValue && gameSide.HasValue)
+                {
+                    double azimuth=Math.Atan2(py-cy,px-cx)*180d/Math.PI;
+                    double progress=(azimuth-startAngle.Value+7200d)%360d;
+                    bool own=gameSide.Value
+                        ?progress>=Sweep/2d && progress<=Sweep
+                        :progress>=0 && progress<=Sweep/2d;
+                    if(!own)wrongChannel++;
+                }
             }
             // If there's no perfect place near a screen edge, prefer a
             // fully visible icon with the fewest collisions.
             double displacement=(left-wantX)*(left-wantX)+
                 (top-wantY)*(top-wantY);
-            double score=conflict*1000000+interior*100000+displacement;
+            double score=conflict*100000000d+interior*10000000d+
+                wrongChannel*1000000d+displacement;
             if(score<best)
             {
                 best=score;bestX=left;bestY=top;
@@ -256,11 +273,12 @@ internal static class WheelArtwork
     }
 
     private static void DrawEndpointIcon(bool[] output,bool[] coverage,
-        int wheelX,int wheelY,string name,double angle,int offsetX,int offsetY)
+        int wheelX,int wheelY,string name,double angle,int offsetX,int offsetY,
+        double startAngle,bool gameSide)
     {
         var rows=IconLibrary.GetCurrent(name);
         var (left,top)=EndpointIconPosition(wheelX,wheelY,name,angle,
-            coverage,offsetX,offsetY);
+            coverage,offsetX,offsetY,startAngle,gameSide);
         for(int yy=0;yy<rows.Length;yy++)
         for(int xx=0;xx<rows[yy].Length;xx++)
             if(rows[yy][xx]=='1')Put(output,coverage,left+xx,top+yy,true);

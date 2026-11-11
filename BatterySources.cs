@@ -16,6 +16,8 @@ internal sealed record BatteryReading(string Kind,int? Percent,string Source,
     // Explicit source-provided charging state: never infer it from a paired
     // Bluetooth record or a spare-battery mention in another device's detail.
     public bool IsCharging => Charging==true;
+    public string FriendlyName {get;init;}="";
+    public string IconKind {get;init;}="";
     public string Display => Percent is int p ? $"{p}%" : "--%";
     public string DisplayWithCharge => Display+(IsCharging?" ⚡":"");
     public bool Available => Percent is >=0 and <=100;
@@ -60,6 +62,10 @@ internal static class BatterySources
                     "Deneysel: son alınan HID raporundan yaklaşık seviye.",
                     DateTimeOffset.Now);
         }
+        // Only live GATT 0x2A19 reads from already-paired devices may
+        // populate additional, dynamically discovered battery slots.
+        foreach(var discovered in await BleBatteryProvider.ReadAsync())
+            snapshot.Values[discovered.Kind]=discovered;
         // Query actual Bluetooth connection status only in the slow loop.
         bool connected=await DualSenseConnection.IsConnectedAsync();
         return new BatterySnapshot{
@@ -72,7 +78,7 @@ internal static class BatterySources
     /// Per-second lightweight refresh: Windows PowerStatus and local GG only.
     /// The expensive Bluetooth device enumeration is never run in this loop.
     /// Phone Link UIA, ADB and optional DualSense input are sampled separately
-    /// every five seconds. The OLED framebuffer may still refresh every second.
+    /// every ten seconds. The OLED framebuffer may still refresh every second.
     /// </summary>
     public static async Task<BatterySnapshot> PollRealtimeAsync(BatterySnapshot previous)
     {

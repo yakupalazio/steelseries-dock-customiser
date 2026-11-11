@@ -14,6 +14,10 @@ internal sealed class BatteryPreferences
     public bool AutoDualSense {get;set;}=true;
     public bool ExperimentalControllerHid {get;set;}=false;
     public bool UseAdbPhoneBattery {get;set;}=false;
+    public bool EnableLowBatteryWarnings {get;set;}=true;
+    public int LowBatteryWarningPercent {get;set;}=20;
+    public int CriticalBatteryWarningPercent {get;set;}=10;
+    public Dictionary<string,int> LowBatteryThresholds {get;set;}=new();
     public bool AutoMinimizePhoneLink {get;set;}=false;
     public static string FilePath=>Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -26,7 +30,8 @@ internal sealed class BatteryPreferences
             if(File.Exists(FilePath))
             {
                 var pref=JsonSerializer.Deserialize<BatteryPreferences>(File.ReadAllText(FilePath));
-                if(pref!=null){pref.PriorityKinds=BatteryPriority.Sanitize(pref.PriorityKinds);return pref;}
+                if(pref!=null){pref.PriorityKinds=BatteryPriority.Sanitize(pref.PriorityKinds);
+                    pref.LowBatteryThresholds??=new();return pref;}
             }
             // Carry over the old experimental-device flag, but apply the new
             // default priority instead of the former hard-coded 3 devices.
@@ -50,6 +55,7 @@ internal sealed class BatteryPreferences
     public void Save()
     {
         PriorityKinds=BatteryPriority.Sanitize(PriorityKinds);
+        LowBatteryThresholds??=new();
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         File.WriteAllText(FilePath,JsonSerializer.Serialize(this,
             new JsonSerializerOptions{WriteIndented=true}));
@@ -86,6 +92,13 @@ internal sealed class BatteryStatusDialog : Form
     {
         Left=17,Top=509,Width=790,Text="Android ADB pil kaynağı (isteğe bağlı)"
     };
+    private readonly DarkCheckBox lowWarning=new(){
+        Left=17,Top=614,Width=400,Height=28,
+        Text="Düşük pil uyarıları"};
+    private readonly DarkNumberBox warningPercent=new(){
+        Left=500,Top=614,Width=70,Minimum=1,Maximum=99};
+    private readonly DarkNumberBox criticalPercent=new(){
+        Left=674,Top=614,Width=70,Minimum=1,Maximum=99};
     private readonly DarkCheckBox minimizePhoneLink=new()
     {
         Left=17,Top=536,Width=790,
@@ -98,8 +111,8 @@ internal sealed class BatteryStatusDialog : Form
         prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
         Text="Pil cihazları — öncelik sıralaması";
         StartPosition=FormStartPosition.CenterParent;
-        ClientSize=new Size(900,728);
-        MinimumSize=new Size(900,728);
+        ClientSize=new Size(900,806);
+        MinimumSize=new Size(900,806);
         AutoScroll=true;
         Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
@@ -128,6 +141,25 @@ internal sealed class BatteryStatusDialog : Form
         foreach(var kind in BatteryPriority.Sanitize(prefs.PriorityKinds))
             priority.Items.Add(kind);
         priority.SelectedIndex=0;
+        var priorityMenu=new ContextMenuStrip();
+        var thresholdItem=new ToolStripMenuItem(UiLanguage.T("Cihaz pil uyarısı eşiği..."));
+        thresholdItem.Click+=(_,_)=>
+        {
+            if(priority.SelectedItem is not string kind)return;
+            int current=prefs.LowBatteryThresholds.TryGetValue(kind,out var set)
+                ?set:prefs.LowBatteryWarningPercent;
+            using var editor=new BatteryAlertThresholdDialog(kind,current);
+            if(editor.ShowDialog(this)!=DialogResult.OK)return;
+            prefs.LowBatteryThresholds[kind]=editor.Percent;
+        };
+        priorityMenu.Items.Add(thresholdItem);
+        priority.ContextMenuStrip=priorityMenu;
+        priority.MouseDown+=(_,e)=>
+        {
+            if(e.Button!=MouseButtons.Right)return;
+            int index=priority.IndexFromPoint(e.Location);
+            if(index>=0)priority.SelectedIndex=index;
+        };
         var up=new DarkButton{Left=382,Top=294,Width=76,Height=32,Text="Yukarı"};
         var down=new DarkButton{Left=382,Top=334,Width=76,Height=32,Text="Aşağı"};
         // Keep the priority controls separate from other device editing.
@@ -141,7 +173,7 @@ internal sealed class BatteryStatusDialog : Form
         Controls.Add(dualSense);
         Controls.Add(new Label{
             Left=17,Top=459,Width=834,Height=22,
-            Text="Telefon ve DualSense okumaları 60 saniyede bir; GG/laptop her saniye.",
+            Text="Pil kaynakları 10 saniyede bir; bağlantı olayları mümkünse anında.",
             ForeColor=Color.DarkSlateGray
         });
         experimental.Checked=prefs.ExperimentalControllerHid;
@@ -167,13 +199,23 @@ internal sealed class BatteryStatusDialog : Form
                 "Arka planda pil okuması için isteğe bağlı yetkilendirilmiş ADB kullanılabilir.",
             ForeColor=Color.DarkSlateGray
         });
-        var applyButton=new DarkButton{Left=649,Top=617,Width=207,Height=32,
+        lowWarning.Checked=prefs.EnableLowBatteryWarnings;
+        warningPercent.Value=Math.Clamp(prefs.LowBatteryWarningPercent,1,99);
+        criticalPercent.Value=Math.Clamp(prefs.CriticalBatteryWarningPercent,1,99);
+        Controls.Add(lowWarning);Controls.Add(warningPercent);
+        Controls.Add(criticalPercent);
+        Controls.Add(new Label{Text="Uyarı %",Left=440,Top=617,Width=55,Height=21});
+        Controls.Add(new Label{Text="Kritik %",Left=614,Top=617,Width=56,Height=21});
+        var applyButton=new DarkButton{Left=649,Top=679,Width=207,Height=32,
             Text="Öncelikleri uygula"};
         applyButton.Click+=(_,_)=>{
             prefs.PriorityKinds=priority.Items.Cast<string>().ToArray();
             prefs.AutoDualSense=dualSense.Checked;
             prefs.ExperimentalControllerHid=experimental.Checked;
             prefs.UseAdbPhoneBattery=adb.Checked;
+            prefs.EnableLowBatteryWarnings=lowWarning.Checked;
+            prefs.LowBatteryWarningPercent=(int)warningPercent.Value;
+            prefs.CriticalBatteryWarningPercent=(int)criticalPercent.Value;
             prefs.AutoMinimizePhoneLink=false;
             prefs.Save();
             onApply();
@@ -241,8 +283,9 @@ internal sealed class BatteryStatusDialog : Form
         string[] headers=["Cihaz","Pil","Doğrulanan kaynak","Durum"];
         for(int i=0;i<headers.Length;i++)
             grid.Columns[i].HeaderText=UiLanguage.T(headers[i]);
-        for(int i=0;i<BatteryPriority.AllKinds.Length;i++)
-            grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(BatteryPriority.AllKinds[i]);
+        for(int i=0;i<grid.Rows.Count;i++)
+            if(grid.Rows[i].Tag is string kind)
+                grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(kind);
         UpdateRows();
     }
 
@@ -270,10 +313,30 @@ internal sealed class BatteryStatusDialog : Form
     {
         if(IsDisposed)return;
         var snap=snapshotGetter();
-        for(int i=0;i<BatteryPriority.AllKinds.Length;i++)
+        var kinds=BatteryPriority.AllKinds.Concat(snap.Values.Keys
+            .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if(grid.Rows.Count!=kinds.Length ||
+           kinds.Where((kind,i)=>i<grid.Rows.Count &&
+               !string.Equals(grid.Rows[i].Tag as string,kind,
+                   StringComparison.OrdinalIgnoreCase)).Any())
         {
-            string kind=BatteryPriority.AllKinds[i];
+            grid.Rows.Clear();
+            foreach(var kind in kinds)
+            {
+                int row=grid.Rows.Add(BatteryPriority.DisplayName(kind),"--%","","");
+                grid.Rows[row].Tag=kind;
+            }
+        }
+        foreach(var kind in kinds)
+            if(!priority.Items.Cast<string>().Any(k=>
+                k.Equals(kind,StringComparison.OrdinalIgnoreCase)))
+                priority.Items.Add(kind);
+        for(int i=0;i<kinds.Length;i++)
+        {
+            string kind=kinds[i];
             var reading=snap[kind];
+            grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(kind);
             grid.Rows[i].Cells[1].Value=reading.Display;
             grid.Rows[i].Cells[2].Value=UiLanguage.T(reading.Source);
             grid.Rows[i].Cells[3].Value=UiLanguage.T(reading.Detail);

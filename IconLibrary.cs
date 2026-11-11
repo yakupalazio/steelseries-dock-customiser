@@ -8,7 +8,8 @@ namespace SteelseriesDockCustomiser;
 
 internal static class IconLibrary
 {
-    public static readonly string[] Names=["Mouse","Phone","DualSense","Headset","Laptop","Spotify","Media","Game","Chat","Charging"];
+    public static readonly string[] Names=["Mouse","Phone","DualSense","Headset","Laptop","Spotify","Media","Game","Chat","Charging",
+        "Earbuds","Keyboard","Speaker","Bluetooth","Usb","Wireless"];
     private static readonly string FileName=Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","icons-v09.json");

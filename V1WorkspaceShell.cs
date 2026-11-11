@@ -502,10 +502,10 @@ internal sealed partial class PixelStudioForm
             modernDialStyleRow.Visible=selected?.Kind=="VolumeChatMix";
         if(modernWheelEditRow!=null)
             modernWheelEditRow.Visible=selected?.Kind=="VolumeChatMix" &&
-                selected.DialStyle=="Wheel";
+                selected.DialStyle is "Wheel" or "MiniWheel";
         if(modernDialWidthRow!=null)
             modernDialWidthRow.Visible=selected?.Kind=="GameMiniPlayer" ||
-                (selected?.Kind=="VolumeChatMix"&&selected.DialStyle!="Wheel");
+                (selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar");
         if(modernDockStatus!=null)
         {
             string message=dockPreview.HardwareStatus;

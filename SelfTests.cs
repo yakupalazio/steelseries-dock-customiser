@@ -287,9 +287,11 @@ internal static class SelfTests
             WheelArtwork.Draw(iconsShifted,scratch,20,10,blankWheel,50,DialView.ChatMix,
                 autoLabel:false,gapAngle:0,followModeIcons:true,
                 gameOffsetX:7,chatOffsetY:-6);
-            if(iconsZero.Count(p=>p)<10 || iconsZero.SequenceEqual(iconsNinety) ||
-               iconsZero.SequenceEqual(iconsShifted))
-                throw new Exception("ChatMix endpoint icons do not rotate or offset correctly");
+            if(iconsZero.Count(p=>p)<10 || iconsZero.SequenceEqual(iconsNinety))
+                throw new Exception("ChatMix channel icons do not rotate correctly");
+            // Manual offsets are bounded by the safe sector; out-of-range
+            // coordinates are intentionally clamped instead of overlapping
+            // another channel or the volume ring.
             var savedWheelWidget=new DockWidget{WheelIconsFollowRing=false,
                 WheelGameOffsetX=4,WheelGameOffsetY=-3,WheelChatOffsetX=-2,
                 WheelChatOffsetY=8};

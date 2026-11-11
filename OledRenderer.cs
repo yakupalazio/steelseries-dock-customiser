@@ -137,6 +137,70 @@ internal static class OledRenderer
             "00110000000",
             "00010000000"
         ],
+        ["Earbuds"] = [
+            "000000000000",
+            "001110001110",
+            "011110011110",
+            "011010010110",
+            "011010010110",
+            "001010001010",
+            "001010001010",
+            "001010001010",
+            "000110000110",
+            "000010000100",
+            "000000000000"
+        ],
+        ["Keyboard"] = [
+            "1111111111111",
+            "1000000000001",
+            "1010101010101",
+            "1000000000001",
+            "1010101010101",
+            "1000000000001",
+            "1000111110001",
+            "1111111111111"
+        ],
+        ["Speaker"] = [
+            "00111111100",
+            "01100000110",
+            "01001110010",
+            "01010101010",
+            "01010101010",
+            "01001110010",
+            "01100000110",
+            "00111111100"
+        ],
+        ["Bluetooth"] = [
+            "000010000",
+            "000011000",
+            "010010100",
+            "001011000",
+            "000110000",
+            "001011000",
+            "010010100",
+            "000011000",
+            "000010000"
+        ],
+        ["Usb"] = [
+            "000010000",
+            "000111000",
+            "001010100",
+            "001010100",
+            "001010100",
+            "001010100",
+            "010010010",
+            "011111110",
+            "000010000"
+        ],
+        ["Wireless"] = [
+            "11111111111",
+            "00000000000",
+            "01111111110",
+            "00000000000",
+            "00011111000",
+            "00000000000",
+            "00000100000"
+        ],
         ["Charging"] = [
             "0011",
             "0110",
@@ -223,6 +287,10 @@ internal static class OledRenderer
         "SystemCpu" or "SystemRam" or "NetworkPing" =>
             new(w.X,w.Y,Math.Min(Width-w.X,83),8),
         "VolumeChatMix" when w.DialStyle=="Wheel" => WheelBounds(w),
+        "VolumeChatMix" when w.DialStyle=="MiniWheel" =>
+            new(Math.Max(0,w.X-26),Math.Max(10,w.Y-14),
+                Math.Min(128,MiniWheelArtwork.Width+75),
+                Math.Min(53-Math.Max(10,w.Y-14),MiniWheelArtwork.Height+27)),
         "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,60,128)),25),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
@@ -295,8 +363,11 @@ internal static class OledRenderer
                     if(slot<1||slot>currentDevices.Length)break;
                     device=currentDevices[slot-1];
                 }
-                DrawIcon(px,device,x,y);
                 var reading=batteries?[device];
+                DrawIcon(px,reading?.IconKind?.Length>0
+                    ?reading.IconKind
+                    :device.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)
+                        ?BatteryDeviceCatalog.Icon(device):device,x,y);
                 string pct=reading?.Display??"--%";
                 int labelX=x+13;
                 DrawText(px,pct,labelX,y+2,1);
@@ -316,12 +387,12 @@ internal static class OledRenderer
                 if(w.FontSize>=15)
                     DrawClock(px,DisplayText(w),x,y,Math.Clamp(w.StrokeWidth,1,3));
                 else
-                    DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
-                        Math.Clamp(w.StrokeWidth,1,3));
+                    DrawReadableDateTime(px,DisplayText(w),x,y,
+                        Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
                 break;
             case "MediaClock":
-                DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
-                    Math.Clamp(w.StrokeWidth,1,3));
+                DrawReadableDateTime(px,DisplayText(w),x,y,
+                    Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
                 break;
             case "GameTitle":
                 DrawMarquee(px,game?.IsRunning==true?game.Name:
@@ -355,8 +426,8 @@ internal static class OledRenderer
                 DrawMarquee(px,DisplayText(w,playback),x,y,Scale(w.FontSize));
                 break;
             case "Date":
-                DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
-                    Math.Clamp(w.StrokeWidth,1,3));
+                DrawReadableDateTime(px,DisplayText(w),x,y,
+                    Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
                 break;
             default:
                 DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
@@ -441,7 +512,15 @@ internal static class OledRenderer
             DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromMinutes(10);
         int width=Math.Max(3,bounds.Width-2);
 
-        if(widget.DialStyle=="Wheel")
+        if(widget.DialStyle=="MiniWheel")
+        {
+            MiniWheelArtwork.Draw(tile,mask,x,y,WheelArtwork.Value(snapshot,fresh),
+                snapshot.View,widget.WheelGapAngle,
+                widget.WheelRingThickness,widget.WheelShowGame,widget.WheelShowChat,
+                widget.WheelGameOffsetX,widget.WheelGameOffsetY,
+                widget.WheelChatOffsetX,widget.WheelChatOffsetY);
+        }
+        else if(widget.DialStyle=="Wheel")
         {
             WheelArtwork.Draw(tile,mask,x,y,widget.WheelPixels,
                 WheelArtwork.Value(snapshot,fresh),snapshot.View,widget.WheelAutoLabel,
@@ -459,15 +538,10 @@ internal static class OledRenderer
 
         if(snapshot.View==DialView.ChatMix)
         {
-            DrawText(tile,"CHATMIX",x+1,y+1,1);
-            var left=fresh?snapshot.Game:null;
-            var right=fresh?snapshot.Chat:null;
-            DrawText(tile,left.HasValue&&right.HasValue
-                ?$"G{left.Value} C{right.Value}":"G-- C--",x+1,y+10,1);
-            DrawProgress(tile,x+1,y+19,width,
-                left.HasValue&&right.HasValue
-                    ?Math.Clamp((int)Math.Round(50d+(left.Value-right.Value)/2d),0,100)
-                    :50);
+            DrawSplitChatMix(tile,x,y,width,
+                WheelArtwork.Value(snapshot,fresh),
+                widget.WheelShowGame,widget.WheelShowChat,
+                widget.BarFrameThickness,widget.BarFillThickness);
         }
         else
         {
@@ -485,12 +559,57 @@ internal static class OledRenderer
                 // A wheel is a transparent 1-bit sprite except where it
                 // explicitly draws lit or black pixels. Other widgets can
                 // occupy its curved corners without being wiped away.
-                if(widget.DialStyle=="Wheel")
+                if(widget.DialStyle is "Wheel" or "MiniWheel")
                 {
                     if(mask[yy*Width+xx])px[yy*Width+xx]=tile[yy*Width+xx];
                 }
                 else px[yy*Width+xx]=tile[yy*Width+xx];
             }
+    }
+
+    // Two independent halves: neutral balance is completely empty, while
+    // the center divider is always visible. The left side is Game, the right
+    // side is Chat; both use user-customizable pixel Icon Workshop sprites.
+    private static void DrawSplitChatMix(bool[] px,int x,int y,int width,
+        int? mix,bool showGame,bool showChat,int borderThickness,int fillThickness)
+    {
+        width=Math.Clamp(width,26,128-Math.Max(0,x));
+        int center=x+width/2;
+        int barY=y+14,barHeight=8;
+        int left=x+1,right=x+width;
+        int frame=Math.Clamp(borderThickness,1,2);
+        int fillH=Math.Clamp(fillThickness,1,5);
+        if(showGame)
+        {
+            var game=IconLibrary.GetCurrent("Game");
+            DrawChargeBolt(px,x+1,y+1,game);
+        }
+        if(showChat)
+        {
+            var chat=IconLibrary.GetCurrent("Chat");
+            DrawChargeBolt(px,right-chat[0].Length,y+1,chat);
+        }
+        for(int dx=0;dx<width;dx++)for(int dy=0;dy<barHeight;dy++)
+        {
+            bool edge=dx<frame || dx>=width-frame ||
+                dy<frame || dy>=barHeight-frame || Math.Abs(x+dx-center)<frame;
+            if(edge)Dot(px,x+dx,barY+dy);
+        }
+        // For the optical 0%, no fill; the middle is balance 50%.
+        int position=mix??50;
+        if(mix.HasValue && position!=50)
+        {
+            int innerHalf=Math.Max(0,(width/2)-frame-1);
+            int fill=(int)Math.Round(Math.Abs(position-50)*2d*innerHalf/100d);
+            int fy=barY+(barHeight-fillH)/2;
+            for(int i=0;i<fill;i++)
+            {
+                int at=position>50?center-frame-1-i:center+frame+i;
+                for(int yy=0;yy<fillH;yy++)
+                    if(at>x+frame-1&&at<right-frame)
+                        Dot(px,at,fy+yy);
+            }
+        }
     }
 
     // The charging badge is an editable Icon Workshop sprite, not the OEM header icon.
@@ -701,28 +820,106 @@ internal static class OledRenderer
             Dot(px,x+xx,y+yy);
     }
 
+    // Thick time/date fonts must not simply stamp 3x3 squares over adjacent
+    // 5x7 characters. Each glyph gets its own width and its enclosed holes
+    // are preserved. If a long date does not fit, reduce stroke before losing
+    // digits at the OLED's right edge.
+    private static void DrawReadableDateTime(bool[] output,string text,
+        int x,int y,int scale,int requested)
+    {
+        string label=ToPixelAlphabet(text);
+        if(label.Length==0)return;
+        int weight=Math.Clamp(requested,1,3);
+        scale=Math.Clamp(scale,1,2);
+        while(scale>1 && label.Length*(5*scale+weight+1)>Width-x)scale--;
+        while(weight>1 && label.Length*(5*scale+weight)>Width-x)weight--;
+        int advance=5*scale+weight;
+        foreach(var ch in label)
+        {
+            if(Glyphs.TryGetValue(ch,out var rows))
+            {
+                int tileW=5*scale+weight-1,tileH=7*scale+weight-1;
+                bool[,] tile=new bool[tileH,tileW];
+                for(int yy=0;yy<7;yy++)
+                for(int xx=0;xx<5;xx++)
+                    if(rows[yy][xx]=='1')
+                        for(int ty=0;ty<scale+weight-1;ty++)
+                        for(int tx=0;tx<scale+weight-1;tx++)
+                        {
+                            int xx0=xx*scale+tx,yy0=yy*scale+ty;
+                            if(xx0<tileW && yy0<tileH)tile[yy0,xx0]=true;
+                        }
+                // Protect enclosed zero-counters, even when glyph is bold.
+                for(int yy=0;yy<7;yy++)for(int xx=0;xx<5;xx++)
+                    if(rows[yy][xx]=='0' && IsEnclosedGlyphCell(rows,xx,yy))
+                        for(int ty=0;ty<scale;ty++)for(int tx=0;tx<scale;tx++)
+                            tile[yy*scale+ty,xx*scale+tx]=false;
+                for(int gy=0;gy<tileH;gy++)
+                for(int gx=0;gx<tileW;gx++)
+                    if(tile[gy,gx])Dot(output,x+gx,y+gy);
+            }
+            x+=advance;
+            if(x>=Width)break;
+        }
+    }
+
+    private static bool IsEnclosedGlyphCell(string[] rows,int gx,int gy)
+    {
+        if(gx<0||gy<0||gx>=5||gy>=7||rows[gy][gx]!='0')
+            return false;
+        var visited=new bool[7,5];
+        var pending=new Stack<(int X,int Y)>();
+        pending.Push((gx,gy));
+        while(pending.Count>0)
+        {
+            var (x,y)=pending.Pop();
+            if(x<0||x>=5||y<0||y>=7)return false;
+            if(visited[y,x]||rows[y][x]=='1')continue;
+            visited[y,x]=true;
+            pending.Push((x+1,y));pending.Push((x-1,y));
+            pending.Push((x,y+1));pending.Push((x,y-1));
+        }
+        return true;
+    }
+
+    // Fixed 9×15 seven-segment digits: 1-3px strokes grow toward the
+    // *inside* of each segment. Both counters stay open even for 8 at 3px.
     private static void DrawClock(bool[] px,string value,int x,int y,int thickness)
     {
         const int SegT=1,SegUL=2,SegUR=4,SegM=8,SegLL=16,SegLR=32,SegB=64;
         int[] map=[119,36,93,109,46,107,123,37,127,111];
-        foreach(char c in value)
+        int t=Math.Clamp(thickness,1,3);
+        void H(int dx,int dy)
         {
-            if(c==':')
+            for(int yy=0;yy<t;yy++)for(int xx=2;xx<=6;xx++)
+                Dot(px,x+dx+xx,y+dy+yy);
+        }
+        void V(int dx,int dy)
+        {
+            for(int yy=0;yy<=3;yy++)for(int xx=0;xx<t;xx++)
+                Dot(px,x+dx+xx,y+dy+yy);
+        }
+        foreach(char ch in value)
+        {
+            if(ch==':')
             {
-                StrokeDot(px,x+2,y+4,thickness);
-                StrokeDot(px,x+2,y+9,thickness);
-                x+=7;continue;
+                for(int a=0;a<t;a++)for(int b=0;b<t;b++)
+                {
+                    Dot(px,x+2+a,y+4+b);
+                    Dot(px,x+2+a,y+10+b);
+                }
+                x+=6;continue;
             }
-            if(!char.IsDigit(c)){x+=10;continue;}
-            int flags=map[c-'0'];
-            if((flags&SegT)!=0)Line(px,x+2,y,x+6,y,thickness);
-            if((flags&SegUL)!=0)Line(px,x+1,y+2,x+1,y+5,thickness);
-            if((flags&SegUR)!=0)Line(px,x+7,y+2,x+7,y+5,thickness);
-            if((flags&SegM)!=0)Line(px,x+2,y+6,x+6,y+6,thickness);
-            if((flags&SegLL)!=0)Line(px,x+1,y+8,x+1,y+11,thickness);
-            if((flags&SegLR)!=0)Line(px,x+7,y+8,x+7,y+11,thickness);
-            if((flags&SegB)!=0)Line(px,x+2,y+12,x+6,y+12,thickness);
-            x+=11+thickness-1;
+            if(!char.IsDigit(ch)){x+=11;continue;}
+            int flags=map[ch-'0'];
+            if((flags&SegT)!=0)H(0,0);
+            if((flags&SegUL)!=0)V(0,2);
+            if((flags&SegUR)!=0)V(9-t,2);
+            if((flags&SegM)!=0)H(0,6);
+            if((flags&SegLL)!=0)V(0,10);
+            if((flags&SegLR)!=0)V(9-t,10);
+            if((flags&SegB)!=0)H(0,15-t);
+            x+=11;
         }
     }
 

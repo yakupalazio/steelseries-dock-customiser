@@ -230,6 +230,16 @@ internal sealed partial class PixelStudioForm
         Console.WriteLine("PASS: one-click tray hide, restore and real quit.");
     }
 
+    private void NotifyLowBattery(string kind,int percent)
+    {
+        if(tray is null || !tray.Visible)return;
+        string name=BatteryPriority.DisplayName(kind);
+        tray.ShowBalloonTip(6000,
+            UiLanguage.English?"Low battery":"Düşük pil",
+            $"{name}: {percent}%",
+            ToolTipIcon.Warning);
+    }
+
     private void DisposeTray()
     {
         if(tray!=null)
