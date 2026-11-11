@@ -35,22 +35,11 @@ Bu gösterge SteelSeries'in resmî görselinden **esinlenilmiş, 45×42 gerçek 
 
 **Ayarlar → Dil / Language** bölümünden Türkçe veya İngilizce seçebilirsin. Seçim anında etkinleşir ve sonraki açılışlarda korunur. **Hakkında** sekmesi ayarlar menüsünün en altındadır.
 
-## Gizli DOOM MODE
-
-1. Soldan **Ayarlar → Hakkında** bölümüne gir.
-2. `↑ ↑ ↓ ↓ ← → ← → B A` tuşlarına sırayla bas.
-3. Bilgisayarda yalnızca **Dock ekranına bak** mesajını görürsün. Oyun **otomatik olarak** dock OLED'e aktarılır; bilgisayarda oyun görüntüsü çizilmez. `W/S` ileri/geri; `A/D` dön; `Space` ateş; `R` oyunu sıfırla; `ESC` çıkış.
-
-Bu oyun DOOM'un kendisi değildir; telifli oyun varlıkları kullanılmadan hazırlanmış özgün bir retro FPS Easter egg'idir.
-
-Konami kodunun girilmesi deneysel tam ekran OLED aktarımını başlatma eylemidir. Yalnızca Nova Pro Wireless OLED koleksiyonu ve güvenli geri-dönüş aracı doğrulanırsa başlar. Üst pil satırları dâhil 128×64 ekranı değiştirir; **süre sınırı yoktur**. Öncesinde bizim **Canlı** modumuz açıksa güvenli biçimde duraklatılır; DOOM kapatıldığında yalnızca öncesinde açıksa otomatik geri başlatılır. Durdur, `ESC`, pencereyi kapat veya odağı değiştirerek oyundan çıkabilirsin. OLED yanığına karşı sabit görüntüyü uzun süre bırakma. Donanımda hızlı akış testi cihaz üzerinde ayrıca doğrulanmalıdır.
-
 ## Sorun giderme
 
 - Pil görünmüyor: SteelSeries GG'yi çalıştır, cihaz bağlantılarını kontrol et. Telefon için Phone Link durumu her Windows sürümünde erişilebilir olmayabilir.
 - Fiziksel OLED değişmiyor: önce doğrulanmış `ggoled` aracının kurulumunu ve dock USB bağlantısını kontrol et. Uygulama donanımın yoksa gerçeği taklit ederek sahte pil değeri göstermez.
 - Önizleme fotoğrafsız: `dock-photo-local.png` dosyasının EXE yanında bulunduğunu kontrol et. GitHub kaynak derlemeleri bu dosyayı içermediği için vektör dock gösterebilir.
-- Oyun modundan çıkmak: `ESC`. Gerçek OLED aktarımı sonlandırılırken cihazın varsayılan ekranına geri dönme komutu gönderilir.
 
 Kaynak kod ve güncellemeler: https://github.com/yakupalazio/steelseries-dock-customiser
 
