@@ -169,6 +169,7 @@ internal sealed class ArctisDialMonitor : IDisposable
             :FindInputs();
         if(found.Length==0){log("No candidate input collections");return;}
         int seen=0;
+        var watch=System.Diagnostics.Stopwatch.StartNew();
         var expires=DateTimeOffset.UtcNow+duration;
         object logGate=new();
         Task.WaitAll(found.Select((device,index)=>Task.Run(()=>
@@ -193,7 +194,7 @@ internal sealed class ArctisDialMonitor : IDisposable
                         int n=Interlocked.Increment(ref seen);
                         if(n<=100)
                         {
-                            string row=$"RAW collection={index+1} packet={n} bytes={count} "+
+                            string row=$"T={watch.ElapsedMilliseconds}ms RAW collection={index+1} packet={n} bytes={count} "+
                                 Convert.ToHexString(raw[..Math.Min(24,count)])+
                                 (decoded?$" decoded={ev.View} vol={ev.Volume} "+
                                     $"steps={ev.VolumeAttenuationSteps} G={ev.Game} C={ev.Chat}":

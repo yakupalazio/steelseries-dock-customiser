@@ -146,10 +146,13 @@ internal static class Program
             Environment.ExitCode=count>0?0:2;
             return;
         }
-        if(args.Contains("--dial-raw-watch")||args.Contains("--dial-raw-all-watch"))
+        if(args.Contains("--dial-raw-watch")||args.Contains("--dial-raw-all-watch")||
+           args.Contains("--dial-mode-only-watch"))
         {
-            bool allInterfaces=args.Contains("--dial-raw-all-watch");
-            try{ArctisDialMonitor.ReadOnlyRawWatch(TimeSpan.FromSeconds(allInterfaces?60:20),
+            bool modeOnly=args.Contains("--dial-mode-only-watch");
+            bool allInterfaces=modeOnly||args.Contains("--dial-raw-all-watch");
+            if(modeOnly)Console.WriteLine("MODE ONLY: press the dial to toggle modes; do not rotate it for 30 seconds.");
+            try{ArctisDialMonitor.ReadOnlyRawWatch(TimeSpan.FromSeconds(modeOnly?30:allInterfaces?60:20),
                 line=>Console.WriteLine(line),allInterfaces);}
             catch(Exception ex)
             {
