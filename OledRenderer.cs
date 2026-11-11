@@ -570,7 +570,7 @@ internal static class OledRenderer
     // Two independent halves: neutral balance is completely empty, while
     // the center divider is always visible. The left side is Game, the right
     // side is Chat; both use user-customizable pixel Icon Workshop sprites.
-    private static void DrawSplitChatMix(bool[] px,int x,int y,int width,
+    internal static void DrawSplitChatMix(bool[] px,int x,int y,int width,
         int? mix,bool showGame,bool showChat,int borderThickness,int fillThickness)
     {
         width=Math.Clamp(width,26,128-Math.Max(0,x));
@@ -824,7 +824,7 @@ internal static class OledRenderer
     // 5x7 characters. Each glyph gets its own width and its enclosed holes
     // are preserved. If a long date does not fit, reduce stroke before losing
     // digits at the OLED's right edge.
-    private static void DrawReadableDateTime(bool[] output,string text,
+    internal static void DrawReadableDateTime(bool[] output,string text,
         int x,int y,int scale,int requested)
     {
         string label=ToPixelAlphabet(text);
@@ -884,7 +884,7 @@ internal static class OledRenderer
 
     // Fixed 9×15 seven-segment digits: 1-3px strokes grow toward the
     // *inside* of each segment. Both counters stay open even for 8 at 3px.
-    private static void DrawClock(bool[] px,string value,int x,int y,int thickness)
+    internal static void DrawClock(bool[] px,string value,int x,int y,int thickness)
     {
         const int SegT=1,SegUL=2,SegUR=4,SegM=8,SegLL=16,SegLR=32,SegB=64;
         int[] map=[119,36,93,109,46,107,123,37,127,111];

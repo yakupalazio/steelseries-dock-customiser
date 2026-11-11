@@ -135,6 +135,10 @@ internal static class BatteryDeviceClassifier
         if(s.Contains("buds")||s.Contains("tws")||s.Contains("airpod")||
            s.Contains("earbud")||s.Contains("kulak içi")||s.Contains("freebuds"))
             return "Earbuds";
+        if(s.Contains("galaxy s")||s.Contains("galaxy a")||
+           s.Contains("iphone")||s.Contains("pixel phone")||
+           s.Contains("smartphone")||s.Contains("android phone")||
+           s.Contains("telefon"))return "Phone";
         if(s.Contains("dualsense")||s.Contains("dualshock")||
            s.Contains("controller")||s.Contains("gamepad")||
            s.Contains("xbox wireless"))return "DualSense";

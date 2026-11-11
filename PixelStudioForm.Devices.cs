@@ -44,6 +44,7 @@ internal sealed partial class PixelStudioForm
         var now=DateTimeOffset.UtcNow;
         if(now-lastDeviceRefresh<TimeSpan.FromSeconds(3))return;
         lastDeviceRefresh=now;
+        SetupApiBatteryDiagnostics.Invalidate();
         _=RefreshBatteriesAsync();
     }
 

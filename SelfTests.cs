@@ -31,6 +31,139 @@ internal static class SelfTests
             dualSensePacket[0]=0xFF;
             if(DualSenseReadOnly.DecodeReport(dualSensePacket,dualSensePacket.Length)!=null)
                 throw new Exception("Unsupported DualSense report was accepted");
+            // Beta 5: ChatMix has two independent bars with a fixed center.
+            // The raw G=100/C=0 packet is Game (left), and G=0/C=100
+            // is Chat (right); G=100/C=100 is an empty neutral bar.
+            var dialNow=DateTimeOffset.UtcNow;
+            if(WheelArtwork.Value(new DialSnapshot(DialView.ChatMix,null,100,0,
+                   dialNow,""),true)!=100 ||
+               WheelArtwork.Value(new DialSnapshot(DialView.ChatMix,null,0,100,
+                   dialNow,""),true)!=0 ||
+               WheelArtwork.Value(new DialSnapshot(DialView.ChatMix,null,100,100,
+                   dialNow,""),true)!=50)
+                throw new Exception("Game/Chat physical HID direction regression");
+            foreach(var (mix,leftLit,rightLit) in new[]{
+                (50,false,false),(100,true,false),(0,false,true)
+            })
+            {
+                var pixels=new bool[128*64];
+                OledRenderer.DrawSplitChatMix(pixels,12,12,80,mix,
+                    true,true,1,3);
+                int barRow=28;
+                if(pixels[barRow*128+32]!=leftLit ||
+                   pixels[barRow*128+72]!=rightLit ||
+                   !Enumerable.Range(26,8).All(y=>pixels[y*128+52]))
+                    throw new Exception("Split ChatMix left/neutral/right render regression");
+            }
+            var noDeviceIcons=new bool[128*64];
+            OledRenderer.DrawSplitChatMix(noDeviceIcons,12,12,80,50,
+                false,false,1,3);
+            if(Enumerable.Range(12,12).Any(y=>Enumerable.Range(12,80)
+                   .Any(x=>noDeviceIcons[y*128+x])))
+                throw new Exception("Disabled ChatMix icons still render");
+            var warningTime=DateTimeOffset.Now;
+            var warningPreferences=new BatteryPreferences{
+                EnableLowBatteryWarnings=true,
+                LowBatteryWarningPercent=20,
+                CriticalBatteryWarningPercent=10
+            };
+            var warningMonitor=new BatteryWarningMonitor();
+            BatterySnapshot warningSnapshot(int percent,bool charging=false,
+                int secondsOld=0)=>new(){
+                Values=new(StringComparer.OrdinalIgnoreCase){
+                    ["Mouse"]=new BatteryReading("Mouse",percent,
+                        "SteelSeries GG Engine (canlı)","",warningTime.AddSeconds(-secondsOld),
+                        charging)
+                }};
+            if(warningMonitor.Evaluate(warningSnapshot(19),warningPreferences,
+                   warningTime).Count!=1 ||
+               warningMonitor.Evaluate(warningSnapshot(19),warningPreferences,
+                   warningTime.AddSeconds(1)).Count!=0 ||
+               warningMonitor.Evaluate(warningSnapshot(9),warningPreferences,
+                   warningTime.AddSeconds(2)).Count!=1 ||
+               warningMonitor.Evaluate(warningSnapshot(8,true),
+                   warningPreferences,warningTime.AddSeconds(3)).Count!=0 ||
+               warningMonitor.Evaluate(warningSnapshot(8,false,30),
+                   warningPreferences,warningTime.AddSeconds(3)).Count!=0)
+                throw new Exception("Low-battery duplicate/critical/stale suppression regression");
+            if(BleBatteryProvider.StableKind("device-a")==
+                   BleBatteryProvider.StableKind("device-b") ||
+               !BleBatteryProvider.StableKind("device-a").StartsWith("Ble:") ||
+               BatteryDeviceClassifier.IconFor("Keychron K2","Bluetooth")!="Keyboard" ||
+               BatteryDeviceClassifier.IconFor("Galaxy S24+","Bluetooth")!="Phone" ||
+               BatteryDeviceClassifier.IconFor("Galaxy Buds3","Bluetooth")!="Earbuds")
+                throw new Exception("Discovered Bluetooth stable IDs/icons regression");
+            var discoveredKind=BleBatteryProvider.StableKind("test-battery-service");
+            BatteryDeviceCatalog.Register(discoveredKind,"Test Bluetooth","Bluetooth");
+            var detectedAt=DateTimeOffset.Now;
+            var discoveredBattery=new BatteryReading(discoveredKind,77,
+                "Bluetooth LE GATT (uncached)","Test Bluetooth",detectedAt){
+                    IconKind="Bluetooth",FriendlyName="Test Bluetooth"
+                };
+            var dynamicSnapshot=new BatterySnapshot{
+                Values=new(StringComparer.OrdinalIgnoreCase){
+                    [discoveredKind]=discoveredBattery
+                }
+            };
+            if(!BatteryPriority.SelectThree(dynamicSnapshot,
+                   new BatteryPreferences()).Contains(discoveredKind) ||
+               BatteryPriority.SelectThree(new BatterySnapshot{
+                   Values=new(StringComparer.OrdinalIgnoreCase){
+                       [discoveredKind]=discoveredBattery with {
+                           CheckedAt=detectedAt.AddMinutes(-1)
+                       }
+                   }
+               },new BatteryPreferences()).Contains(discoveredKind))
+                throw new Exception("Auto-detected GATT device priority/staleness regression");
+            var dynamicLayout=new LayoutState{Widgets=[
+                new DockWidget{Kind="BatterySlot1",X=4,Y=17}
+            ]};
+            using(var liveImage=OledRenderer.Render(dynamicLayout,false,true,false,
+                dynamicSnapshot,layoutMode:ScreenMode.Idle))
+            using(var emptyImage=OledRenderer.Render(dynamicLayout,false,true,false,
+                new BatterySnapshot(),layoutMode:ScreenMode.Idle))
+            {
+                int changed=0;
+                for(int y=17;y<28;y++)for(int x=4;x<50;x++)
+                    if(liveImage.GetPixel(x,y).ToArgb()!=emptyImage.GetPixel(x,y).ToArgb())
+                        changed++;
+                if(changed<12)
+                    throw new Exception("Live BLE battery did not reach OLED auto slot");
+            }
+            // Windows SetupAPI reports cached data, not verified live
+            // battery state. The Galaxy S24+ value must never displace the
+            // live Phone Link reading (a real Windows cache discrepancy).
+            var setupTime=DateTimeOffset.Now;
+            var setupCache=new[]{new PnpBattery("Samsung Galaxy S24+",40)};
+            var noPhone=new BatterySnapshot();
+            BatterySources.ApplySetupApiDiagnostics(noPhone,setupCache,setupTime);
+            if(noPhone["Phone"].Available ||
+               !noPhone["Phone"].Detail.Contains("40") ||
+               BatteryPriority.SelectThree(noPhone,new BatteryPreferences())
+                   .Contains("Phone"))
+                throw new Exception("Stale SetupAPI phone was shown as live");
+            var livePhone=new BatterySnapshot{
+                Values=new(StringComparer.OrdinalIgnoreCase){
+                    ["Phone"]=new("Phone",84,"Microsoft Phone Link",
+                        "Verified",setupTime)
+                }};
+            BatterySources.ApplySetupApiDiagnostics(livePhone,setupCache,setupTime);
+            if(livePhone["Phone"].Percent!=84 ||
+               !livePhone["Phone"].Source.Contains("Phone Link"))
+                throw new Exception("Cached SetupAPI displaced live Phone Link");
+            // Thick 128x64 clock/date glyphs must retain their counters.
+            // On the seven-segment clock 8 has an open upper/lower counter.
+            var boldClock=new bool[128*64];
+            OledRenderer.DrawClock(boldClock,"8",2,12,3);
+            if(boldClock[(12+4)*128+6] ||
+               boldClock[(12+9)*128+6] ||
+               !boldClock[(12+1)*128+6])
+                throw new Exception("Bold clock digit counters became unreadable");
+            var boldDate=new bool[128*64];
+            OledRenderer.DrawReadableDateTime(boldDate,"8",30,30,1,3);
+            if(boldDate[(30+1)*128+32] ||
+               boldDate[(30+4)*128+32])
+                throw new Exception("Bold date glyph counters became unreadable");
             // GG's status JSON must be interpreted strictly, with no guessed readings.
             if(!GgBatteryProvider.TryEngineUri("127.0.0.1:49763",out _) ||
                 GgBatteryProvider.TryEngineUri("example.com:443",out _) ||

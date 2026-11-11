@@ -66,12 +66,41 @@ internal static class BatterySources
         // populate additional, dynamically discovered battery slots.
         foreach(var discovered in await BleBatteryProvider.ReadAsync())
             snapshot.Values[discovered.Kind]=discovered;
+        // SetupAPI is useful for unsupported Classic Bluetooth hardware,
+        // including checking whether Windows has ever seen a phone battery.
+        // Its percentages can be stale while the device is disconnected,
+        // so never promote them to a verified number on the OLED.
+        ApplySetupApiDiagnostics(snapshot,
+            await SetupApiBatteryDiagnostics.ReadAsync(),DateTimeOffset.Now);
         // Query actual Bluetooth connection status only in the slow loop.
         bool connected=await DualSenseConnection.IsConnectedAsync();
         return new BatterySnapshot{
             CheckedAt=snapshot.CheckedAt,Values=snapshot.Values,
             DualSenseConnected=connected || snapshot["DualSense"].Available
         };
+    }
+
+    /// <summary>
+    /// Retain cached Windows information as diagnostics only. An active GATT,
+    /// GG, ADB, Phone Link or HID percentage always takes priority. Merely
+    /// observing a Bluetooth pairing never proves the value is fresh.
+    /// </summary>
+    internal static void ApplySetupApiDiagnostics(BatterySnapshot snapshot,
+        IReadOnlyList<PnpBattery> records,DateTimeOffset now)
+    {
+        foreach(var cached in records)
+        {
+            string? kind=Classify(cached.Name);
+            if(kind is null || snapshot[kind].Available ||
+               snapshot[kind].Source.StartsWith("Windows SetupAPI",
+                   StringComparison.Ordinal))continue;
+            if(cached.Percent is not int lastKnown || lastKnown is <0 or >100)
+                continue;
+            snapshot.Values[kind]=new BatteryReading(kind,null,
+                "Windows SetupAPI (yalnızca tanılama)",
+                cached.Name+": önbellekte %"+lastKnown+
+                "; bağlantı/güncellik doğrulanamadı.",now);
+        }
     }
 
     /// <summary>
