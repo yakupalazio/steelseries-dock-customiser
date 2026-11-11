@@ -185,9 +185,11 @@ internal static class Program
            args.Contains("--oled-full-retention-watch")||
            args.Contains("--oled-reclaim-watch")||
            args.Contains("--oled-reclaim-fast-watch")||
-           args.Contains("--oled-reclaim-burst-watch"))
+           args.Contains("--oled-reclaim-burst-watch")||
+           args.Contains("--oled-reclaim-single-watch"))
         {
-            bool burstReclaim=args.Contains("--oled-reclaim-burst-watch");
+            bool singleReclaim=args.Contains("--oled-reclaim-single-watch");
+            bool burstReclaim=singleReclaim||args.Contains("--oled-reclaim-burst-watch");
             bool fastReclaim=burstReclaim||args.Contains("--oled-reclaim-fast-watch");
             bool reclaim=fastReclaim||args.Contains("--oled-reclaim-watch");
             bool fullScreen=reclaim||args.Contains("--oled-full-retention-watch");
@@ -231,7 +233,7 @@ internal static class Program
             };
             var stopwatch=System.Diagnostics.Stopwatch.StartNew();
             int frames=0,slowest=0;
-            long lastProgress=0, lastReclaim=-1000;
+            long lastProgress=0, lastReclaim=-1000, lastSingleReclaimedBurst=0;
             try
             {
                 using var bitmap=OledRenderer.Render(
@@ -241,7 +243,8 @@ internal static class Program
                 transport.Open();
                 monitor.Start();
                 Log("30s OLED retention check ("+
-                    (burstReclaim?"BURST RECLAIM 180ms for 550ms after dial":
+                    (singleReclaim?"SINGLE RECLAIM once per dial burst":
+                     burstReclaim?"BURST RECLAIM 180ms for 550ms after dial":
                      fastReclaim?"FAST RECLAIM 180ms + 750ms tail":
                      reclaim?"RECLAIM 0x95->0x93":
                      fullScreen?"128x64 FULL":"protected 10..63")+
@@ -260,7 +263,10 @@ internal static class Program
                     bool pending=System.Threading.Volatile.Read(ref reclaimPending)!=0;
                     int limit=fastReclaim?150:12;
                     int cooldown=fastReclaim?180:700;
-                    bool shouldReclaim=burstReclaim?burstWindow:(pending||dialTail);
+                    bool singlePending=singleReclaim && burstStart>0 &&
+                        burstStart!=lastSingleReclaimedBurst;
+                    bool shouldReclaim=singleReclaim?singlePending:
+                        (burstReclaim?burstWindow:(pending||dialTail));
                     if(reclaim && reclaimAttempts<limit &&
                        stopwatch.ElapsedMilliseconds-lastReclaim>=cooldown &&
                        shouldReclaim)
@@ -269,6 +275,7 @@ internal static class Program
                         // Bounded, diagnostic-only release/draw burst after wheel input.
                         // Subsequent frames use the existing 0x93 transport.
                         transport.ReclaimNativeOverlay(bitmap);
+                        if(singleReclaim)lastSingleReclaimedBurst=burstStart;
                         lastReclaim=stopwatch.ElapsedMilliseconds;
                         reclaimAttempts++;
                         Log($"RECLAIM attempt={reclaimAttempts} at={lastReclaim}ms "+
