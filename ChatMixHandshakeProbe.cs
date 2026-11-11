@@ -91,7 +91,7 @@ internal static class ChatMixHandshakeProbe
         stream.Write(report);
     }
 
-    public static void Run(bool includeIcon)
+    public static void Run(bool includeIcon,int durationSeconds=20)
     {
         string file=LogFile;
         using var writer=new StreamWriter(file) { AutoFlush=true };
@@ -139,11 +139,11 @@ internal static class ChatMixHandshakeProbe
                 iconEnabled=true;
                 Log("TX 06 8D 01: optional Sonar indicator enabled (volatile).");
             }
-            Log($"20s test: press and rotate wheel. Listening on {candidates.Length} mi_04 collections.");
+            Log($"{durationSeconds}s guided test: physical wheel commands only on instruction. Listening on {candidates.Length} mi_04 collections.");
             void Watch(HidStream reader,int channel,int maxInput)
             {
                 var buffer=new byte[Math.Max(65,maxInput)];
-                while(watch.Elapsed<TimeSpan.FromSeconds(20))
+                while(watch.Elapsed<TimeSpan.FromSeconds(durationSeconds))
                 {
                     try
                     {

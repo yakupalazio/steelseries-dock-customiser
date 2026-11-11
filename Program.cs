@@ -118,6 +118,11 @@ internal static class Program
             ChatMixHandshakeProbe.Inspect();
             return;
         }
+        if(args.Contains("--chatmix-guided-probe"))
+        {
+            ChatMixHandshakeProbe.Run(includeIcon:true,durationSeconds:75);
+            return;
+        }
         if(args.Contains("--chatmix-enable-only-probe") ||
            args.Contains("--chatmix-handshake-probe"))
         {
