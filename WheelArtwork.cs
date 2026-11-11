@@ -38,9 +38,11 @@ internal static class WheelArtwork
             bool onSweep=angle<=Sweep;
             if(distance<=9.1)
                 pixels[y*Width+x]='1';
-            else if(onSweep && distance>=19.25 && distance<=20.5)
+            else if(onSweep &&
+                (distance>=19.25 && distance<=20.5 ||
+                 distance>=15.1 && distance<16.2))
                 pixels[y*Width+x]='1';
-            else if(onSweep && distance>=15.8 && distance<19.25)
+            else if(onSweep && distance>=16.2 && distance<19.25)
                 pixels[y*Width+x]='2';
         }
         return new string(pixels);
@@ -50,6 +52,28 @@ internal static class WheelArtwork
     {
         double degrees=Math.Atan2(y-CenterY,x-CenterX)*180d/Math.PI;
         return (degrees-StartAngle+720d)%360d;
+    }
+
+    /// <summary>
+    /// Source-space pixel at the displayed position. Both the empty track and
+    /// its illuminated fill are rotated together; the badge is not rotated.
+    /// Also used by the editor to avoid a stationary, misleading blue guide.
+    /// </summary>
+    public static (int X,int Y) SourceAt(int x,int y,int gapAngle)
+    {
+        int dx=x-CenterX,dy=y-CenterY;
+        if(dx*dx+dy*dy<100)return (x,y);
+        double radians=-Math.Clamp(gapAngle,-180,180)*Math.PI/180d;
+        double cos=Math.Cos(radians),sin=Math.Sin(radians);
+        return (CenterX+(int)Math.Round(dx*cos-dy*sin),
+                CenterY+(int)Math.Round(dx*sin+dy*cos));
+    }
+
+    public static char Sample(string source,int x,int y,int gapAngle)
+    {
+        var (sx,sy)=SourceAt(x,y,gapAngle);
+        return sx>=0&&sy>=0&&sx<Width&&sy<Height
+            ?source[sy*Width+sx]:'0';
     }
 
     public static bool IsOn(char value,int x,int y,int? percent,
@@ -83,21 +107,14 @@ internal static class WheelArtwork
 
     public static void Draw(bool[] output,bool[] coverage,int x,int y,
         string? artwork,int? percent,DialView view,bool autoLabel=true,
-        int gapAngle=0,int volumeDelta=0)
+        int gapAngle=0,int? attenuationSteps=null,bool transientAttenuation=false)
     {
         string src=Resolve(artwork);
-        double radians=-Math.Clamp(gapAngle,-180,180)*Math.PI/180d;
-        double cosine=Math.Cos(radians),sine=Math.Sin(radians);
         for(int sy=0;sy<Height;sy++)for(int sx=0;sx<Width;sx++)
         {
             int px=x+sx,py=y+sy;
             if(px<0||py<0||px>=128||py>=64)continue;
-            // Rotate ring around its centre via inverse pixel sampling.
-            // The central badge is intentionally excluded from rotation.
-            int dx=sx-CenterX,dy=sy-CenterY;
-            int rx=dx*dx+dy*dy;
-            int fromX=rx<100?sx:CenterX+(int)Math.Round(dx*cosine-dy*sine);
-            int fromY=rx<100?sy:CenterY+(int)Math.Round(dx*sine+dy*cosine);
+            var (fromX,fromY)=SourceAt(sx,sy,gapAngle);
             if(fromX<0||fromY<0||fromX>=Width||fromY>=Height)continue;
             char value=src[fromY*Width+fromX];
             if(value=='0')continue;
@@ -108,17 +125,17 @@ internal static class WheelArtwork
         // The original Nova Pro badge is a *filled* white disc with black
         // lettering, unlike the previous hollow badge with text to its right.
         if(autoLabel)
-            DrawBadge(output,coverage,x,y,view==DialView.Volume?"VOL":"MIX");
+        {
+            string label=view==DialView.ChatMix?"MIX":
+                transientAttenuation&&attenuationSteps.HasValue
+                    ?attenuationSteps.Value==0?"":$"-{Math.Clamp(attenuationSteps.Value,0,56)}"
+                    :"VOL";
+            DrawBadge(output,coverage,x,y,label);
+        }
         if(view==DialView.ChatMix)
         {
             DrawIcon(output,coverage,x+1,y+1,'G');
             DrawIcon(output,coverage,x+Width-8,y+1,'C');
-        }
-        else if(volumeDelta!=0)
-        {
-            // Show a signed live step without wasting the width of the OLED
-            // wheel on a redundant "VOL 76%" label.
-            DrawSignedDelta(output,coverage,x+1,y+1,volumeDelta);
         }
     }
 
@@ -134,33 +151,6 @@ internal static class WheelArtwork
             if(glyph[yy][xx]=='1')Put(output,coverage,x+2+xx,y+2+yy,true);
     }
 
-    private static void DrawSignedDelta(bool[] output,bool[] coverage,
-        int x,int y,int delta)
-    {
-        string str=delta>0?"+"+Math.Min(99,delta):"-"+Math.Min(99,-delta);
-        foreach(char digit in str)
-        {
-            string[] rows=digit switch
-            {
-                '+'=>["010","111","010","000","000"],
-                '-'=>["000","111","000","000","000"],
-                '0'=>["111","101","101","101","111"],
-                '1'=>["010","110","010","010","111"],
-                '2'=>["111","001","111","100","111"],
-                '3'=>["111","001","111","001","111"],
-                '4'=>["101","101","111","001","001"],
-                '5'=>["111","100","111","001","111"],
-                '6'=>["111","100","111","101","111"],
-                '7'=>["111","001","010","010","010"],
-                '8'=>["111","101","111","101","111"],
-                _=>["111","101","111","001","111"]
-            };
-            for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)
-                if(rows[yy][xx]=='1')Put(output,coverage,x+xx,y+yy,true);
-            x+=4;
-        }
-    }
-
     private static void Put(bool[] output,bool[] coverage,int x,int y,bool on)
     {
         if(x<0||x>=128||y<0||y>=64)return;
@@ -172,21 +162,32 @@ internal static class WheelArtwork
     private static void DrawBadge(bool[] output,bool[] coverage,
         int x,int y,string label)
     {
-        string[][] glyphs=label switch
+        static string[] Glyph(char ch)=>ch switch
         {
-            "MIX" => [
-                ["101","111","111","101","101"],
-                ["111","010","010","010","111"],
-                ["101","101","010","101","101"]],
-            _ => [
-                ["101","101","101","101","010"],
-                ["010","101","101","101","010"],
-                ["100","100","100","100","111"]]
+            'V'=>["101","101","101","101","010"],
+            'O'=>["010","101","101","101","010"],
+            'L'=>["100","100","100","100","111"],
+            'M'=>["101","111","111","101","101"],
+            'I'=>["111","010","010","010","111"],
+            'X'=>["101","101","010","101","101"],
+            '-'=>["000","000","111","000","000"],
+            '0'=>["111","101","101","101","111"],
+            '1'=>["010","110","010","010","111"],
+            '2'=>["111","001","111","100","111"],
+            '3'=>["111","001","111","001","111"],
+            '4'=>["101","101","111","001","001"],
+            '5'=>["111","100","111","001","111"],
+            '6'=>["111","100","111","101","111"],
+            '7'=>["111","001","010","010","010"],
+            '8'=>["111","101","111","101","111"],
+            '9'=>["111","101","111","001","111"],
+            _=>["000","000","000","000","000"]
         };
-        const int letterX=CenterX-5,letterY=CenterY-2;
-        for(int i=0;i<3;i++)for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)
+        int letterX=CenterX-(label.Length*4-1)/2;
+        int letterY=CenterY-2;
+        for(int i=0;i<label.Length;i++)for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)
         {
-            if(glyphs[i][yy][xx]!='1')continue;
+            if(Glyph(label[i])[yy][xx]!='1')continue;
             int px=x+letterX+i*4+xx,py=y+letterY+yy;
             if(px<0||py<0||px>=128||py>=64)continue;
             int pos=py*128+px;

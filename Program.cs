@@ -123,6 +123,41 @@ internal static class Program
             Console.WriteLine(ArctisDialMonitor.ReadOnlyDeviceCheck());
             return;
         }
+        if(args.Contains("--dial-event-watch"))
+        {
+            // Read-only diagnostic: no audio adjustment, OLED report or
+            // firmware command. A human must rotate the physical wheel to
+            // generate events; this tool cannot synthesize hardware input.
+            int count=0;
+            using var monitor=new ArctisDialMonitor();
+            monitor.Updated+=()=>
+            {
+                var eventInfo=monitor.Snapshot;
+                System.Threading.Interlocked.Increment(ref count);
+                Console.WriteLine($"{eventInfo.UpdatedAt:O} {eventInfo.View} "+
+                    $"vol={eventInfo.Volume} step={eventInfo.VolumeAttenuationSteps} "+
+                    $"game={eventInfo.Game} chat={eventInfo.Chat}");
+            };
+            Console.WriteLine("Watching the read-only Nova Pro dial for 20 seconds.");
+            monitor.Start();
+            System.Threading.Thread.Sleep(TimeSpan.FromSeconds(20));
+            monitor.Stop();
+            Console.WriteLine($"Dial events received: {count}; status: {monitor.Snapshot.Status}");
+            Environment.ExitCode=count>0?0:2;
+            return;
+        }
+        if(args.Contains("--dial-raw-watch"))
+        {
+            try{ArctisDialMonitor.ReadOnlyRawWatch(TimeSpan.FromSeconds(20),
+                line=>Console.WriteLine(line));}
+            catch(Exception ex)
+            {
+                Console.WriteLine("Raw HID read failed: "+ex.GetType().Name+
+                    ": "+ex.Message);
+                Environment.ExitCode=1;
+            }
+            return;
+        }
         if(args.Contains("--oled-hid-check"))
         {
             var error=FastOledTransport.ValidateAvailable();
@@ -143,6 +178,54 @@ internal static class Program
             {
                 Console.WriteLine("OLED HID open failed: "+ex.Message);
                 Environment.ExitCode=1;
+            }
+            return;
+        }
+        if(args.Contains("--oled-retention-watch"))
+        {
+            // Interactive diagnostic only: keep the user's normal idle design
+            // on the OLED while they rotate the hardware knob. No firmware,
+            // audio or configuration writes are made. Always hand back.
+            using var monitor=new ArctisDialMonitor();
+            int seen=0;
+            monitor.Updated+=()=>
+            {
+                var value=monitor.Snapshot;
+                System.Threading.Interlocked.Increment(ref seen);
+                Console.WriteLine($"DIAL {value.View}: vol={value.Volume}, "+
+                    $"steps={value.VolumeAttenuationSteps}, G={value.Game}, C={value.Chat}");
+            };
+            var stopwatch=System.Diagnostics.Stopwatch.StartNew();
+            int frames=0,slowest=0;
+            try
+            {
+                using var bitmap=OledRenderer.Render(
+                    StudioProject.Defaults(ScreenMode.Idle),false,true,false,
+                    layoutMode:ScreenMode.Idle);
+                using var transport=new FastOledTransport();
+                transport.Open();
+                monitor.Start();
+                Console.WriteLine("30s OLED retention check started. Rotate and press the physical dial now.");
+                while(stopwatch.Elapsed<TimeSpan.FromSeconds(30))
+                {
+                    long before=stopwatch.ElapsedMilliseconds;
+                    transport.SendLiveFrame(bitmap,true);
+                    slowest=Math.Max(slowest,(int)(stopwatch.ElapsedMilliseconds-before));
+                    frames++;
+                    System.Threading.Thread.Sleep(35);
+                }
+                Console.WriteLine($"Full protected writes={frames}; worst transfer={slowest}ms; "+
+                    $"dial events={seen}; elapsed={stopwatch.ElapsedMilliseconds}ms");
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("Retention check failed: "+ex.Message);
+                Environment.ExitCode=1;
+            }
+            finally
+            {
+                monitor.Stop();
+                Console.WriteLine(new DockHardwareTest().RestoreNow());
             }
             return;
         }

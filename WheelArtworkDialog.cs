@@ -169,12 +169,15 @@ internal sealed class WheelArtworkDialog : Form
         if(e.Button is not (MouseButtons.Left or MouseButtons.Right))return;
         int x=e.X/Zoom,y=e.Y/Zoom;
         if(x<0||y<0||x>=WheelArtwork.Width||y>=WheelArtwork.Height)return;
+        (x,y)=WheelArtwork.SourceAt(x,y,GapAngle);
+        if(x<0||y<0||x>=WheelArtwork.Width||y>=WheelArtwork.Height)return;
         char chosen=e.Button==MouseButtons.Right?'0':brush.SelectedIndex switch{
             0=>'1',1=>'2',2=>'3',_=>'0'};
         int index=y*WheelArtwork.Width+x;
         if(pixels[index]==chosen)return;
         pixels[index]=chosen;
-        canvas.Invalidate(new Rectangle(x*Zoom,y*Zoom,Zoom+1,Zoom+1));
+        // Rotated source pixels affect different on-screen positions.
+        canvas.Invalidate();
         // Centre mode text is also overlaid in the preview. Redraw the entire
         // badge when changing any pixel under that lettering.
         if(Math.Abs(x-WheelArtwork.CenterX)<=10 &&
@@ -185,13 +188,14 @@ internal sealed class WheelArtworkDialog : Form
     {
         var bitmap=new bool[128*64];
         var coverage=new bool[128*64];
-        WheelArtwork.Draw(bitmap,coverage,0,0,new string(pixels),sample.Value,
+        string source=new(pixels);
+        WheelArtwork.Draw(bitmap,coverage,0,0,source,sample.Value,
             mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
             automaticLabel.Checked,GapAngle);
         e.Graphics.Clear(Color.FromArgb(6,10,15));
         for(int y=0;y<WheelArtwork.Height;y++)for(int x=0;x<WheelArtwork.Width;x++)
         {
-            char px=pixels[y*WheelArtwork.Width+x];
+            char px=WheelArtwork.Sample(source,x,y,GapAngle);
             var fill=bitmap[y*128+x]?Color.FromArgb(235,242,248):
                 px=='2'?Color.FromArgb(30,75,100):
                 px=='3'?Color.FromArgb(30,26,31):Color.Black;

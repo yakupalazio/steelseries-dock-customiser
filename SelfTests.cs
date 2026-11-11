@@ -209,8 +209,11 @@ internal static class SelfTests
             // bytes in memory, without opening or writing a HID device.
             if(!ArctisDialMonitor.TryDecode(new byte[]{7,0x25,0},out var maximum)||
                 maximum.Volume!=100||maximum.View!=DialView.Volume ||
+                maximum.VolumeAttenuationSteps!=0 ||
                !ArctisDialMonitor.TryDecode(new byte[]{0,7,0x25,56},out var minimum)||
-                minimum.Volume!=0 ||
+                minimum.Volume!=0||minimum.VolumeAttenuationSteps!=56 ||
+               !ArctisDialMonitor.TryDecode(new byte[]{7,0x25,50},out var low)||
+                low.VolumeAttenuationSteps!=50 ||
                !ArctisDialMonitor.TryDecode(new byte[]{7,0x45,75,25},out var mixed)||
                 mixed.View!=DialView.ChatMix||mixed.Game!=75||mixed.Chat!=25 ||
                ArctisDialMonitor.TryDecode(new byte[]{7,0x25,99},out _)||
@@ -242,6 +245,64 @@ internal static class SelfTests
             if(OledRenderer.GetBounds(wheelWidget).Width!=WheelArtwork.Width ||
                !WheelArtwork.IsValid(WheelArtwork.Factory))
                 throw new Exception("Original-style wheel sprite has invalid geometry");
+            // An empty gauge still has visible track borders, and its fill
+            // rotates alongside those borders while VOL/MIX remains fixed.
+            var ringEmpty=new bool[128*64];var maskEmpty=new bool[128*64];
+            var ringFilled=new bool[128*64];var maskFilled=new bool[128*64];
+            var ringTurned=new bool[128*64];var maskTurned=new bool[128*64];
+            WheelArtwork.Draw(ringEmpty,maskEmpty,0,0,null,0,DialView.Volume);
+            WheelArtwork.Draw(ringFilled,maskFilled,0,0,null,100,DialView.Volume);
+            WheelArtwork.Draw(ringTurned,maskTurned,0,0,null,100,DialView.Volume,
+                gapAngle:90);
+            if(!ringEmpty[1*128+22] || ringEmpty[3*128+22] ||
+               !ringFilled[3*128+22])
+                throw new Exception("Native-style wheel must retain an empty outlined track");
+            int fillRotationChanged=0;
+            for(int yy=0;yy<WheelArtwork.Height;yy++)
+            for(int xx=0;xx<WheelArtwork.Width;xx++)
+            {
+                if(ringFilled[yy*128+xx]!=ringTurned[yy*128+xx])
+                    fillRotationChanged++;
+                if(xx>=17&&xx<=28&&yy>=18&&yy<=24&&
+                   ringFilled[yy*128+xx]!=ringTurned[yy*128+xx])
+                    throw new Exception("The ring rotated its centre lettering");
+            }
+            if(fillRotationChanged<30 ||
+               WheelArtwork.Sample(WheelArtwork.Factory,4,21,90)==
+               WheelArtwork.Sample(WheelArtwork.Factory,4,21,0))
+                throw new Exception("Rotating the wheel did not move its fill track");
+            var transientLow=new bool[128*64];var maskLow=new bool[128*64];
+            var transientMax=new bool[128*64];var maskMax=new bool[128*64];
+            WheelArtwork.Draw(transientLow,maskLow,0,0,null,10,DialView.Volume,
+                attenuationSteps:50,transientAttenuation:true);
+            WheelArtwork.Draw(transientMax,maskMax,0,0,null,100,DialView.Volume,
+                attenuationSteps:0,transientAttenuation:true);
+            int transientDifference=0,blankDifference=0;
+            for(int yy=19;yy<=24;yy++)for(int xx=16;xx<=29;xx++)
+            {
+                if(transientLow[yy*128+xx]!=ringFilled[yy*128+xx])
+                    transientDifference++;
+                if(transientMax[yy*128+xx]!=ringFilled[yy*128+xx])
+                    blankDifference++;
+            }
+            if(transientDifference<4||blankDifference<4)
+                throw new Exception("Negative step/blank-at-maximum timeout badges failed");
+            var recentVolume=new DialSnapshot(DialView.Volume,11,null,null,
+                DateTimeOffset.UtcNow,"test"){VolumeAttenuationSteps=50};
+            var settledVolume=recentVolume with{
+                UpdatedAt=DateTimeOffset.UtcNow.AddSeconds(-3)};
+            using(var latest=OledRenderer.Render(radialDesign,false,true,false,
+                layoutMode:ScreenMode.Idle,dial:recentVolume))
+            using(var settled=OledRenderer.Render(radialDesign,false,true,false,
+                layoutMode:ScreenMode.Idle,dial:settledVolume))
+            {
+                int changedBadge=0;
+                for(int yy=29;yy<=35;yy++)for(int xx=19;xx<32;xx++)
+                    if(latest.GetPixel(xx,yy).ToArgb()!=
+                       settled.GetPixel(xx,yy).ToArgb())changedBadge++;
+                if(changedBadge<3)
+                    throw new Exception("After two seconds the volume step must return to VOL");
+            }
             using(var radialZero=OledRenderer.Render(radialDesign,false,true,false,
                 layoutMode:ScreenMode.Idle,
                 dial:new DialSnapshot(DialView.Volume,0,null,null,
@@ -726,9 +787,9 @@ internal static class SelfTests
                DockPreviewPanel.ReconnectDelaySeconds(12)!=15)
                 throw new Exception("OLED hot-reconnect backoff changed");
             if(DockPreviewPanel.NeedsReassert("same","same",sampleTime,
-                    sampleTime.AddMilliseconds(300),false) ||
+                    sampleTime.AddMilliseconds(40),false) ||
                !DockPreviewPanel.NeedsReassert("same","same",sampleTime,
-                    sampleTime.AddMilliseconds(510),false) ||
+                    sampleTime.AddMilliseconds(65),false) ||
                !DockPreviewPanel.NeedsReassert("same","same",sampleTime,
                     sampleTime.AddMilliseconds(100),true) ||
                !DockPreviewPanel.NeedsReassert("previous","changed",sampleTime,

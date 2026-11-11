@@ -44,8 +44,13 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly Button _sendHardware = new() { Text="Uygula", Width=110,Height=31 };
     private readonly Button _restoreHardware = new() { Text="Dock Reset", Width=120,Height=31 };
     private readonly Button _liveToggle = new() { Text="Canlı dock modunu başlat", Width=191,Height=31 };
-    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=250 };
-    private readonly System.Windows.Forms.Timer _dialRefreshTimer=new() { Interval=110 };
+    // Even when GG consumes dial notifications, keep asserting the chosen
+    // OLED framebuffer so the native knob overlay is short-lived.
+    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=60 };
+    // The dock firmware draws its own volume overlay on physical input. Keep
+    // our custom OLED frame ahead of the native animation while the wheel is
+    // active, then return to the low-frequency idle refresh.
+    private readonly System.Windows.Forms.Timer _dialRefreshTimer=new() { Interval=25 };
     private DateTimeOffset _dialTakeoverUntil=DateTimeOffset.MinValue;
     private bool _liveEnabled,_liveSending;
     private bool _forceNextLiveFrame;
@@ -148,10 +153,10 @@ internal sealed class DockPreviewPanel : UserControl
     public bool FactoryPreviewActive => _factory.Checked;
 
     /// <summary>
-    /// The dock firmware briefly reclaims its OLED when the physical knob
-    /// moves. Send a fresh frame after the OEM animation starts, including
-    /// when our pixel bitmap hasn't otherwise changed. The knob remains
-    /// fully controlled by the dock, not by this application.
+    /// A physical input triggers a native firmware overlay. Request an
+    /// immediate write and briefly stream our selected content so that the
+    /// native screen cannot linger while the knob is being operated. This is
+    /// display-only; input and device volume continue to work as designed.
     /// </summary>
     public void OnPhysicalDialEvent()
     {
@@ -161,6 +166,9 @@ internal sealed class DockPreviewPanel : UserControl
         // Leading-edge throttle, not trailing-edge debounce: while the user
         // keeps spinning, the preview and physical OLED must keep advancing.
         if(!_dialRefreshTimer.Enabled)_dialRefreshTimer.Start();
+        // A timer-only implementation leaves a plainly visible OEM frame
+        // between the event and its first scheduled tick.
+        _=RefreshLiveDock(force:true);
     }
 
     internal static int ReconnectDelaySeconds(int failures)
@@ -319,13 +327,13 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         string liveConsent=UiLanguage.English
-            ?"Live OLED checks every 250 ms and reasserts after dial input.\n"+
+            ?"Live OLED refreshes at up to 16 frames/sec and reasserts after dial input.\n"+
                 (_protectHeader()
                     ?"Only rows 10–63 will update; original top 10 pixels remain untouched.\n"
                     :"WARNING: Full-screen 128×64 output will replace the OEM header.\n")+
                 "SteelSeries GG Now Playing may conflict with this feature.\n"+
                 "Closing live mode restores the original OLED. Start live mode?"
-            :"Canlı OLED her 250 ms kontrol edilir; fiziksel tekerlekten sonra ekran geri alınır.\n"+
+            :"Canlı OLED saniyede 16 kareye kadar yenilenir; fiziksel tekerlekten sonra ekran geri alınır.\n"+
                 (_protectHeader()
                     ?"Yalnızca 10–63. satırlar güncellenir; orijinal üst bölüm korunur.\n"
                     :"UYARI: Üst koruma kapalı, tüm 128×64 ekran değiştirilecek.\n")+
@@ -377,7 +385,7 @@ internal sealed class DockPreviewPanel : UserControl
 
     internal static bool NeedsReassert(string? prior,string next,
         DateTimeOffset last,DateTimeOffset now,bool force)
-        =>force||prior!=next||now-last>=TimeSpan.FromMilliseconds(450);
+        =>force||prior!=next||now-last>=TimeSpan.FromMilliseconds(55);
 
     private async System.Threading.Tasks.Task RefreshLiveDock(bool force=false)
     {
@@ -437,8 +445,14 @@ internal sealed class DockPreviewPanel : UserControl
         finally
         {
             _liveSending=false;
-            if(_liveEnabled&&_forceNextLiveFrame&&!IsDisposed)
-                _dialRefreshTimer.Start();
+            if(_liveEnabled&&_forceNextLiveFrame&&!IsDisposed &&
+               DateTimeOffset.UtcNow>=_nextReconnect)
+            {
+                // Hardware events arriving during an in-flight HID transfer
+                // must get the newest frame immediately after it completes.
+                try{BeginInvoke((Action)(()=>_ = RefreshLiveDock(force:true)));}
+                catch(InvalidOperationException){ /* closing */ }
+            }
         }
     }
 

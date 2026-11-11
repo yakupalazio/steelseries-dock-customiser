@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,15 +9,19 @@ namespace SteelseriesDockCustomiser;
 
 internal enum DialView { Volume, ChatMix }
 
-internal readonly record struct DialEvent(DialView View, int? Volume, int? Game, int? Chat);
+internal readonly record struct DialEvent(DialView View, int? Volume, int? Game, int? Chat)
+{
+    // The Nova Pro sends native attenuation steps, not a percentage delta.
+    // 0 is maximum volume, 56 is minimum volume.
+    public int? VolumeAttenuationSteps { get; init; }
+}
 
 internal readonly record struct DialSnapshot(
     DialView View, int? Volume, int? Game, int? Chat,
     DateTimeOffset UpdatedAt, string Status)
 {
     public bool HasData => Volume.HasValue || Game.HasValue && Chat.HasValue;
-    // Signed percentage-point change since the preceding physical volume event.
-    public int VolumeDelta { get; init; }
+    public int? VolumeAttenuationSteps { get; init; }
 }
 
 /// <summary>
@@ -31,7 +36,7 @@ internal sealed class ArctisDialMonitor : IDisposable
     private const int Vendor = 0x1038;
     private readonly object gate = new();
     private CancellationTokenSource? cancellation;
-    private HidStream? stream;
+    private readonly List<HidStream> streams = new();
     private Task? worker;
     private DialSnapshot current = new(DialView.Volume, null, null, null,
         DateTimeOffset.MinValue, "Tekerlek bekleniyor");
@@ -54,7 +59,8 @@ internal sealed class ArctisDialMonitor : IDisposable
             case 0x25 when report[offset + 2] <= 56:
                 int volume = (int)Math.Round((56 - report[offset + 2]) * 100d / 56,
                     MidpointRounding.AwayFromZero);
-                value = new DialEvent(DialView.Volume, volume, null, null);
+                value = new DialEvent(DialView.Volume, volume, null, null)
+                    { VolumeAttenuationSteps = report[offset + 2] };
                 return true;
             case 0x45 when report.Length >= offset + 4 &&
                 report[offset + 2] <= 100 && report[offset + 3] <= 100:
@@ -68,24 +74,28 @@ internal sealed class ArctisDialMonitor : IDisposable
     private static bool Supported(HidDevice d) =>
         d.VendorID == Vendor && d.ProductID is 0x12e0 or 0x12e5 or 0x225d;
 
-    private static HidDevice? FindInput()
+    private static HidDevice[] FindInputs()
     {
         return DeviceList.Local.GetHidDevices(Vendor)
             .Where(Supported)
             .Where(d => d.DevicePath.Contains("mi_04", StringComparison.OrdinalIgnoreCase))
-            .FirstOrDefault(d =>
+            .Where(d =>
             {
                 try { return d.GetMaxInputReportLength() is >= 4 and <= 128; }
                 catch { return false; }
-            });
+            }).OrderByDescending(d =>
+            {
+                try { return d.GetMaxFeatureReportLength(); }
+                catch { return 0; }
+            }).ToArray();
     }
 
     public static string ReadOnlyDeviceCheck()
     {
         try
         {
-            var found = FindInput();
-            if (found is null)
+            var found = FindInputs();
+            if (found.Length == 0)
             {
                 var inventory = DeviceList.Local.GetHidDevices(Vendor)
                     .Where(Supported)
@@ -104,7 +114,7 @@ internal sealed class ArctisDialMonitor : IDisposable
                 return "Tekerlek HID arayüzü bulunamadı (görülen: " +
                     string.Join(",", inventory) + ")";
             }
-            return "Nova Pro Wireless tekerlek HID arayüzü algılandı (salt-okunur)";
+            return $"Nova Pro Wireless tekerlek HID arayüzleri: {found.Length} (salt-okunur)";
         }
         catch (Exception ex) { return "HID keşfi başarısız: " + ex.GetType().Name; }
     }
@@ -113,15 +123,80 @@ internal sealed class ArctisDialMonitor : IDisposable
     {
         try
         {
-            var device=FindInput();
-            if(device is null)return "Nova Pro tekerlek HID bulunamadı";
-            using var opened=device.Open();
-            return "Nova Pro tekerlek HID aç/kapat başarılı; komut gönderilmedi";
+            var devices=FindInputs();
+            if(devices.Length==0)return "Nova Pro tekerlek HID bulunamadı";
+            int openedCount=0;
+            foreach(var device in devices)
+            {
+                using var opened=device.Open();
+                openedCount++;
+            }
+            return $"Nova Pro tekerlek HID aç/kapat: {openedCount} koleksiyon; komut gönderilmedi";
         }
         catch(Exception ex)
         {
             return "Nova Pro tekerlek HID açılamadı: "+ex.GetType().Name;
         }
+    }
+
+    /// <summary>
+    /// Diagnostic only: record the complete raw input notifications, even
+    /// those that do not match our decoder. Never sends a device command.
+    /// </summary>
+    internal static void ReadOnlyRawWatch(TimeSpan duration,Action<string> log)
+    {
+        var candidates=DeviceList.Local.GetHidDevices(Vendor)
+            .Where(Supported).ToArray();
+        foreach(var candidate in candidates)
+        {
+            try
+            {
+                string path=candidate.DevicePath;
+                int at=path.IndexOf("mi_",StringComparison.OrdinalIgnoreCase);
+                string iface=at>=0&&at+5<=path.Length?path.Substring(at,5):"unknown";
+                log($"HID {iface} input={candidate.GetMaxInputReportLength()} "+
+                    $"feature={candidate.GetMaxFeatureReportLength()}");
+            }
+            catch(Exception ex){log("HID inventory: "+ex.GetType().Name);}
+        }
+        var found=FindInputs();
+        if(found.Length==0){log("No candidate input collections");return;}
+        int seen=0;
+        var expires=DateTimeOffset.UtcNow+duration;
+        object logGate=new();
+        Task.WaitAll(found.Select((device,index)=>Task.Run(()=>
+        {
+            try
+            {
+                using var opened=device.Open();
+                opened.ReadTimeout=300;
+                var buffer=new byte[Math.Max(65,device.GetMaxInputReportLength())];
+                lock(logGate)log($"Opened collection {index+1}, feature={device.GetMaxFeatureReportLength()}");
+                while(DateTimeOffset.UtcNow<expires)
+                {
+                    try
+                    {
+                        int count=opened.Read(buffer,0,buffer.Length);
+                        if(count<=0)continue;
+                        var raw=buffer.AsSpan(0,count);
+                        bool decoded=TryDecode(raw,out var ev);
+                        int n=Interlocked.Increment(ref seen);
+                        if(n<=100)
+                        {
+                            string row=$"RAW collection={index+1} packet={n} bytes={count} "+
+                                Convert.ToHexString(raw[..Math.Min(24,count)])+
+                                (decoded?$" decoded={ev.View} vol={ev.Volume} "+
+                                    $"steps={ev.VolumeAttenuationSteps} G={ev.Game} C={ev.Chat}":
+                                    " unrecognized");
+                            lock(logGate)log(row);
+                        }
+                    }
+                    catch(TimeoutException){ /* no event in this interval */ }
+                }
+            }
+            catch(Exception ex){lock(logGate)log($"Collection {index+1} read failed: {ex.GetType().Name}");}
+        })).ToArray());
+        log($"Raw packets received: {seen}");
     }
 
     public void Start()
@@ -139,18 +214,38 @@ internal sealed class ArctisDialMonitor : IDisposable
     {
         while (!token.IsCancellationRequested)
         {
-            HidStream? opened = null;
             try
             {
-                var device = FindInput();
-                if (device is null)
+                var devices = FindInputs();
+                if (devices.Length == 0)
                     throw new InvalidOperationException("Tekerlek HID arayüzü yok");
+                Task.WaitAll(devices.Select(device =>
+                    Task.Run(() => ListenDevice(device, token), token)).ToArray());
+            }
+            catch (Exception ex)
+            {
+                if (!token.IsCancellationRequested)
+                    lock (gate) current = current with
+                    {
+                        Status = "Tekerlek okunamıyor: " + ex.GetType().Name
+                    };
+            }
+            // Keep checking new HID collections after a disconnection.
+            if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(2))) break;
+        }
+    }
+
+    private void ListenDevice(HidDevice device, CancellationToken token)
+    {
+        HidStream? opened = null;
+        try
+        {
                 opened = device.Open();
                 opened.ReadTimeout = 650;
                 lock (gate)
                 {
                     if (token.IsCancellationRequested) return;
-                    stream = opened;
+                    streams.Add(opened);
                     current = current with { Status = "Tekerlek hareketi bekleniyor" };
                 }
                 var buffer = new byte[Math.Max(65, device.GetMaxInputReportLength())];
@@ -163,21 +258,20 @@ internal sealed class ArctisDialMonitor : IDisposable
                     if (!TryDecode(buffer.AsSpan(0, count), out var ev)) continue;
                     lock (gate)
                     {
-                        int delta=ev.Volume.HasValue && current.Volume.HasValue
-                            ? ev.Volume.Value-current.Volume.Value : 0;
                         current = new DialSnapshot(ev.View,
                             ev.Volume ?? current.Volume,
                             ev.Game ?? current.Game,
                             ev.Chat ?? current.Chat,
                             DateTimeOffset.UtcNow, "Dock tekerleği (canlı)")
-                            { VolumeDelta=ev.View==DialView.Volume?delta:0 };
+                            { VolumeAttenuationSteps=ev.VolumeAttenuationSteps??
+                                current.VolumeAttenuationSteps };
                     }
                     try{Updated?.Invoke();}
                     catch(ObjectDisposedException){ /* Form is closing. */ }
                     catch(InvalidOperationException){ /* Form handle is gone. */ }
                 }
-            }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
             {
                 // Closing the stream on user-requested Stop raises an expected
                 // read exception; observe it instead of faulting the worker.
@@ -187,33 +281,29 @@ internal sealed class ArctisDialMonitor : IDisposable
                         Status = "Tekerlek okunamıyor: " + ex.GetType().Name
                     };
             }
-            finally
+        finally
             {
                 lock (gate)
                 {
-                    if (ReferenceEquals(stream, opened)) stream = null;
+                    if (opened!=null)streams.Remove(opened);
                 }
                 opened?.Dispose();
             }
-            // Hot-unplug/replug should not leave the physical dial silent for
-            // fifteen seconds after the connection becomes available again.
-            if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(2))) break;
-        }
     }
 
     public void Stop()
     {
         CancellationTokenSource? stop;
-        HidStream? close;
+        HidStream[] close;
         lock (gate)
         {
             stop = cancellation;
             cancellation = null;
-            close = stream;
-            stream = null;
+            close = streams.ToArray();
+            streams.Clear();
         }
         stop?.Cancel();
-        close?.Dispose();
+        foreach(var stream in close)stream.Dispose();
         // The worker exits after its read timeout. Do not block the UI thread.
     }
 

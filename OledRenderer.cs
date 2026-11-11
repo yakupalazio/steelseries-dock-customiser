@@ -392,7 +392,8 @@ internal static class OledRenderer
                 WheelArtwork.Value(snapshot,fresh),snapshot.View,widget.WheelAutoLabel,
                 widget.WheelGapAngle,
                 fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2)
-                    ?snapshot.VolumeDelta:0);
+                    ?snapshot.VolumeAttenuationSteps:null,
+                fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2));
         }
         else
         {
