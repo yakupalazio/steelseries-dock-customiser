@@ -25,6 +25,9 @@ internal static class WidgetLabels
         "SpareBattery"=>"Yedek batarya",
         "DualSense"=>"DualSense bataryası",
         "VolumeChatMix"=>"Ses / ChatMix tekerleği",
+        "SystemCpu"=>"İşlemci kullanımı",
+        "SystemRam"=>"RAM kullanımı",
+        "NetworkPing"=>"Ağ gecikmesi",
         _=>kind
     });
 }

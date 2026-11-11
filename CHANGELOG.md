@@ -2,22 +2,24 @@
 
 ## 1.1.0 — Wheel widget and integration fixes
 
-- **Physical wheel hotfix (in place, version remains 1.1.0):** replaced slow per-frame CLI process startup with a persistent, opt-in OLED-only HID draw session (existing ggoled patch fallback remains). On every decoded physical dial report, a short delay reasserts the custom display after the dock's native overlay; a two-second keepalive also recovers from native overrides when GG consumes the input event. Reset/DOOM still close the live OLED session before handing the screen back.
+- **Latest in-place update:** configurable radial wheel gap angle (−180° to +180°, fixed upright VOL/MIX lettering), signed hardware-volume steps, compact Game/Chat badges and center-originating ChatMix arc. Physical wheel recovery uses a bounded rapid reassert burst plus a 500 ms idle fallback, without changing firmware or mixer settings.
+- Added a local **Profile Manager**: blank profiles, current-design copies, rename/delete, one-click apply and data-only JSON import/export. Starter widgets can now be removed from Media/Game as well as Idle without silently reappearing after Save.
+- Added opt-in CPU, RAM and network ping OLED widgets using lightweight native counters and on-demand ICMP, optional 45-second one-pixel burn-in drift for live output, and automatic OLED reconnect/backoff after USB interruptions.
+- Rechecked connected Nova Pro Wireless HID input/output, a successful bounded OLED report write and original-screen restoration, Windows self-tests, and English layout screenshots. The native overlay may still briefly take priority during physical knob rotation; that exact behavior needs manual observation.
+- **Physical wheel hotfix (in place, version remains 1.1.0):** replaced slow per-frame CLI process startup with a persistent, opt-in OLED-only HID draw session (existing ggoled patch fallback remains). On every decoded physical dial report, a short delay reasserts the custom display after the dock's native overlay; a half-second fallback also recovers from native overrides when GG consumes the input event. Stopping Live or pressing Dock Reset releases the OLED session.
 - Rebuilt the 45×42 1-bit radial wheel with a white filled centre, black `VOL` / `MIX` lettering, and no redundant right-hand label or percentage. The narrower footprint leaves more room for the clock, date and battery widgets.
 - Added a dedicated **pixel-by-pixel wheel designer**, with permanent white, dynamic percentage-controlled ring, black and eraser layers, optional auto VOL/MIX centre lettering, live sample-fill slider, factory reset, per-widget JSON persistence and English UI. Switch to Flat Bar from either the editor or the inspector.
 - Added tests for native protected 10–63 row frame patches, exact 45×42 layout bounds, per-widget pixel-art persistence, and English editor labels. Hardware wheel interaction still requires real-device acceptance testing.
 - **In-place visual and behavior update (still 1.1.0):** rebuilt the right inspector with non-overlapping rows, relevant-property visibility, 1-bit OLED previews, native Windows 11 dark mode, consistent dark input controls and custom stepper/button painting.
 - Added a radial, OEM-inspired **Volume / ChatMix wheel** alternative to the flat bar. Native monochrome pixels recreate the segmented arc, center mode badge, and percentage. The wheel is present by default in Idle and Game; it can be edited or removed, and a one-time non-destructive migration upgrades familiar legacy layouts without re-adding an intentionally removed wheel.
 - Repacked defaults around the wheel; kept all three bottom battery slots and the protected OEM header. Repaired compact-clock colon and shifted old media/game elements away from overlaps. Charging bolt still appears only when a provider positively reports charging.
-- Moved **About** to the bottom of Settings, added a persistent Turkish / English language selector, and localized the main workspace, battery pane, clock, icons, dialogs and DOOM instructions.
-- The About-only Konami sequence now automatically launches the mini FPS on the physical OLED. A currently running custom live OLED session is paused, allowed to drain and restored after the game exits. Physical frames never appear on the PC; ALT+TAB or Stop closes the game and restores the previous state. The experimental full-screen output still validates the HID device and OEM restoration tool.
+- Moved **About** to the bottom of Settings, added a persistent Turkish / English language selector, and localized the main workspace, battery pane, clock, icons and settings dialogs.
 - Added regression checks for radial drawing, intact date/header/battery bounds, one-time layout migration, language strings and English/Turkish UI.
 - **In-place refinement (no version bump):** replaced the timed 10-second test with persistent, separately confirmed **Uygula**; relabeled restore to **Dock Reset**. Static output is restored on normal shutdown or explicit Reset, and Reset is available after relaunch if the app crashed.
-- Removed the DOOM 20-second cutoff; after explicit confirmation, the PC shows a dock-facing instruction rather than the gameplay. The physical OLED alone receives game frames until Stop/ESC/close/focus loss. Restore and OLED burn-in warnings remain.
 
-- Corrected Live, 10-second physical test and Return buttons: old hidden controls no longer swallow clicks; separate device confirmation is unchanged.
+- Corrected Live, 10-second physical test and Return buttons: old inactive controls no longer swallow clicks; separate device confirmation is unchanged.
 - Removed Photo and Align buttons and stopped loading photo overrides; the original product photograph can be included in the private Windows package but is excluded from Git.
-- Moved Battery & Priority into a GG-style dark Settings page next to About; preserved author signature and About-only Konami unlock.
+- Moved Battery & Priority into a GG-style dark Settings page next to About; preserved the About page and author signature.
 - Fixed Phone Link Turkish `Piliniz şu anda %54` accessibility label; actual connected device returned 54% without ADB.
 - Added an optional read-only Volume/ChatMix OLED widget for Media/Game/Idle, decoding `07 25` and `07 45` HID events; no audio/device configuration writes.
 - Added synthetic HID decode/render and interface discovery tests. Read-only interface open/close passed while GG was running. Physical wheel event streaming requires acceptance testing.
@@ -36,10 +38,8 @@
 - Preserved opt-in physical 10-second frame, live 1Hz, return, photo import and four-point calibration.
 - Added regression tests for the new one-page workspace and charging-flag behavior; removed obsolete two-tab assertions.
 - Matched the dark off-pixel OLED photo composite to the surrounding black dock bezel; removed the grey preview rectangle.
-- Added **Settings → About**, the Yakup Can Palaz signature and hidden Konami-code entry.
-- Added an original playable 128×64 monochrome DOOM-style mini FPS (not the licensed DOOM game/engine); ESC returns to the normal application.
-- Added optional 20-second, fully user-confirmed physical OLED gameplay streaming via a restricted Nova Pro Wireless HID collection. It is off by default, stops on ESC, checks for competing in-app live output and restores via the SHA-verified ggoled CLI.
-- Added read-only HID collection detection, successful open/close without drawing, and report-packing/self-test coverage. The physical fast-stream mode still requires on-device visual acceptance testing.
+- Added **Settings → About** and the Yakup Can Palaz author signature.
+- Added read-only HID device discovery, open/close diagnostics and packet-format regression tests.
 - Added HidSharp 2.6.4 attribution, Apache 2.0 license and NOTICE files.
 - No unattended hardware output, firmware writes or SteelSeries GG registration.
 

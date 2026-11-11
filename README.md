@@ -1,13 +1,15 @@
 # Steelseries Dock Customiser 1.1 — OLED Studio
 
-## New in 1.1: dark OLED Studio, radial wheel and seamless DOOM takeover
+## New in 1.1: dark OLED Studio and radial controls
 
+- **Latest 1.1 update:** Rotate the wheel gap with the angle slider (the centre text remains upright). Hardware-volume steps can display signed `+` / `−` changes; ChatMix has G/C icons and fills from a neutral centre instead of from one end.
+- **Profiles:** Left sidebar → Profiles. Create a truly blank canvas, save/duplicate a design, rename/delete a profile, apply it and import/export safe JSON. Default Media/Game widgets are now removable; saving never silently re-adds them.
+- **Additional optional widgets:** CPU usage, RAM usage and ping, refreshed only while present on a layout. Settings → OLED display provides optional 45-second one-pixel live-output drift to reduce static-image persistence; a USB reconnect retry keeps an authorized Live session armed after temporary disconnection.
 - **Physical wheel fix, same 1.1.0 version:** Live mode now reasserts the custom OLED after hardware wheel events and periodically recovers from the dock's native overlay. A persistent OLED-only HID sender reduces redraw latency; the verified ggoled sender remains a fallback. This never changes hardware audio, wheel mode, or firmware configuration. The factory overlay may still appear briefly on turning the physical knob.
 - **Smaller native-style wheel:** 45×42 with filled white `VOL` / `MIX` centre and no right-hand duplicate text/percentage. Exact factory firmware pixel data was not extracted. To match a particular dock revision, select the wheel and open **Edit wheel pixels** to paint a custom 1-bit design, including a dynamic segment layer, optional centre text, instant sample-percentage preview and factory reset. **Flat bar** is accessible from both the pixel editor and Display style. Custom wheel art saves per widget and can be undone.
 - Rebuilt the right-side property inspector using properly spaced, context-sensitive rows and dark native controls. Pixel editor and dock preview remain on one responsive page.
 - Added a **radial wheel** option for hardware **Volume / ChatMix** (the earlier flat bar remains available). The black-and-white 1-bit design is an original, pixel-addressed recreation inspired by the factory ring. Default **Idle** and **Game** layouts now include a removable radial wheel, while existing layouts migrate only once and remember intentional removal.
 - Added **Settings → Language** with persistent English/Turkish selection. **About** now sits at the bottom of the Settings navigation. UI labels, menus, dialogs, settings and editor actions support English.
-- The About-only Konami code **automatically starts gameplay on the physical OLED** after device/restore validation. Any previously enabled live custom layout is safely paused and resumed when DOOM exits; PC displays instructions only. The game never draws frames on the PC.
 - Polished compact clock rendering, original top-ten-pixel protection and charging bolts; added radial layout/migration/language regression checks.
 
 ### Earlier 1.1 reliability fixes
@@ -39,7 +41,7 @@ The photo is a **simulation**, not a capture from the hardware. Real OLED writes
 ### Modes and widgets preserved
 
 - **Media:** Spotify/generic source icon, song, artist, progress bar and customizable small clock.
-- **Game:** A required game heading/title, a default radial volume/ChatMix wheel, plus an optional Mini Player that shows the playing song while gaming and stays black when paused.
+- **Game:** A starter game heading/title, a default removable radial volume/ChatMix wheel, plus an optional Mini Player that shows the playing song while gaming and stays black when paused. All visible widgets can be removed or rearranged.
 - **Idle:** Completely customizable clock/date, a default radial wheel, optional text and battery widgets.
 - Three dynamic prioritized battery slots, Nova Pro spare battery source, optional DualSense override, the removable read-only volume/ChatMix wheel, pixel icon editor and per-mode saved layouts.
 
@@ -85,20 +87,9 @@ Our **full graphical editor remains standalone in 1.0**. For the physical Nova P
 
 A later opt-in GG GameSense registration could add an Apps entry / supported events **after checking Nova Pro Wireless zone compatibility and conflict behavior**. No undocumented GG app files are patched or injected, and no registration is performed without user consent.
 
-## Settings, About and hidden OLED mini FPS
+## Settings and About
 
-Open **Settings → About** (the last navigation item) for the app information and the **Yakup Can Palaz** signature. While the About panel has keyboard focus, enter the classic Konami sequence:
-
-`↑ ↑ ↓ ↓ ← → ← → B A`
-
-This launches **DOOM MODE**, an original monochrome 128×64 ray-casting mini FPS with walls, an enemy, health, shooting and a pixel gun. It is an Easter egg **inspired by retro FPS games**, not the copyrighted id Software DOOM game or engine.
-
-- `W/S` or `↑/↓`: forward/back, `A/D` or `←/→`: turn, `Space`: fire, `R`: reset.
-- `ESC`: close the game and return to the normal OLED Studio.
-- The Konami sequence is an intentional **start action**. It automatically launches the native OLED game; the PC shows only **Look at your dock** instructions. There is **no automatic duration limit**. The experimental OLED game uses all 128×64 pixels including the temporary OEM header area.
-- When normal **Live** was already running, the app pauses its OLED sender, drains outstanding updates, lets the game own the OLED, then restores Live **only if it was active before the game**. Stop/ESC/window close/focus loss closes the game and restores the previous state; use Dock Reset as a recovery path.
-- The HID collection and SHA-verified `ggoled` restore tool are validated before game output. Fast frames only use the OLED endpoint; there are no firmware/brightness/device-setting edits. A failed validation refuses to write the game. Long unchanged OLED images can cause burn-in.
-- **High-frame-rate physical streaming has not yet been visually verified on the user's dock.** Check on the actual device before marking the Easter egg hardware path release-ready.
+**Settings → About** contains application details and the **Yakup Can Palaz** author signature.
 
 Developer read-only diagnostics: `--oled-hid-check` / `--oled-hid-open-test` check the OLED interface without sending a frame; `--dial-hid-check` / `--dial-hid-open-test` check the separate knob notification interface without changing audio. Neither writes a device command.
 
@@ -109,11 +100,10 @@ See `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES/` for HidSharp (Apache 2.
 - GG battery status and Library catalog are inspected read-only; no game process injection.
 - Windows Media sessions provide playing song title/artist and timeline; no Spotify account token.
 - Phone Link battery reading uses its accessibility status while open/minimized, with an optional user-enabled open-and-minimize recovery. It does not read messages, photos or contact data.
-- No direct firmware modification. Full-screen OLED gameplay is started **only by entering the secret Konami code**, never unattended at startup.
+- No direct firmware modification. Physical OLED output requires the application's normal on-screen confirmation or Live controls.
 - The user-provided SteelSeries product photograph stays **excluded from Git**. Local Windows packages built on the development PC contain the photo for personal use or direct review by SteelSeries; fresh source builds without the asset draw a vector dock. Redistribution permission for someone else's product photograph is not implied by owning the device.
 
 ## Verification status
 
 - .NET 10 Release compilation and headless self-tests (renderer, factory-header protection, photo alignment, mode priority, charging bolt, radial Volume/ChatMix rendering, layout migration and language).
 - Windows off-screen UI captures of Media, Idle, Game and English Settings were inspected; native inputs and context-specific rows were adjusted after visual QA.
-- **Final on-device OLED inspection and fast-game/live handoff still require hands-on verification.** The user has confirmed the physical wheel responds; its HID values are decoded read-only, but this update's new radial display and the DOOM exclusive handoff have not been exercised on their dock by the assistant.

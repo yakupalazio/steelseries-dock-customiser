@@ -146,6 +146,58 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--oled-hardware-smoke"))
+        {
+            // Explicit, temporary physical test. It only writes rows 10–63,
+            // uses the normal user design and restores firmware ownership in
+            // finally. It does not change audio, knob settings or firmware.
+            var writer=new DockHardwareTest();
+            string validation=writer.Validate();
+            if(validation.Length!=0)
+            {
+                Console.WriteLine(validation);
+                Environment.ExitCode=1;
+                return;
+            }
+            try
+            {
+                using var image=OledRenderer.Render(
+                    StudioProject.Defaults(ScreenMode.Idle),false,true,false,
+                    layoutMode:ScreenMode.Idle);
+                using(var transport=new FastOledTransport())
+                {
+                    transport.Open();
+                    transport.SendLiveFrame(image,true);
+                    System.Threading.Thread.Sleep(850);
+                }
+                Console.WriteLine("OLED protected feature reports accepted.");
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("OLED smoke test failed: "+ex.Message);
+                Environment.ExitCode=1;
+            }
+            finally
+            {
+                string result=writer.RestoreNow();
+                Console.WriteLine(result);
+                if(!result.StartsWith("SteelSeries varsayılan",StringComparison.Ordinal))
+                    Environment.ExitCode=1;
+            }
+            return;
+        }
+        if(args.Contains("--telemetry-smoke"))
+        {
+            var reader=new SystemTelemetry();
+            reader.Read();
+            System.Threading.Thread.Sleep(700);
+            var sample=reader.Read();
+            Console.WriteLine($"CPU={sample.Cpu?.ToString()??"--"}% RAM="+
+                $"{sample.Memory?.ToString()??"--"}%");
+            Environment.ExitCode=sample.Cpu is >=0 and <=100 &&
+                sample.Memory is >=0 and <=100 ?0:1;
+            return;
+        }
         if(args.Contains("--self-test"))
         {
             ApplicationConfiguration.Initialize();
@@ -174,6 +226,22 @@ internal static class Program
                     wheelCapture.Width,wheelCapture.Height));
                 wheelCapture.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
                 wheel.Close();
+                return;
+            }
+            if(args.Contains("--capture-profiles"))
+            {
+                using var profiles=new LayoutProfileDialog(ScreenMode.Idle,
+                    ()=>StudioProject.Defaults(ScreenMode.Idle),_=>{});
+                profiles.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
+                profiles.Location=new System.Drawing.Point(-5000,-5000);
+                profiles.ShowInTaskbar=false;
+                profiles.Show();
+                Application.DoEvents();
+                using var capture=new System.Drawing.Bitmap(profiles.Width,profiles.Height);
+                profiles.DrawToBitmap(capture,new System.Drawing.Rectangle(0,0,
+                    capture.Width,capture.Height));
+                capture.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                profiles.Close();
                 return;
             }
             if(args.Contains("--capture-settings"))
@@ -229,6 +297,9 @@ public sealed class DockWidget
     // factory template; saved along with this widget, not globally.
     public string WheelPixels { get; set; } = "";
     public bool WheelAutoLabel { get; set; } = true;
+    // Degrees clockwise relative to the factory ring. The VOL/MIX badge
+    // remains upright, including when the surrounding artwork is rotated.
+    public int WheelGapAngle { get; set; }
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;

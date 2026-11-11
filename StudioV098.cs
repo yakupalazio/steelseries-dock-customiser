@@ -168,12 +168,9 @@ internal sealed class StudioProject
         RadialDefaultsMigrated=true;
     }
 
-    public static bool IsLocked(ScreenMode mode,string kind) => mode switch
-    {
-        ScreenMode.Media=>kind is "Source" or "Track" or "Artist" or "Progress",
-        ScreenMode.Game=>kind is "GameLabel" or "GameTitle",
-        _=>false
-    };
+    // Starter layouts remain useful defaults, but no visual widget is
+    // mandatory. This allows a genuinely blank custom design in every mode.
+    public static bool IsLocked(ScreenMode mode,string kind) => false;
 
     public static bool IsAllowed(ScreenMode mode,string kind) => kind switch
     {
@@ -181,6 +178,7 @@ internal sealed class StudioProject
             mode==ScreenMode.Media,
         "GameLabel" or "GameTitle" or "GameMiniPlayer"=>mode==ScreenMode.Game,
         "Clock" or "Date" or "Custom text" or
+        "SystemCpu" or "SystemRam" or "NetworkPing" or
         "Mouse" or "Phone" or "DualSense" or "Headset" or "SpareBattery" or "Laptop" or
         "BatterySlot1" or "BatterySlot2" or "BatterySlot3" or "VolumeChatMix"=>true,
         _=>false
@@ -204,22 +202,12 @@ internal sealed class StudioProject
             w.MiniWidth=Math.Clamp(w.MiniWidth,35,128);
             w.DialStyle=w.DialStyle=="Wheel"?"Wheel":"Bar";
             if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
+            w.WheelGapAngle=Math.Clamp(w.WheelGapAngle,-180,180);
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }
-        foreach(string required in mode switch
-            {
-                ScreenMode.Media=>new[]{"Source","Track","Artist","Progress"},
-                ScreenMode.Game=>new[]{"GameLabel","GameTitle"},
-                _=>Array.Empty<string>()
-            })
-        {
-            if(layout.Widgets.All(w=>w.Kind!=required))
-            {
-                var example=Defaults(mode).Widgets.First(w=>w.Kind==required);
-                layout.Widgets.Add(example);
-            }
-        }
+        // Never silently re-create widgets the user has removed. Defaults()
+        // supplies the initial Media/Game/Idle UI instead.
         // Do not delete header artwork when protection is enabled:
         // the renderer simply masks it, so disabling protection restores it.
         foreach(var w in layout.Widgets)

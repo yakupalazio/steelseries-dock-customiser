@@ -52,14 +52,25 @@ internal static class WheelArtwork
         return (degrees-StartAngle+720d)%360d;
     }
 
-    public static bool IsOn(char value,int x,int y,int? percent)
+    public static bool IsOn(char value,int x,int y,int? percent,
+        DialView view=DialView.Volume)
         => value switch
         {
             '1'=>true,
-            '2'=>percent.HasValue && Angle(x,y)<=Sweep*
-                Math.Clamp(percent.Value,0,100)/100d,
+            '2'=>percent.HasValue && DynamicSegment(Angle(x,y),percent.Value,view),
             _=>false
         };
+
+    // Volume grows clockwise from the ring's first endpoint. ChatMix is
+    // different: the middle is neutral and the illuminated segment grows
+    // away from the center toward Game or Chat, as on the original GameDAC.
+    private static bool DynamicSegment(double angle,int percentage,DialView view)
+    {
+        double stop=Sweep*Math.Clamp(percentage,0,100)/100d;
+        if(view==DialView.Volume)return angle<=stop;
+        return angle>=Math.Min(Sweep/2d,stop) &&
+            angle<=Math.Max(Sweep/2d,stop);
+    }
 
     public static int? Value(DialSnapshot snapshot,bool fresh)
     {
@@ -71,23 +82,91 @@ internal static class WheelArtwork
     }
 
     public static void Draw(bool[] output,bool[] coverage,int x,int y,
-        string? artwork,int? percent,DialView view,bool autoLabel=true)
+        string? artwork,int? percent,DialView view,bool autoLabel=true,
+        int gapAngle=0,int volumeDelta=0)
     {
         string src=Resolve(artwork);
+        double radians=-Math.Clamp(gapAngle,-180,180)*Math.PI/180d;
+        double cosine=Math.Cos(radians),sine=Math.Sin(radians);
         for(int sy=0;sy<Height;sy++)for(int sx=0;sx<Width;sx++)
         {
             int px=x+sx,py=y+sy;
             if(px<0||py<0||px>=128||py>=64)continue;
-            char value=src[sy*Width+sx];
+            // Rotate ring around its centre via inverse pixel sampling.
+            // The central badge is intentionally excluded from rotation.
+            int dx=sx-CenterX,dy=sy-CenterY;
+            int rx=dx*dx+dy*dy;
+            int fromX=rx<100?sx:CenterX+(int)Math.Round(dx*cosine-dy*sine);
+            int fromY=rx<100?sy:CenterY+(int)Math.Round(dx*sine+dy*cosine);
+            if(fromX<0||fromY<0||fromX>=Width||fromY>=Height)continue;
+            char value=src[fromY*Width+fromX];
             if(value=='0')continue;
             int dest=py*128+px;
             coverage[dest]=true;
-            output[dest]=IsOn(value,sx,sy,percent);
+            output[dest]=IsOn(value,fromX,fromY,percent,view);
         }
         // The original Nova Pro badge is a *filled* white disc with black
         // lettering, unlike the previous hollow badge with text to its right.
         if(autoLabel)
             DrawBadge(output,coverage,x,y,view==DialView.Volume?"VOL":"MIX");
+        if(view==DialView.ChatMix)
+        {
+            DrawIcon(output,coverage,x+1,y+1,'G');
+            DrawIcon(output,coverage,x+Width-8,y+1,'C');
+        }
+        else if(volumeDelta!=0)
+        {
+            // Show a signed live step without wasting the width of the OLED
+            // wheel on a redundant "VOL 76%" label.
+            DrawSignedDelta(output,coverage,x+1,y+1,volumeDelta);
+        }
+    }
+
+    private static void DrawIcon(bool[] output,bool[] coverage,int x,int y,char symbol)
+    {
+        for(int xx=0;xx<7;xx++)for(int yy=0;yy<8;yy++)
+            if(xx==0||xx==6||yy==0||yy==7)
+                Put(output,coverage,x+xx,y+yy,true);
+        string[] glyph=symbol=='G'?
+            ["111","100","101","101","111"]:
+            ["111","100","100","100","111"];
+        for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)
+            if(glyph[yy][xx]=='1')Put(output,coverage,x+2+xx,y+2+yy,true);
+    }
+
+    private static void DrawSignedDelta(bool[] output,bool[] coverage,
+        int x,int y,int delta)
+    {
+        string str=delta>0?"+"+Math.Min(99,delta):"-"+Math.Min(99,-delta);
+        foreach(char digit in str)
+        {
+            string[] rows=digit switch
+            {
+                '+'=>["010","111","010","000","000"],
+                '-'=>["000","111","000","000","000"],
+                '0'=>["111","101","101","101","111"],
+                '1'=>["010","110","010","010","111"],
+                '2'=>["111","001","111","100","111"],
+                '3'=>["111","001","111","001","111"],
+                '4'=>["101","101","111","001","001"],
+                '5'=>["111","100","111","001","111"],
+                '6'=>["111","100","111","101","111"],
+                '7'=>["111","001","010","010","010"],
+                '8'=>["111","101","111","101","111"],
+                _=>["111","101","111","001","111"]
+            };
+            for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)
+                if(rows[yy][xx]=='1')Put(output,coverage,x+xx,y+yy,true);
+            x+=4;
+        }
+    }
+
+    private static void Put(bool[] output,bool[] coverage,int x,int y,bool on)
+    {
+        if(x<0||x>=128||y<0||y>=64)return;
+        int pos=y*128+x;
+        coverage[pos]=true;
+        output[pos]=on;
     }
 
     private static void DrawBadge(bool[] output,bool[] coverage,
@@ -102,7 +181,7 @@ internal static class WheelArtwork
             _ => [
                 ["101","101","101","101","010"],
                 ["010","101","101","101","010"],
-                ["110","101","110","100","100"]]
+                ["100","100","100","100","111"]]
         };
         const int letterX=CenterX-5,letterY=CenterY-2;
         for(int i=0;i<3;i++)for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)

@@ -44,10 +44,13 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly Button _sendHardware = new() { Text="Uygula", Width=110,Height=31 };
     private readonly Button _restoreHardware = new() { Text="Dock Reset", Width=120,Height=31 };
     private readonly Button _liveToggle = new() { Text="Canlı dock modunu başlat", Width=191,Height=31 };
-    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=1000 };
-    private readonly System.Windows.Forms.Timer _dialRefreshTimer=new() { Interval=160 };
+    private readonly System.Windows.Forms.Timer _liveTimer=new() { Interval=250 };
+    private readonly System.Windows.Forms.Timer _dialRefreshTimer=new() { Interval=110 };
+    private DateTimeOffset _dialTakeoverUntil=DateTimeOffset.MinValue;
     private bool _liveEnabled,_liveSending;
     private bool _forceNextLiveFrame;
+    private int _reconnectFailures;
+    private DateTimeOffset _nextReconnect=DateTimeOffset.MinValue;
     private string? _lastLiveFrame;
     private DateTimeOffset _lastLiveWrite=DateTimeOffset.MinValue;
     private readonly Label _message = new() { Left=16,Top=725,Width=775,Height=42,
@@ -102,7 +105,11 @@ internal sealed class DockPreviewPanel : UserControl
         _liveTimer.Tick += async (_,_) => await RefreshLiveDock();
         _dialRefreshTimer.Tick += async (_,_) =>
         {
-            _dialRefreshTimer.Stop();
+            if(DateTimeOffset.UtcNow>=_dialTakeoverUntil)
+            {
+                _dialRefreshTimer.Stop();
+                return;
+            }
             await RefreshLiveDock(force:true);
         };
         _restoreHardware.Click += (_,_) => ResetDock();
@@ -110,6 +117,7 @@ internal sealed class DockPreviewPanel : UserControl
         {
             _liveTimer.Stop();
             _dialRefreshTimer.Stop();
+            _dialTakeoverUntil=DateTimeOffset.MinValue;
             bool mustRestore=_liveEnabled||_hardware.Active||_liveSending;
             _liveEnabled=false;
             if(mustRestore)_hardware.RestoreNow();
@@ -149,10 +157,14 @@ internal sealed class DockPreviewPanel : UserControl
     {
         if(!_liveEnabled||IsDisposed)return;
         _forceNextLiveFrame=true;
+        _dialTakeoverUntil=DateTimeOffset.UtcNow.AddSeconds(3);
         // Leading-edge throttle, not trailing-edge debounce: while the user
         // keeps spinning, the preview and physical OLED must keep advancing.
         if(!_dialRefreshTimer.Enabled)_dialRefreshTimer.Start();
     }
+
+    internal static int ReconnectDelaySeconds(int failures)
+        =>Math.Clamp(1<<Math.Clamp(failures,1,4),2,15);
 
     // Public actions for the integrated, single-page v1.0 toolbar.
     // The legacy buttons are hidden in the integrated studio. PerformClick()
@@ -174,9 +186,12 @@ internal sealed class DockPreviewPanel : UserControl
         _liveEnabled=false;
         _liveTimer.Stop();
         _dialRefreshTimer.Stop();
+        _dialTakeoverUntil=DateTimeOffset.MinValue;
         _lastLiveFrame=null;
         _lastLiveWrite=DateTimeOffset.MinValue;
         _forceNextLiveFrame=false;
+        _reconnectFailures=0;
+        _nextReconnect=DateTimeOffset.MinValue;
         _liveToggle.Text="Canlı dock modunu başlat";
         _sendHardware.Enabled=false;
         _message.Text="DOOM MODE için OLED aktarımı duraklatılıyor…";
@@ -304,13 +319,13 @@ internal sealed class DockPreviewPanel : UserControl
             return;
         }
         string liveConsent=UiLanguage.English
-            ?"Live OLED checks once per second and reasserts the screen after dial input.\n"+
+            ?"Live OLED checks every 250 ms and reasserts after dial input.\n"+
                 (_protectHeader()
                     ?"Only rows 10–63 will update; original top 10 pixels remain untouched.\n"
                     :"WARNING: Full-screen 128×64 output will replace the OEM header.\n")+
                 "SteelSeries GG Now Playing may conflict with this feature.\n"+
                 "Closing live mode restores the original OLED. Start live mode?"
-            :"Canlı OLED saniyede 1 kez kontrol edilir; fiziksel tekerlekten sonra ekran geri alınır.\n"+
+            :"Canlı OLED her 250 ms kontrol edilir; fiziksel tekerlekten sonra ekran geri alınır.\n"+
                 (_protectHeader()
                     ?"Yalnızca 10–63. satırlar güncellenir; orijinal üst bölüm korunur.\n"
                     :"UYARI: Üst koruma kapalı, tüm 128×64 ekran değiştirilecek.\n")+
@@ -326,6 +341,8 @@ internal sealed class DockPreviewPanel : UserControl
         _lastLiveFrame=null;
         _lastLiveWrite=DateTimeOffset.MinValue;
         _forceNextLiveFrame=false;
+        _reconnectFailures=0;
+        _nextReconnect=DateTimeOffset.MinValue;
         _sendHardware.Enabled=false;
         _liveToggle.Text="Canlı modu durdur";
         _message.Text=_protectHeader()
@@ -341,9 +358,12 @@ internal sealed class DockPreviewPanel : UserControl
         _liveEnabled=false;
         _liveTimer.Stop();
         _dialRefreshTimer.Stop();
+        _dialTakeoverUntil=DateTimeOffset.MinValue;
         _lastLiveFrame=null;
         _lastLiveWrite=DateTimeOffset.MinValue;
         _forceNextLiveFrame=false;
+        _reconnectFailures=0;
+        _nextReconnect=DateTimeOffset.MinValue;
         if(!IsDisposed)
         {
             _liveToggle.Text="Canlı dock modunu başlat";
@@ -357,11 +377,12 @@ internal sealed class DockPreviewPanel : UserControl
 
     internal static bool NeedsReassert(string? prior,string next,
         DateTimeOffset last,DateTimeOffset now,bool force)
-        =>force||prior!=next||now-last>=TimeSpan.FromSeconds(2);
+        =>force||prior!=next||now-last>=TimeSpan.FromMilliseconds(450);
 
     private async System.Threading.Tasks.Task RefreshLiveDock(bool force=false)
     {
         if(!_liveEnabled||IsDisposed)return;
+        if(DateTimeOffset.UtcNow<_nextReconnect)return;
         if(_liveSending)
         {
             if(force)_forceNextLiveFrame=true;
@@ -378,10 +399,9 @@ internal sealed class DockPreviewPanel : UserControl
                 pixels[ptr++]=bitmap.GetPixel(x,y).R>127?(byte)1:(byte)0;
             string stamp=(_protectHeader()?"protected:":"full:")+
                 Convert.ToHexString(SHA256.HashData(pixels[..ptr]));
-            // Keepalive is necessary: a real volume/ChatMix turn causes the
-            // dock firmware to display its native wheel, even if its HID
-            // notification isn't available to a concurrent GG client.
-            // Always reassert at most every two seconds during Live.
+            // OLED report 0x93 already overwrites the display RAM, but the
+            // firmware may draw its volume animation afterward. Reassert the
+            // selected design without attempting undocumented mode changes.
             if(NeedsReassert(_lastLiveFrame,stamp,_lastLiveWrite,
                 DateTimeOffset.UtcNow,force||_forceNextLiveFrame))
             {
@@ -389,20 +409,30 @@ internal sealed class DockPreviewPanel : UserControl
                 _lastLiveFrame=stamp;
                 _lastLiveWrite=DateTimeOffset.UtcNow;
                 _forceNextLiveFrame=false;
+                if(_reconnectFailures>0)
+                {
+                    _reconnectFailures=0;
+                    _nextReconnect=DateTimeOffset.MinValue;
+                    if(!IsDisposed)
+                        _message.Text=UiLanguage.T("OLED bağlantısı yeniden kuruldu.");
+                }
             }
         }
         catch(Exception ex)
         {
-            _liveEnabled=false;
-            _liveTimer.Stop();
-            _dialRefreshTimer.Stop();
+            // Keep the user's authorized live session armed on unplug. The
+            // transport is rebuilt by DockHardwareTest at the next attempt.
+            _reconnectFailures++;
+            int delay=ReconnectDelaySeconds(_reconnectFailures);
+            _nextReconnect=DateTimeOffset.UtcNow.AddSeconds(delay);
+            _lastLiveFrame=null;
+            _lastLiveWrite=DateTimeOffset.MinValue;
+            _forceNextLiveFrame=false;
             if(!IsDisposed)
             {
-                _liveToggle.Text="Canlı dock modunu başlat";
-                _sendHardware.Enabled=_custom.Checked;
-                _message.Text="Canlı dock bağlantısı durdu: "+ex.Message;
+                _message.Text=UiLanguage.T("OLED bağlantısı bekleniyor")+
+                    $" ({delay}s): "+ex.Message;
             }
-            _hardware.RestoreNow();
         }
         finally
         {

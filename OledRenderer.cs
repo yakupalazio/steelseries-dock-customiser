@@ -119,7 +119,8 @@ internal static class OledRenderer
     public static Bitmap Render(LayoutState layout,bool media,bool showDate,bool spotify,
         BatterySnapshot? batteries=null,MediaSnapshot? playback=null,
         GameSnapshot? game=null,BatteryPreferences? preferences=null,
-        bool protectHeader=true,ScreenMode? layoutMode=null,DialSnapshot? dial=null)
+        bool protectHeader=true,ScreenMode? layoutMode=null,DialSnapshot? dial=null,
+        SystemTelemetrySnapshot? telemetry=null)
     {
         bool wasEditable=EditableHeader.Value;
         EditableHeader.Value=!protectHeader;
@@ -145,7 +146,7 @@ internal static class OledRenderer
                 StudioProject.IsAllowed(mode,w.Kind) &&
                     (w.Kind!="Date"||showDate)))
             .OrderBy(w=>w.Kind is "GameMiniPlayer" or "VolumeChatMix"?1:0))
-            DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial);
+            DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial,telemetry);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
         for(int y=0;y<Height;y++)
@@ -187,6 +188,8 @@ internal static class OledRenderer
         "GameMiniPlayer" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,35,128)),Math.Max(14,
             7*Scale(w.FontSize)+Math.Clamp(w.StrokeWidth,1,3)+2)),
+        "SystemCpu" or "SystemRam" or "NetworkPing" =>
+            new(w.X,w.Y,Math.Min(Width-w.X,83),8),
         "VolumeChatMix" when w.DialStyle=="Wheel" => new(w.X,w.Y,
             Math.Min(Width-w.X,WheelArtwork.Width),WheelArtwork.Height),
         "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
@@ -219,7 +222,8 @@ internal static class OledRenderer
 
     private static void DrawWidget(bool[] px,DockWidget w,bool spotify,
         BatterySnapshot? batteries,MediaSnapshot? playback,
-        GameSnapshot? game,string[] currentDevices,DialSnapshot? dial)
+        GameSnapshot? game,string[] currentDevices,DialSnapshot? dial,
+        SystemTelemetrySnapshot? telemetry)
     {
         int x=w.X,y=w.Y;
         switch(w.Kind)
@@ -282,6 +286,15 @@ internal static class OledRenderer
             case "VolumeChatMix":
                 DrawDialWidget(px,w,dial);
                 break;
+            case "SystemCpu":
+                DrawText(px,$"CPU {FormatPercent(telemetry?.Cpu)}",x,y,1);
+                break;
+            case "SystemRam":
+                DrawText(px,$"RAM {FormatPercent(telemetry?.Memory)}",x,y,1);
+                break;
+            case "NetworkPing":
+                DrawText(px,$"PING {FormatPing(telemetry?.Ping)}",x,y,1);
+                break;
             case "Track":
             case "Artist":
                 DrawMarquee(px,DisplayText(w,playback),x,y,Scale(w.FontSize));
@@ -296,6 +309,11 @@ internal static class OledRenderer
                 break;
         }
     }
+
+    private static string FormatPercent(int? value)=>value.HasValue
+        ?$"{Math.Clamp(value.Value,0,100)}%":"--%";
+    private static string FormatPing(int? value)=>value.HasValue
+        ?$"{Math.Clamp(value.Value,0,9999)}MS":"--MS";
 
     /// <summary>
     /// Optional game-only media widget. No fake title or playback indicator:
@@ -371,7 +389,10 @@ internal static class OledRenderer
         if(widget.DialStyle=="Wheel")
         {
             WheelArtwork.Draw(tile,mask,x,y,widget.WheelPixels,
-                WheelArtwork.Value(snapshot,fresh),snapshot.View,widget.WheelAutoLabel);
+                WheelArtwork.Value(snapshot,fresh),snapshot.View,widget.WheelAutoLabel,
+                widget.WheelGapAngle,
+                fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2)
+                    ?snapshot.VolumeDelta:0);
         }
         else
         {

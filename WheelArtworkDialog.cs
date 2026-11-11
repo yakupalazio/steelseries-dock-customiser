@@ -22,23 +22,28 @@ internal sealed class WheelArtworkDialog : Form
     private readonly Label previewLabel=new(){Width=230,Height=35};
     private readonly ComboBox brush=new(){Width=216,DropDownStyle=ComboBoxStyle.DropDownList};
     private readonly ComboBox mode=new(){Width=216,DropDownStyle=ComboBoxStyle.DropDownList};
+    private readonly TrackBar rotation=new(){Minimum=-180,Maximum=180,
+        TickFrequency=45,SmallChange=5,LargeChange=15,Width=218};
+    private readonly Label angleValue=new(){Width=218,Height=23};
     private readonly DarkCheckBox automaticLabel=new(){
         Width=218,Height=32,Checked=true,AutoSize=false};
 
     public string Artwork {get;private set;}="";
     public bool AutoLabel {get;private set;}=true;
     public bool UseBar {get;private set;}
+    public int GapAngle {get;private set;}
 
-    public WheelArtworkDialog(string? saved,bool labelEnabled=true)
+    public WheelArtworkDialog(string? saved,bool labelEnabled=true,int gapAngle=0)
     {
         pixels=WheelArtwork.Resolve(saved).ToCharArray();
         Artwork=saved??"";
         AutoLabel=labelEnabled;
+        GapAngle=Math.Clamp(gapAngle,-180,180);
         Text=UiLanguage.T("Tekerlek tasarım atölyesi");
         StartPosition=FormStartPosition.CenterParent;
         FormBorderStyle=FormBorderStyle.FixedDialog;
         MaximizeBox=false;MinimizeBox=false;
-        ClientSize=new Size(758,550);
+        ClientSize=new Size(758,625);
         BackColor=Color.FromArgb(13,18,26);
         ForeColor=Color.FromArgb(235,242,248);
         Font=new Font("Segoe UI",9.3f);
@@ -80,24 +85,40 @@ internal sealed class WheelArtworkDialog : Form
         automaticLabel.CheckedChanged+=(_,_)=>canvas.Invalidate();
         Controls.Add(automaticLabel);
 
+        Controls.Add(new Label{Text=UiLanguage.T("Halka boşluğunun açısı"),
+            Left=right,Top=266,Width=230,Height=22});
+        rotation.Left=right;rotation.Top=286;
+        rotation.Value=GapAngle;
+        rotation.ValueChanged+=(_,_)=>{
+            GapAngle=rotation.Value;
+            angleValue.Text=UiLanguage.T("Açı")+$": {rotation.Value:+#;-#;0}°";
+            canvas.Invalidate();
+        };
+        Controls.Add(rotation);
+        angleValue.Left=right;angleValue.Top=327;
+        angleValue.ForeColor=Color.FromArgb(151,169,187);
+        angleValue.Text=UiLanguage.T("Açı")+$": {GapAngle:+#;-#;0}°";
+        Controls.Add(angleValue);
+
         Controls.Add(new Label{Text=UiLanguage.T("Örnek doluluk"),
-            Left=right,Top=272,Width=230,Height=26});
-        sample.Left=right;sample.Top=298;
+            Left=right,Top=354,Width=230,Height=22});
+        sample.Left=right;sample.Top=375;
         sample.ValueChanged+=(_,_)=>UpdateSample();
         Controls.Add(sample);
-        previewLabel.Left=right;previewLabel.Top=347;
+        previewLabel.Left=right;previewLabel.Top=417;
         previewLabel.ForeColor=Color.FromArgb(151,169,187);
         Controls.Add(previewLabel);
 
-        var reset=Button(UiLanguage.T("Orijinal tasarıma dön"),right,381,218);
+        var reset=Button(UiLanguage.T("Orijinal tasarıma dön"),right,451,218);
         reset.Click+=(_,_)=>
         {
             WheelArtwork.Factory.CopyTo(0,pixels,0,pixels.Length);
             automaticLabel.Checked=true;
+            rotation.Value=0;
             canvas.Invalidate();
         };
         Controls.Add(reset);
-        var flatBar=Button(UiLanguage.T("Düz çubuğa geç"),right,422,218);
+        var flatBar=Button(UiLanguage.T("Düz çubuğa geç"),right,492,218);
         flatBar.Click+=(_,_)=>
         {
             UseBar=true;
@@ -109,11 +130,11 @@ internal sealed class WheelArtworkDialog : Form
         Controls.Add(new Label{
             Text=UiLanguage.T("Sol tık: seçilen piksel  •  Sağ tık: sil\nMavi katman, ses/ChatMix ile hareket eder."),
             ForeColor=Color.FromArgb(151,169,187),
-            Left=24,Top=505,Width=452,Height=38});
-        var cancel=Button(UiLanguage.T("Vazgeç"),500,472,100);
+            Left=24,Top=536,Width=452,Height=42});
+        var cancel=Button(UiLanguage.T("Vazgeç"),500,542,100);
         cancel.DialogResult=DialogResult.Cancel;
         Controls.Add(cancel);
-        var save=Button(UiLanguage.T("Kaydet"),610,472,108);
+        var save=Button(UiLanguage.T("Kaydet"),610,542,108);
         save.BackColor=Color.FromArgb(72,194,238);
         save.ForeColor=Color.FromArgb(13,18,26);
         save.Click+=(_,_)=>
@@ -166,7 +187,7 @@ internal sealed class WheelArtworkDialog : Form
         var coverage=new bool[128*64];
         WheelArtwork.Draw(bitmap,coverage,0,0,new string(pixels),sample.Value,
             mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
-            automaticLabel.Checked);
+            automaticLabel.Checked,GapAngle);
         e.Graphics.Clear(Color.FromArgb(6,10,15));
         for(int y=0;y<WheelArtwork.Height;y++)for(int x=0;x<WheelArtwork.Width;x++)
         {

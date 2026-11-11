@@ -15,6 +15,8 @@ internal readonly record struct DialSnapshot(
     DateTimeOffset UpdatedAt, string Status)
 {
     public bool HasData => Volume.HasValue || Game.HasValue && Chat.HasValue;
+    // Signed percentage-point change since the preceding physical volume event.
+    public int VolumeDelta { get; init; }
 }
 
 /// <summary>
@@ -161,11 +163,14 @@ internal sealed class ArctisDialMonitor : IDisposable
                     if (!TryDecode(buffer.AsSpan(0, count), out var ev)) continue;
                     lock (gate)
                     {
+                        int delta=ev.Volume.HasValue && current.Volume.HasValue
+                            ? ev.Volume.Value-current.Volume.Value : 0;
                         current = new DialSnapshot(ev.View,
                             ev.Volume ?? current.Volume,
                             ev.Game ?? current.Game,
                             ev.Chat ?? current.Chat,
-                            DateTimeOffset.UtcNow, "Dock tekerleği (canlı)");
+                            DateTimeOffset.UtcNow, "Dock tekerleği (canlı)")
+                            { VolumeDelta=ev.View==DialView.Volume?delta:0 };
                     }
                     try{Updated?.Invoke();}
                     catch(ObjectDisposedException){ /* Form is closing. */ }
@@ -190,7 +195,9 @@ internal sealed class ArctisDialMonitor : IDisposable
                 }
                 opened?.Dispose();
             }
-            if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(15))) break;
+            // Hot-unplug/replug should not leave the physical dial silent for
+            // fifteen seconds after the connection becomes available again.
+            if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(2))) break;
         }
     }
 

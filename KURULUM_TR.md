@@ -25,32 +25,23 @@ Bu paket .NET 10 çalışma zamanını içinde taşır; ayrıca .NET yüklemen g
 
 ## İsteğe bağlı Ses / ChatMix tekerleği widget'ı
 
+Tekerlek tasarım penceresinde **Halka boşluğunun açısı** sürgüsüyle kesik yeri −180° ile +180° arasında döndürebilirsin; ortadaki yazı dönmez. Ses hareketinde `+`/`−` adım değeri, ChatMix ekranında Game/Chat simgeleri ve orta denge noktasından büyüyen halka dolumu gösterilir.
+
 **Boşta** ve **Oyun** modlarında dairesel widget varsayılan olarak eklidir. Sağdan widget'ı seçip **Gösterge tipi → Dairesel tekerlek / Düz çubuk** arasında geçebilirsin. İstemiyorsan öğeyi silebilirsin; kaydettikten sonra kendiliğinden geri gelmez. Ses modunda yüzdeyi, ChatMix modunda Game/Chat dengesini gösterir; Windows sesini veya kulaklık ayarını değiştirmez. Fiziksel tekerlek hareketinden gelen salt-okunur HID bildirimlerini dinler. İlk gerçek tekerlek hareketine kadar `--` görünmesi normaldir. Bazı cihazlarda tuşa basmak yeni bir HID bildirimi üretmeyebilir; görünüm bir sonraki tekerlek hareketiyle güncellenir.
 
 Bu gösterge SteelSeries'in resmî görselinden **esinlenilmiş, 45×42 gerçek OLED pikseliyle yeniden çizilmiş** bir tasarımdır; firmware veya GG içinden alınmış hazır sprite içermez. Ortadaki beyaz disk, siyah `VOL` / `MIX` yazısı ve halkası dışında yüzde metni yoktur. Görseli birebir kendi cihazına uyarlamak için dairesel widget seçiliyken **Tekerleği piksel piksel düzenle** düğmesine bas. Beyaz/Siyah/Silgi fırçalarını ve sese göre dolan mavi katmanı kullanıp 0–100 örnek sürgüsüyle dene. İstersen otomatik orta yazıyı kapatıp onu da elle çizebilirsin. Değişiklikler widget'a kaydedilir; **Orijinal tasarıma dön** ile şablona dönebilirsin. Aynı menüde **Düz çubuğa geç** seçeneği de bulunur.
 
-**Fiziksel tekerlek sorunu için düzeltme:** Canlı mod artık doğrudan OLED çizim oturumunu yeniden kullanır, tekerlek hareketinden kısa süre sonra tasarımı tekrar gösterir ve GG olayı saklarsa iki saniyede bir ekranı geri alır. Tekerlek döndüğünde orijinal SteelSeries göstergesi çok kısa görünebilir; bağlantı veya HID bildirimlerinin GG tarafından tüketilmesi hâlinde görünümün hareketi gerçek donanımda doğrulanmalıdır. Ses seviyesini ayarlayan hiçbir komut gönderilmez. OLED'in orijinal üst 10 pikseli değiştirilmez.
+**Fiziksel tekerlek sorunu için düzeltme:** Canlı mod artık doğrudan OLED çizim oturumunu yeniden kullanır, tekerlek hareketinden kısa süre sonra tasarımı tekrar gösterir ve GG olayı saklarsa yaklaşık yarım saniyede bir ekranı geri alır. Tekerlek döndüğünde orijinal SteelSeries göstergesi çok kısa görünebilir; bağlantı veya HID bildirimlerinin GG tarafından tüketilmesi hâlinde görünümün hareketi gerçek donanımda doğrulanmalıdır. Ses seviyesini ayarlayan hiçbir komut gönderilmez. OLED'in orijinal üst 10 pikseli değiştirilmez.
 
 ## Dil
 
 **Ayarlar → Dil / Language** bölümünden Türkçe veya İngilizce seçebilirsin. Seçim anında etkinleşir ve sonraki açılışlarda korunur. **Hakkında** sekmesi ayarlar menüsünün en altındadır.
-
-## Gizli DOOM MODE
-
-1. Soldan **Ayarlar → Hakkında** bölümüne gir.
-2. `↑ ↑ ↓ ↓ ← → ← → B A` tuşlarına sırayla bas.
-3. Bilgisayarda yalnızca **Dock ekranına bak** mesajını görürsün. Oyun **otomatik olarak** dock OLED'e aktarılır; bilgisayarda oyun görüntüsü çizilmez. `W/S` ileri/geri; `A/D` dön; `Space` ateş; `R` oyunu sıfırla; `ESC` çıkış.
-
-Bu oyun DOOM'un kendisi değildir; telifli oyun varlıkları kullanılmadan hazırlanmış özgün bir retro FPS Easter egg'idir.
-
-Konami kodunun girilmesi deneysel tam ekran OLED aktarımını başlatma eylemidir. Yalnızca Nova Pro Wireless OLED koleksiyonu ve güvenli geri-dönüş aracı doğrulanırsa başlar. Üst pil satırları dâhil 128×64 ekranı değiştirir; **süre sınırı yoktur**. Öncesinde bizim **Canlı** modumuz açıksa güvenli biçimde duraklatılır; DOOM kapatıldığında yalnızca öncesinde açıksa otomatik geri başlatılır. Durdur, `ESC`, pencereyi kapat veya odağı değiştirerek oyundan çıkabilirsin. OLED yanığına karşı sabit görüntüyü uzun süre bırakma. Donanımda hızlı akış testi cihaz üzerinde ayrıca doğrulanmalıdır.
 
 ## Sorun giderme
 
 - Pil görünmüyor: SteelSeries GG'yi çalıştır, cihaz bağlantılarını kontrol et. Telefon için Phone Link durumu her Windows sürümünde erişilebilir olmayabilir.
 - Fiziksel OLED değişmiyor: önce doğrulanmış `ggoled` aracının kurulumunu ve dock USB bağlantısını kontrol et. Uygulama donanımın yoksa gerçeği taklit ederek sahte pil değeri göstermez.
 - Önizleme fotoğrafsız: `dock-photo-local.png` dosyasının EXE yanında bulunduğunu kontrol et. GitHub kaynak derlemeleri bu dosyayı içermediği için vektör dock gösterebilir.
-- Oyun modundan çıkmak: `ESC`. Gerçek OLED aktarımı sonlandırılırken cihazın varsayılan ekranına geri dönme komutu gönderilir.
 
 Kaynak kod ve güncellemeler: https://github.com/yakupalazio/steelseries-dock-customiser
 

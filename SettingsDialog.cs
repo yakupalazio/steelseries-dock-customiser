@@ -43,7 +43,8 @@ internal sealed class SettingsDialog : Form
         Action? onApply = null,
         Func<Task<bool>>? suspendLive = null,
         Func<bool,Task>? resumeLive = null,
-        Action? onLanguageChanged = null)
+        Action? onLanguageChanged = null,
+        DisplayPreferences? displayPreferences = null)
     {
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
         this.suspendLive=suspendLive??(()=>Task.FromResult(false));
@@ -242,15 +243,56 @@ internal sealed class SettingsDialog : Form
             batteryEditor.Show();
         }
 
+        Button? displayButton=null;
+        Panel? displayPage=null;
+        if(displayPreferences is not null)
+        {
+            displayButton=new DarkButton{
+                Text="◧   OLED ekran",Left=13,Top=201,Width=178,Height=49,
+                TextAlign=ContentAlignment.MiddleLeft,Padding=new Padding(12,0,0,0),
+                FlatStyle=FlatStyle.Flat,BackColor=Surface,ForeColor=Muted,
+                Cursor=Cursors.Hand,
+                Font=new Font("Segoe UI Semibold",10f,FontStyle.Bold)};
+            displayButton.FlatAppearance.BorderSize=0;
+            menu.Controls.Add(displayButton);
+            displayPage=new Panel{Dock=DockStyle.Fill,BackColor=Background};
+            displayPage.Controls.Add(new Label{
+                Text="OLED EKRAN",Left=32,Top=28,Width=680,Height=24,
+                ForeColor=Accent,Font=new Font("Segoe UI Semibold",10f,FontStyle.Bold)});
+            displayPage.Controls.Add(new Label{
+                Text="Ekran sağlığı",Left=30,Top=67,Width=680,Height=48,
+                ForeColor=Primary,Font=new Font("Segoe UI Semibold",24f,FontStyle.Bold)});
+            displayPage.Controls.Add(new Label{
+                Text="Canlı OLED sırasında sabit piksellerin iz bırakmasını azaltmak için isteğe bağlı koruma.",
+                Left=32,Top=129,Width=750,Height=54,ForeColor=Muted,
+                Font=new Font("Segoe UI",10f)});
+            var drift=new DarkCheckBox{
+                Text="Yanmayı azaltan piksel kaydırma (45 sn)",
+                Left=32,Top=209,Width=620,Height=41,AutoSize=false,
+                Checked=displayPreferences.BurnInDrift,ForeColor=Primary};
+            displayPage.Controls.Add(drift);
+            displayPage.Controls.Add(new Label{
+                Text="Yalnızca canlı dock çıktısı 1 piksel kayar; tasarım koordinatları ve üst 10 satır korunur.",
+                Left=32,Top=273,Width=700,Height=58,
+                ForeColor=Muted,Font=new Font("Segoe UI",9.3f)});
+            drift.CheckedChanged+=(_,_)=>
+            {
+                displayPreferences.BurnInDrift=drift.Checked;
+                displayPreferences.Save();
+            };
+            contentHost.Controls.Add(displayPage);
+        }
+
         void SwitchPage(int page)
         {
             aboutActive=page==2;
             content.Visible=aboutActive;
             languagePage.Visible=page==0;
             if(batteryPage!=null)batteryPage.Visible=page==1;
+            if(displayPage!=null)displayPage.Visible=page==3;
             foreach(var (button,active) in new[]{
                 (languageItem,page==0),(aboutItem,page==2),
-                (batteryButton,page==1)})
+                (batteryButton,page==1),(displayButton,page==3)})
             {
                 if(button==null)continue;
                 button.BackColor=active?Color.FromArgb(38,68,82):Surface;
@@ -261,6 +303,7 @@ internal sealed class SettingsDialog : Form
         languageItem.Click+=(_,_)=>SwitchPage(0);
         aboutItem.Click+=(_,_)=>SwitchPage(2);
         if(batteryButton!=null)batteryButton.Click+=(_,_)=>SwitchPage(1);
+        if(displayButton!=null)displayButton.Click+=(_,_)=>SwitchPage(3);
         languageSelector.SelectedIndexChanged+=(_,_)=>
         {
             bool english=languageSelector.SelectedIndex==1;

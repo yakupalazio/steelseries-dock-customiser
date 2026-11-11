@@ -124,6 +124,23 @@ internal sealed partial class PixelStudioForm
         // Device priority now lives in Settings > Pil ve öncelik.
         left.Controls.Add(iconButton);
         left.Controls.Add(clockDateButton);
+        var profileButton=ModeButton("▤   Profiller");
+        profileButton.Height=44;
+        left.Controls.Add(profileButton);
+        profileButton.Click+=(_,_)=>
+        {
+            using var dialog=new LayoutProfileDialog(editingMode,
+                ()=>state.DeepClone(),profile=>
+                {
+                    Record();
+                    state=profile;
+                    project.Set(editingMode,state);
+                    selected=null;
+                    RefreshWidgetList();Redraw();
+                    SetStatus(UiLanguage.T("Profil uygulandı. Kaydet ile sakla."));
+                });
+            dialog.ShowDialog(this);
+        };
 
         left.Controls.Add(Spacer(23,190));
         left.Controls.Add(Section("DURUM",190));
@@ -186,7 +203,7 @@ internal sealed partial class PixelStudioForm
             BackColor=UiBg,Padding=new Padding(2,4,0,0),Margin=Padding.Empty
         };
         workspace.Controls.Add(photoActions,0,2);
-        modernCustom=ModernButton("Özel tasarım",105);
+        modernCustom=ModernButton("Özel tasarım",133);
         modernOriginal=ModernButton("Orijinal",82);
         var apply=ModernButton("✓ Uygula",105);
         modernLive=ModernButton("▶ Canlı",105);
@@ -246,7 +263,7 @@ internal sealed partial class PixelStudioForm
         Decorate(undoButton);undoButton.Text="↶ Geri al";undoButton.Width=96;
         Decorate(redoButton);redoButton.Text="↷ İleri al";redoButton.Width=96;
         Decorate(reset);reset.Text="Modu sıfırla";reset.Width=114;
-        Decorate(clear);clear.Text="Çizimi sil";clear.Width=100;
+        Decorate(clear);clear.Text="Çizimi sil";clear.Width=126;
         editActions.Controls.AddRange([undoButton,redoButton,reset,clear]);
 
         // Inspector: widget hierarchy, choices and context-sensitive controls.
@@ -269,10 +286,10 @@ internal sealed partial class PixelStudioForm
         DecorateInput(kind);
         DecorateCombo(kind);
         inspector.Controls.Add(kind);
-        var addRow=Row(270,41);
+        var addRow=Row(288,41);
         Decorate(add,true);Decorate(remove);
         add.Text="+ Öğe ekle";remove.Text="Seçileni sil";
-        add.Width=136;remove.Width=127;
+        add.Width=122;remove.Width=145;
         addRow.Controls.AddRange([add,remove]);
         inspector.Controls.Add(addRow);
         inspector.Controls.Add(Spacer(9,266));
@@ -371,7 +388,7 @@ internal sealed partial class PixelStudioForm
                 ()=>{Redraw();_ = RefreshBatteriesAsync();},
                 ()=>dockPreview!.SuspendLiveForGameAsync(),
                 wasLive=>dockPreview!.ResumeLiveAfterGameAsync(wasLive),
-                ApplyLanguage);
+                ApplyLanguage,displayPreferences);
             settingsDialog=dialog;
             try{dialog.ShowDialog(this);}finally{settingsDialog=null;}
         };

@@ -47,10 +47,16 @@ internal sealed partial class PixelStudioForm : Form
 
     private LayoutState state = LayoutDefaults.Create();
     private BatteryPreferences batteryPreferences = BatteryPreferences.Load();
+    private readonly DisplayPreferences displayPreferences = DisplayPreferences.Load();
     private BatterySnapshot batterySnapshot = new();
     private BatteryStatusDialog? batteryDialog;
     private SettingsDialog? settingsDialog;
     private readonly ArctisDialMonitor dialMonitor = new();
+    private readonly SystemTelemetry telemetryReader = new();
+    private SystemTelemetrySnapshot telemetry = new(null,null,null,
+        DateTimeOffset.MinValue);
+    private bool telemetryPolling;
+    private int telemetryTick;
     private bool dialMonitorStarted;
     private bool batteryPolling;
     private bool fastBatteryPolling;
@@ -113,7 +119,8 @@ internal sealed partial class PixelStudioForm : Form
         editTab.Controls.Add(editor);
         dockPreview=new DockPreviewPanel(
             ()=>RenderScreen(editingMode),()=>project.ProtectHeader,
-            ()=>RenderScreen(ActiveMode));
+            ()=>DisplayBurnIn.Apply(RenderScreen(ActiveMode),project.ProtectHeader,
+                displayPreferences.BurnInDrift,DateTimeOffset.UtcNow));
         dockTab.Controls.Add(dockPreview);
         editor.Paint += (_,e) => PaintFrame(e.Graphics,true,Zoom);
 
@@ -314,6 +321,11 @@ internal sealed partial class PixelStudioForm : Form
                 _=RefreshBatteriesAsync();
             }
             else _=RefreshFastBatteriesAsync();
+            if(++telemetryTick>=5)
+            {
+                telemetryTick=0;
+                _=RefreshTelemetryAsync();
+            }
         };
         BuildModernShell(editTab,add,remove,save,load,reset,export,clear,
             clockDateButton,batteryButton,iconButton);
@@ -333,7 +345,8 @@ internal sealed partial class PixelStudioForm : Form
         "BatterySlot1","BatterySlot2","BatterySlot3","Mouse","Phone",
         "DualSense","Laptop","Headset","SpareBattery","Source","Track",
         "Artist","Progress","MediaClock","GameLabel","GameTitle","GameMiniPlayer",
-        "Clock","Date","VolumeChatMix","Custom text"
+        "Clock","Date","VolumeChatMix","SystemCpu","SystemRam",
+        "NetworkPing","Custom text"
     ];
 
     private ScreenMode ActiveMode =>
@@ -344,7 +357,29 @@ internal sealed partial class PixelStudioForm : Form
             SpotifyActive,batterySnapshot,
             mode==ScreenMode.Game ? (mediaSnapshot.IsPlaying ? mediaSnapshot : null) : LiveMedia,
             gameSnapshot,
-            batteryPreferences,project.ProtectHeader,mode,dialMonitor.Snapshot);
+            batteryPreferences,project.ProtectHeader,mode,dialMonitor.Snapshot,
+            telemetry);
+
+    private async System.Threading.Tasks.Task RefreshTelemetryAsync()
+    {
+        if(telemetryPolling||IsDisposed)return;
+        string[] keys=["SystemCpu","SystemRam","NetworkPing"];
+        bool needed=Enum.GetValues<ScreenMode>().Any(mode=>
+            project.For(mode).Widgets.Any(w=>w.Visible&&keys.Contains(w.Kind)));
+        if(!needed)return;
+        telemetryPolling=true;
+        try
+        {
+            var next=await System.Threading.Tasks.Task.Run(telemetryReader.Read);
+            bool needsPing=Enum.GetValues<ScreenMode>().Any(mode=>
+                project.For(mode).Widgets.Any(w=>w.Visible&&w.Kind=="NetworkPing"));
+            if(needsPing)next=next with{Ping=await SystemTelemetry.ReadPingAsync()};
+            telemetry=next;
+            if(!IsDisposed)Redraw();
+        }
+        catch { /* Show unknown measurements, never fake a live percentage. */ }
+        finally{telemetryPolling=false;}
+    }
 
     private void SwitchEditingMode(ScreenMode next)
     {
@@ -577,7 +612,8 @@ internal sealed partial class PixelStudioForm : Form
     private void EditWheelArtwork()
     {
         if(selected?.Kind!="VolumeChatMix"||selected.DialStyle!="Wheel")return;
-        using var dialog=new WheelArtworkDialog(selected.WheelPixels,selected.WheelAutoLabel);
+        using var dialog=new WheelArtworkDialog(selected.WheelPixels,
+            selected.WheelAutoLabel,selected.WheelGapAngle);
         if(dialog.ShowDialog(this)!=DialogResult.OK)return;
         if(dialog.UseBar)
         {
@@ -586,10 +622,12 @@ internal sealed partial class PixelStudioForm : Form
             return;
         }
         if(selected.WheelPixels==dialog.Artwork &&
-           selected.WheelAutoLabel==dialog.AutoLabel)return;
+           selected.WheelAutoLabel==dialog.AutoLabel &&
+           selected.WheelGapAngle==dialog.GapAngle)return;
         Record();
         selected.WheelPixels=dialog.Artwork;
         selected.WheelAutoLabel=dialog.AutoLabel;
+        selected.WheelGapAngle=dialog.GapAngle;
         Redraw();
         SetStatus(UiLanguage.T("Tekerlek pikselleri güncellendi. Kaydet ile sakla."));
     }

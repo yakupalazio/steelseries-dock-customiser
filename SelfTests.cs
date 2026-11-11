@@ -125,6 +125,45 @@ internal static class SelfTests
                        OledRenderer.GetBounds(wheel).Bottom>53)
                         throw new Exception("OEM-style wheel missing or clashes with battery row");
                 }
+                state.Widgets.Clear();
+                StudioProject.Sanitize(state,mode,true);
+                if(state.Widgets.Count!=0 || state.Pixels.Any(x=>x))
+                    throw new Exception("A blank profile re-created default widgets");
+            }
+            var profileLibrary=new LayoutProfileLibrary();
+            var blankProfile=profileLibrary.Add("Blank Game",ScreenMode.Game,
+                new LayoutState());
+            var copyProfile=profileLibrary.Add("Idle copy",ScreenMode.Idle,
+                StudioProject.Defaults(ScreenMode.Idle));
+            var serializedProfiles=System.Text.Json.JsonSerializer.Deserialize<LayoutProfileLibrary>(
+                System.Text.Json.JsonSerializer.Serialize(profileLibrary));
+            if(serializedProfiles?.Profiles.Count!=2 ||
+               blankProfile.Layout.Widgets.Count!=0 ||
+               copyProfile.Layout.Widgets.Count==0)
+                throw new Exception("Local profile library roundtrip failed");
+            using(var unshifted=new Bitmap(128,64))
+            {
+                unshifted.SetPixel(44,42,Color.White);
+                unshifted.SetPixel(17,7,Color.White);
+                using var moved=DisplayBurnIn.Apply(unshifted,true,true,
+                    DateTimeOffset.FromUnixTimeSeconds(45));
+                if(moved.GetPixel(45,42).R!=255 ||
+                   moved.GetPixel(44,42).R!=0 ||
+                   moved.GetPixel(17,7).R!=255)
+                    throw new Exception("Optional OLED burn-in drift damaged pixels");
+            }
+            var systemLayout=new LayoutState{Widgets=[
+                new DockWidget{Kind="SystemCpu",X=0,Y=10},
+                new DockWidget{Kind="SystemRam",X=0,Y=20},
+                new DockWidget{Kind="NetworkPing",X=0,Y=30}]};
+            using(var known=OledRenderer.Render(systemLayout,false,true,false,
+                telemetry:new SystemTelemetrySnapshot(62,79,25,DateTimeOffset.UtcNow)))
+            using(var unknown=OledRenderer.Render(systemLayout,false,true,false))
+            {
+                int changed=0;
+                for(int y=10;y<38;y++)for(int x=0;x<90;x++)
+                    if(known.GetPixel(x,y).ToArgb()!=unknown.GetPixel(x,y).ToArgb())changed++;
+                if(changed<15)throw new Exception("System CPU/RAM/Ping widget regression");
             }
             var legacyLayouts=new StudioProject
             {
@@ -226,6 +265,36 @@ internal static class SelfTests
                 }
                 if(changed<40 || mixedChanged<20)
                     throw new Exception("Radial VOL/ChatMix wheel did not change with HID data");
+            var rotatedWheel=StudioProject.Defaults(ScreenMode.Idle);
+            var rotatedWidget=rotatedWheel.Widgets.Single(w=>w.Kind=="VolumeChatMix");
+            rotatedWidget.WheelGapAngle=90;
+            using(var rotated=OledRenderer.Render(rotatedWheel,false,true,false,
+                layoutMode:ScreenMode.Idle,
+                dial:new DialSnapshot(DialView.Volume,100,null,null,
+                    DateTimeOffset.UtcNow,"test")))
+            {
+                int moved=0;
+                for(int y=11;y<53;y++)for(int x=2;x<47;x++)
+                    if(radialFull.GetPixel(x,y).ToArgb()!=rotated.GetPixel(x,y).ToArgb())moved++;
+                if(moved<10)throw new Exception("Wheel gap angle did not rotate the ring");
+                // Rotating the outside must not turn the centre lettering.
+                for(int y=29;y<37;y++)for(int x=17;x<32;x++)
+                    if(radialFull.GetPixel(x,y).ToArgb()!=rotated.GetPixel(x,y).ToArgb())
+                        throw new Exception("Volume centre label rotated with the ring");
+            }
+            var mixNeutral=StudioProject.Defaults(ScreenMode.Idle);
+            using(var centered=OledRenderer.Render(mixNeutral,false,true,false,
+                layoutMode:ScreenMode.Idle,
+                dial:new DialSnapshot(DialView.ChatMix,null,50,50,
+                    DateTimeOffset.UtcNow,"test")))
+            {
+                int centeredDiff=0;
+                for(int y=11;y<53;y++)for(int x=2;x<47;x++)
+                    if(centered.GetPixel(x,y).ToArgb()!=radialMix.GetPixel(x,y).ToArgb())
+                        centeredDiff++;
+                if(centeredDiff<10)
+                    throw new Exception("ChatMix should fill outward from the center");
+            }
                 if(exportDemo!=null)
                 {
                     string folder=Path.GetDirectoryName(Path.GetFullPath(exportDemo))!;
@@ -245,10 +314,12 @@ internal static class SelfTests
             userPixels[2*WheelArtwork.Width+2]='1';
             wheelWidget.WheelPixels=new string(userPixels);
             wheelWidget.WheelAutoLabel=false;
+            wheelWidget.WheelGapAngle=-105;
             var customPixels=System.Text.Json.JsonSerializer.Deserialize<DockWidget>(
                 System.Text.Json.JsonSerializer.Serialize(wheelWidget));
             if(customPixels?.WheelPixels!=wheelWidget.WheelPixels ||
                customPixels.WheelAutoLabel ||
+               customPixels.WheelGapAngle!=-105 ||
                !WheelArtwork.IsValid(customPixels.WheelPixels) ||
                WheelArtwork.IsValid("wrong"))
                 throw new Exception("Wheel pixel artwork failed persistence check");
@@ -559,10 +630,11 @@ internal static class SelfTests
                     throw new Exception("Integrated dock photo and pixel editor are missing");
                 var buttons=children.OfType<System.Windows.Forms.Button>().ToArray();
                 if(buttons.Any(b=>b.Text is "Fotoğraf" or "Hizala" or "10 sn test") ||
-                   !buttons.Any(b=>b.Text.Contains("Uygula")) ||
+                   !buttons.Any(b=>b.Text.Contains("Uygula")||b.Text.Contains("Apply")) ||
                    !buttons.Any(b=>b.Text.Contains("Reset")) ||
-                   !buttons.Any(b=>b.Text.Contains("Canlı")))
-                    throw new Exception("Studio Apply/Reset toolbar regression");
+                   !buttons.Any(b=>b.Text.Contains("Canlı")||b.Text.Contains("Live")))
+                    throw new Exception("Studio Apply/Reset toolbar regression: "+
+                        string.Join(" / ",buttons.Select(b=>b.Text)));
                 if(typeof(DockHardwareTest).GetMethod("ApplyStaticAsync")==null ||
                    typeof(DockHardwareTest).GetMethod("ShowForTenSecondsAsync")!=null)
                     throw new Exception("Timed hardware test remains in the API");
@@ -649,10 +721,14 @@ internal static class SelfTests
             // Fast OLED reports are tested entirely in memory: the HID
             // device is never opened and nothing is sent to hardware.
             var sampleTime=DateTimeOffset.UtcNow;
+            if(DockPreviewPanel.ReconnectDelaySeconds(1)!=2 ||
+               DockPreviewPanel.ReconnectDelaySeconds(4)!=15 ||
+               DockPreviewPanel.ReconnectDelaySeconds(12)!=15)
+                throw new Exception("OLED hot-reconnect backoff changed");
             if(DockPreviewPanel.NeedsReassert("same","same",sampleTime,
-                    sampleTime.AddSeconds(1),false) ||
+                    sampleTime.AddMilliseconds(300),false) ||
                !DockPreviewPanel.NeedsReassert("same","same",sampleTime,
-                    sampleTime.AddMilliseconds(2010),false) ||
+                    sampleTime.AddMilliseconds(510),false) ||
                !DockPreviewPanel.NeedsReassert("same","same",sampleTime,
                     sampleTime.AddMilliseconds(100),true) ||
                !DockPreviewPanel.NeedsReassert("previous","changed",sampleTime,
