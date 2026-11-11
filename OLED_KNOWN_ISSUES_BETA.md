@@ -1,4 +1,4 @@
-# OLED ownership and ChatMix: known issues (1.1.1-beta.1)
+# OLED ownership and ChatMix: known issues (1.1.1-beta.2)
 
 Status: **unresolved / reproducible**. This document separates actual observations from hypotheses. This project is unofficial and does not modify device firmware.
 

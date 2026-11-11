@@ -1,4 +1,4 @@
-# Steelseries Dock Customiser v1.1.1-beta.1
+# Steelseries Dock Customiser v1.1.1-beta.2
 
 Experimental **Windows 11 x64 portable beta** for the Nova Pro Wireless 128×64 OLED. Unofficial; by **Yakup Can Palaz**.
 
@@ -19,7 +19,7 @@ Experimental **Windows 11 x64 portable beta** for the Nova Pro Wireless 128×64 
 
 ## Install / Kurulum
 
-1. Extract `SteelseriesDockCustomiser-v1.1.1-beta.1-win-x64-portable.zip`.
+1. Extract `SteelseriesDockCustomiser-v1.1.1-beta.2-win-x64-portable.zip`.
 2. Run `SteelseriesDockCustomiser.exe`. .NET 10 runtime is included; this binary is **not code signed**.
 3. Preview/design works without hardware access. **Uygula / Canlı** requires explicit confirmation and the separately obtained SHA-verified `ggoled v0.3.0` helper documented in the Turkish guide.
 4. Stop Live or use **Dock Reset** to return to the OEM screen.

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.1-beta.1 — Experimental single-shot OLED reclaim (2026-11-11)
+## 1.1.1-beta.2 — Experimental single-shot OLED reclaim (2026-11-11)
 
 - In the user-authorized **Canlı / Live** mode, schedule one `0x95` native release followed by `0x93` custom patches after **450 ms** without a decoded physical wheel report; apply a **900 ms** minimum cooldown. No constant `0x95` traffic, firmware writes, or audio setting modifications.
 - Keep the factory top 10 OLED rows untouched in the normal protected layout; fully redraw only when full-screen ownership was separately authorized.

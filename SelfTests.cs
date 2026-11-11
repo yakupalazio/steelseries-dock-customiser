@@ -701,9 +701,13 @@ internal static class SelfTests
                 if(window.Controls.OfType<System.Windows.Forms.TabControl>().Any())
                     throw new Exception("The old separate Preview tab is still visible");
                 var root=window.Controls.OfType<System.Windows.Forms.TableLayoutPanel>().Single();
+                // Hosted Windows CI may cap the requested 1120px minimum to
+                // the 1024px virtual desktop. Validate the available size.
+                int screenWidth=System.Windows.Forms.Screen.PrimaryScreen?.Bounds.Width ?? 1102;
+                int effectiveMinWidth=Math.Min(1100,screenWidth-2);
                 if(root.ColumnCount!=3 || root.RowCount!=3 ||
-                    !window.MaximizeBox || window.MinimumSize.Width<1100)
-                    throw new Exception($"Responsive v1.0 layout was not constructed: columns={root.ColumnCount}, rows={root.RowCount}, max={window.MaximizeBox}, minWidth={window.MinimumSize.Width}, dpi={window.DeviceDpi}");
+                    !window.MaximizeBox || window.MinimumSize.Width<effectiveMinWidth)
+                    throw new Exception($"Responsive v1.0 layout mismatch: columns={root.ColumnCount}, rows={root.RowCount}, max={window.MaximizeBox}, minWidth={window.MinimumSize.Width}, expected={effectiveMinWidth}, screen={screenWidth}, dpi={window.DeviceDpi}");
                 var children=AllChildren(root).ToArray();
                 if(children.Count(c=>c is DockPreviewPanel)!=1 ||
                    children.Count(c=>c is System.Windows.Forms.PictureBox)==0)

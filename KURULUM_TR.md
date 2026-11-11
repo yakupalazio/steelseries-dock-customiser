@@ -1,4 +1,4 @@
-# Steelseries Dock Customiser 1.1.1-beta.1 — Türkçe Kılavuz
+# Steelseries Dock Customiser 1.1.1-beta.2 — Türkçe Kılavuz
 
 > **Beta uyarısı:** Canlı modda tekerlek döndürme verisi algılanırsa son hareketten 450 ms sonra tek seferlik OLED geri alma denenir. Bu yöntem daha önce ayrı tanılama testinde yaklaşık 0,5–1 saniyelik dönüş sağlamıştır; yeni uygulama entegrasyonu henüz fiziksel cihazda yeniden doğrulanmadı. ChatMix mod düğmesi bazı durumlarda algılanmaz, orijinal ekran yaklaşık 5 saniye kalabilir. Tespit edilmiş sorunlar ve geliştirme notları: [OLED_KNOWN_ISSUES_BETA.md](OLED_KNOWN_ISSUES_BETA.md).
 
@@ -8,7 +8,7 @@ SteelSeries Arctis Nova Pro Wireless baz istasyonunun 128×64 OLED ekranı için
 
 ## Kurulum
 
-1. `SteelseriesDockCustomiser-v1.1.1-beta.1-win-x64-portable.zip` dosyasını güvenilir bir klasöre çıkar.
+1. `SteelseriesDockCustomiser-v1.1.1-beta.2-win-x64-portable.zip` dosyasını güvenilir bir klasöre çıkar.
 2. `SteelseriesDockCustomiser.exe` dosyasını aç. Yönetici yetkisi normal tasarım ve önizleme için gerekli değildir.
 3. Soldan **Medya / Oyun / Boşta** modunu seç. Ortadaki dock önizlemesi ve altındaki piksel editörü tek ekrandadır.
 4. Sağdan widget ekle, konumunu değiştir, pil kaynaklarını seç ve **Kaydet** ile sakla. Sağdaki ayarlar seçili widget'ın türüne göre görünür.
