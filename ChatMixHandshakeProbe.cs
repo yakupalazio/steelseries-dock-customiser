@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using HidSharp;
 
 namespace SteelseriesDockCustomiser;
@@ -29,9 +30,11 @@ internal static class ChatMixHandshakeProbe
             }
             catch { return false; }
         })
+        // The 1024-feature OLED collection also has the confirmed 64-byte
+        // output transport (0x95); the other mi_04 collection rejects Write().
         .OrderBy(d =>
         {
-            try { return d.GetMaxFeatureReportLength() >= 1024 ? 1 : 0; }
+            try { return d.GetMaxFeatureReportLength() >= 1024 ? 0 : 1; }
             catch { return 2; }
         }).ToArray();
 
@@ -92,11 +95,15 @@ internal static class ChatMixHandshakeProbe
     {
         string file=LogFile;
         using var writer=new StreamWriter(file) { AutoFlush=true };
+        object logGate=new();
         void Log(string line)
         {
-            string msg=DateTimeOffset.Now.ToString("O")+" "+line;
-            Console.WriteLine(msg);
-            writer.WriteLine(msg);
+            lock(logGate)
+            {
+                string msg=DateTimeOffset.Now.ToString("O")+" "+line;
+                Console.WriteLine(msg);
+                writer.WriteLine(msg);
+            }
         }
 
         Log("Log: "+file);
@@ -132,25 +139,48 @@ internal static class ChatMixHandshakeProbe
                 iconEnabled=true;
                 Log("TX 06 8D 01: optional Sonar indicator enabled (volatile).");
             }
-            Log("20s test: press wheel Volume<->ChatMix, then rotate in each mode.");
-            var buffer=new byte[Math.Max(65,candidates[0].GetMaxInputReportLength())];
-            while(watch.Elapsed<TimeSpan.FromSeconds(20))
+            Log($"20s test: press and rotate wheel. Listening on {candidates.Length} mi_04 collections.");
+            void Watch(HidStream reader,int channel,int maxInput)
+            {
+                var buffer=new byte[Math.Max(65,maxInput)];
+                while(watch.Elapsed<TimeSpan.FromSeconds(20))
+                {
+                    try
+                    {
+                        int size=reader.Read(buffer,0,buffer.Length);
+                        if(size<1)continue;
+                        var data=buffer.AsSpan(0,size);
+                        bool parsed=ArctisDialMonitor.TryDecode(data,out var dial);
+                        int n=Interlocked.Increment(ref count);
+                        if(n<=80)
+                            Log($"T={watch.ElapsedMilliseconds}ms RX channel={channel} "+
+                                Convert.ToHexString(data[..Math.Min(16,size)])+
+                                (parsed?$" MODE={dial.View} V={dial.Volume} "+
+                                    $"G={dial.Game} C={dial.Chat}":" other"));
+                    }
+                    catch(TimeoutException) { }
+                    catch(Exception ex)
+                    {
+                        Log($"Reader {channel} stopped: {ex.GetType().Name}");
+                        break;
+                    }
+                }
+            }
+            var reads=candidates.Select((device,index)=>Task.Run(()=>
             {
                 try
                 {
-                    int size=stream.Read(buffer,0,buffer.Length);
-                    if(size<1) continue;
-                    var data=buffer.AsSpan(0,size);
-                    bool parsed=ArctisDialMonitor.TryDecode(data,out var dial);
-                    count++;
-                    if(count<=80)
-                        Log($"T={watch.ElapsedMilliseconds}ms RX "+
-                            Convert.ToHexString(data[..Math.Min(16,size)])+
-                            (parsed?$" MODE={dial.View} V={dial.Volume} "+
-                                $"G={dial.Game} C={dial.Chat}":" other"));
+                    if(index==0)Watch(stream,index+1,device.GetMaxInputReportLength());
+                    else
+                    {
+                        using var reader=device.Open();
+                        reader.ReadTimeout=300;
+                        Watch(reader,index+1,device.GetMaxInputReportLength());
+                    }
                 }
-                catch(TimeoutException) { }
-            }
+                catch(Exception ex){Log($"Reader {index+1} unavailable: {ex.GetType().Name}");}
+            })).ToArray();
+            Task.WaitAll(reads);
             Log("Completed, reports observed: "+count);
         }
         catch(Exception e)
