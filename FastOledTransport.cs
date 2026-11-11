@@ -106,6 +106,37 @@ internal sealed class FastOledTransport : IDisposable
         return report;
     }
 
+    /// <summary>Send only the two pre-encoded 0x93 OLED strips for a frame-rate diagnostic.</summary>
+    internal void SendEncodedFrame(byte[] left,byte[] right)
+    {
+        if(left.Length!=PacketLength||right.Length!=PacketLength||
+           left[0]!=ScreenReportId||right[0]!=ScreenReportId||
+           left[1]!=0x93||right[1]!=0x93)
+            throw new ArgumentException("Invalid 0x93 diagnostic frame packets.");
+        lock(gate)
+        {
+            if(stream is null)throw new InvalidOperationException("OLED is closed.");
+            stream.SetFeature(left);
+            stream.SetFeature(right);
+        }
+    }
+
+    /// <summary>Temporary ChatMix test only; never writes persistent device settings.</summary>
+    internal void SendChatMixTestCommand(byte opcode,byte value)
+    {
+        if(opcode is not (0x49 or 0x8d)||value>1)
+            throw new ArgumentException("Unsupported test command.");
+        var report=new byte[64];
+        report[0]=ScreenReportId;
+        report[1]=opcode;
+        report[2]=value;
+        lock(gate)
+        {
+            if(stream is null)throw new InvalidOperationException("OLED is closed.");
+            stream.Write(report);
+        }
+    }
+
     public void SendFrame(Bitmap image)
     {
         // Build packets before acquiring the device lock. Neither this

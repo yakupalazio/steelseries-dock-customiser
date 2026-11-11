@@ -113,6 +113,14 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--oled-frame-rate-probe"))
+        {
+            int at=Array.IndexOf(args,"--oled-frame-rate-probe");
+            int rate=at>=0 && at+1<args.Length &&
+                int.TryParse(args[at+1],out int requested)?requested:50;
+            OledFrameRateProbe.Run(rate);
+            return;
+        }
         if(args.Contains("--chatmix-probe-list"))
         {
             ChatMixHandshakeProbe.Inspect();
