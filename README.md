@@ -1,4 +1,8 @@
-# Steelseries Dock Customiser 1.1 — OLED Studio
+# Steelseries Dock Customiser 1.1.1-beta.1 — OLED Studio
+
+> **Beta / experimental OLED handoff:** While Live mode is authorized, the app tries one `0x95 → 0x93` recovery after 450 ms of silence following a decoded physical dial event, with a 900 ms cooldown. This is **not** a firmware-level priority override. Physical mode-button presses can remain undetected, so the factory overlay may still persist for around 5 seconds. Repeated 5 Hz release/draw pulses are **not** used in normal Live mode because hardware testing showed partial flicker and native-screen takeover. For reproducible results, unsuccessful tests, risks and contributor ideas, see [OLED known issues](OLED_KNOWN_ISSUES_BETA.md).
+
+
 
 ## New in 1.1: dark OLED Studio and radial controls
 

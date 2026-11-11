@@ -176,6 +176,38 @@ internal sealed class DockHardwareTest
         }
     }
 
+    /// <summary>
+    /// Experimental beta recovery: one release + immediate redraw, called
+    /// only after a decoded physical dial burst has been silent for 450 ms.
+    /// Retains the native top 10 rows unless full-screen mode was authorized.
+    /// A missing HID mode-button event cannot be inferred from this method.
+    /// </summary>
+    public async Task ReclaimLiveFrameAsync(Bitmap frame,bool protectHeader)
+    {
+        if(Active)throw new InvalidOperationException("Önce Dock Reset yap.");
+        string validation=Validate();
+        if(validation!="")throw new InvalidOperationException(validation);
+        await liveGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if(directLive==null)
+            {
+                var device=new FastOledTransport();
+                try{device.Open();directLive=device;}
+                catch{device.Dispose();throw;}
+            }
+            await Task.Run(()=>directLive.ReclaimNativeOverlay(frame,protectHeader))
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            directLive?.Dispose();
+            directLive=null;
+            throw;
+        }
+        finally{liveGate.Release();}
+    }
+
     public string RestoreNow()
     {
         string validation=Validate();

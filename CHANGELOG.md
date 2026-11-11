@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.1-beta.1 — Experimental single-shot OLED reclaim (2026-11-11)
+
+- In the user-authorized **Canlı / Live** mode, schedule one `0x95` native release followed by `0x93` custom patches after **450 ms** without a decoded physical wheel report; apply a **900 ms** minimum cooldown. No constant `0x95` traffic, firmware writes, or audio setting modifications.
+- Keep the factory top 10 OLED rows untouched in the normal protected layout; fully redraw only when full-screen ownership was separately authorized.
+- Prior 450 ms one-shot hardware diagnosis brought the custom screen back after about **0.5–1 seconds** following volume rotation without visible flicker in that run. **This integrated beta path has not yet passed a separate live hardware acceptance test**; the physical mode button may not emit an independent HID event and can still leave the factory UI visible.
+- Document the unsuccessful 28/50/60 FPS drawing-only attempts, flicker and lost ChatMix mode during repeated 5 Hz `0x95→0x93`, firmware-timer uncertainty, and safe contributor investigations in [OLED_KNOWN_ISSUES_BETA.md](OLED_KNOWN_ISSUES_BETA.md).
+- Add deterministic in-memory regression checks for the one-shot 450 ms scheduling and cooldown. The app remains an unofficial SteelSeries project.
+
+
+
 ## 1.1.0 — Wheel widget and integration fixes
 
 - **Latest in-place update:** configurable radial wheel gap angle (−180° to +180°, fixed upright VOL/MIX lettering), signed hardware-volume steps, compact Game/Chat badges and center-originating ChatMix arc. Physical wheel recovery uses a bounded rapid reassert burst plus a 500 ms idle fallback, without changing firmware or mixer settings.

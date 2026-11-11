@@ -54,6 +54,12 @@ internal sealed class DockPreviewPanel : UserControl
     // active, then return to the low-frequency idle refresh.
     private readonly System.Windows.Forms.Timer _dialRefreshTimer=new() { Interval=25 };
     private DateTimeOffset _dialTakeoverUntil=DateTimeOffset.MinValue;
+    // A single 0x95->0x93 reclaim after 450 ms dial silence, with a cooldown.
+    // No periodic release commands: those were observed to cause flicker.
+    private readonly System.Windows.Forms.Timer _dialReclaimTimer=new(){Interval=65};
+    private DateTimeOffset _lastDialInput=DateTimeOffset.MinValue;
+    private DateTimeOffset _lastDialReclaim=DateTimeOffset.MinValue;
+    private bool _dialReclaimPending,_dialReclaimBusy;
     private bool _liveEnabled,_liveSending;
     private bool _forceNextLiveFrame;
     private int _reconnectFailures;
@@ -120,11 +126,14 @@ internal sealed class DockPreviewPanel : UserControl
             }
             await RefreshLiveDock(force:true);
         };
+        _dialReclaimTimer.Tick += async (_,_) => await ReclaimOnceAfterDialSilence();
         _restoreHardware.Click += (_,_) => ResetDock();
         Disposed += (_,_) =>
         {
             _liveTimer.Stop();
             _dialRefreshTimer.Stop();
+            _dialReclaimTimer.Stop();
+            _dialReclaimPending=false;
             _dialTakeoverUntil=DateTimeOffset.MinValue;
             bool mustRestore=_liveEnabled||_hardware.Active||_liveSending;
             _liveEnabled=false;
@@ -166,12 +175,54 @@ internal sealed class DockPreviewPanel : UserControl
         if(!_liveEnabled||IsDisposed)return;
         _forceNextLiveFrame=true;
         _dialTakeoverUntil=DateTimeOffset.UtcNow.AddSeconds(3);
+        _lastDialInput=DateTimeOffset.UtcNow;
+        _dialReclaimPending=true;
+        if(!_dialReclaimTimer.Enabled)_dialReclaimTimer.Start();
         // Leading-edge throttle, not trailing-edge debounce: while the user
         // keeps spinning, the preview and physical OLED must keep advancing.
         if(!_dialRefreshTimer.Enabled)_dialRefreshTimer.Start();
         // A timer-only implementation leaves a plainly visible OEM frame
         // between the event and its first scheduled tick.
         _=RefreshLiveDock(force:true);
+    }
+
+    internal static bool ShouldReclaimAfterDialSilence(bool pending,
+        DateTimeOffset lastDial,DateTimeOffset lastReclaim,DateTimeOffset now)
+        =>pending && lastDial!=DateTimeOffset.MinValue &&
+          now-lastDial>=TimeSpan.FromMilliseconds(450) &&
+          (lastReclaim==DateTimeOffset.MinValue ||
+           now-lastReclaim>=TimeSpan.FromMilliseconds(900));
+
+    private async System.Threading.Tasks.Task ReclaimOnceAfterDialSilence()
+    {
+        if(!_liveEnabled || IsDisposed)
+        {
+            _dialReclaimPending=false;
+            _dialReclaimTimer.Stop();
+            return;
+        }
+        if(_dialReclaimBusy || !ShouldReclaimAfterDialSilence(
+            _dialReclaimPending,_lastDialInput,_lastDialReclaim,DateTimeOffset.UtcNow))
+            return;
+        _dialReclaimPending=false;
+        _dialReclaimBusy=true;
+        _lastDialReclaim=DateTimeOffset.UtcNow;
+        try
+        {
+            using var image=_liveFrameFactory();
+            await _hardware.ReclaimLiveFrameAsync(image,LiveHeaderProtected);
+            _lastLiveFrame=null;
+        }
+        catch(Exception ex)
+        {
+            if(!IsDisposed)
+                _message.Text="OLED tek seferlik geri alma başarısız: "+ex.Message;
+        }
+        finally
+        {
+            _dialReclaimBusy=false;
+            if(!_dialReclaimPending)_dialReclaimTimer.Stop();
+        }
     }
 
     internal static int ReconnectDelaySeconds(int failures)
@@ -197,6 +248,8 @@ internal sealed class DockPreviewPanel : UserControl
         _liveEnabled=false;
         _liveTimer.Stop();
         _dialRefreshTimer.Stop();
+        _dialReclaimTimer.Stop();
+        _dialReclaimPending=false;
         _dialTakeoverUntil=DateTimeOffset.MinValue;
         _lastLiveFrame=null;
         _lastLiveWrite=DateTimeOffset.MinValue;
@@ -371,6 +424,8 @@ internal sealed class DockPreviewPanel : UserControl
         _liveEnabled=false;
         _liveTimer.Stop();
         _dialRefreshTimer.Stop();
+        _dialReclaimTimer.Stop();
+        _dialReclaimPending=false;
         _dialTakeoverUntil=DateTimeOffset.MinValue;
         _lastLiveFrame=null;
         _lastLiveWrite=DateTimeOffset.MinValue;

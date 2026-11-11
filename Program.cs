@@ -113,6 +113,14 @@ internal static class Program
             }
             return;
         }
+        #if DEBUG
+        if(args.Contains("--oled-reclaim-pulse-probe"))
+        {
+            // Failed high-frequency diagnostic; never expose it in beta builds.
+            OledFrameRateProbe.Run(50,reclaimHz:5);
+            return;
+        }
+        #endif
         if(args.Contains("--oled-frame-rate-probe"))
         {
             int at=Array.IndexOf(args,"--oled-frame-rate-probe");

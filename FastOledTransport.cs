@@ -171,10 +171,14 @@ internal sealed class FastOledTransport : IDisposable
     /// change firmware, audio configuration, or persistent device settings.
     /// Never call this from the ordinary Live renderer.
     /// </summary>
-    internal void ReclaimNativeOverlay(Bitmap image)
+    internal void ReclaimNativeOverlay(Bitmap image,bool protectHeader=false)
     {
-        var left = EncodeHalf(image, 0);
-        var right = EncodeHalf(image, 64);
+        // Reclaim exactly once per observed dial burst. Never send 0x95 in
+        // a high-frequency rendering loop: it restores the native UI.
+        byte[][] reports=protectHeader
+            ?[EncodePatch(image,0,10,48),EncodePatch(image,64,10,48),
+              EncodePatch(image,0,56,8),EncodePatch(image,64,56,8)]
+            :[EncodeHalf(image,0),EncodeHalf(image,64)];
         lock (gate)
         {
             if (stream is null) throw new InvalidOperationException("OLED bağlantısı kapalı.");
@@ -182,8 +186,7 @@ internal sealed class FastOledTransport : IDisposable
             release[0] = ScreenReportId;
             release[1] = 0x95;
             stream.Write(release);
-            stream.SetFeature(left);
-            stream.SetFeature(right);
+            foreach(var report in reports)stream.SetFeature(report);
         }
     }
 

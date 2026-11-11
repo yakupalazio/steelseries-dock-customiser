@@ -814,6 +814,17 @@ internal static class SelfTests
                !DockPreviewPanel.NeedsReassert("previous","changed",sampleTime,
                     sampleTime.AddMilliseconds(100),false))
                 throw new Exception("Native OLED overlay reassert scheduling regression");
+            if(DockPreviewPanel.ShouldReclaimAfterDialSilence(true,
+                    sampleTime,DateTimeOffset.MinValue,sampleTime.AddMilliseconds(449)) ||
+               !DockPreviewPanel.ShouldReclaimAfterDialSilence(true,
+                    sampleTime,DateTimeOffset.MinValue,sampleTime.AddMilliseconds(450)) ||
+               DockPreviewPanel.ShouldReclaimAfterDialSilence(false,
+                    sampleTime,DateTimeOffset.MinValue,sampleTime.AddSeconds(2)) ||
+               DockPreviewPanel.ShouldReclaimAfterDialSilence(true,
+                    sampleTime,sampleTime.AddMilliseconds(450),sampleTime.AddMilliseconds(800)) ||
+               !DockPreviewPanel.ShouldReclaimAfterDialSilence(true,
+                    sampleTime,sampleTime.AddMilliseconds(450),sampleTime.AddMilliseconds(1350)))
+                throw new Exception("Single-shot 450 ms dial reclaim scheduler regression");
             using(var pattern=new Bitmap(128,64))
             {
                 pattern.SetPixel(0,0,Color.White);

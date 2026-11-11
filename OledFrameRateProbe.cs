@@ -24,18 +24,20 @@ internal static class OledFrameRateProbe
         return false;
     }
 
-    public static void Run(int fps)
+    public static void Run(int fps,int reclaimHz=0)
     {
-        if(fps is not (50 or 60))
+        if(fps is not (50 or 60) || reclaimHz is not (0 or 5))
         {
-            Console.WriteLine("Only 50 or 60 FPS is permitted.");
+            Console.WriteLine("Only 50/60 FPS and 0/5 Hz reclaim are permitted.");
             Environment.ExitCode=2;
             return;
         }
         var folder=Path.Combine(Path.GetTempPath(),"SteelseriesDockCustomiser");
         Directory.CreateDirectory(folder);
         var logfile=Path.Combine(folder,
-            "oled-"+fps+"fps-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".log");
+            "oled-"+fps+"fps-"+reclaimHz+"hz-"+
+            DateTime.Now.ToString("yyyyMMdd-HHmmss")+".log");
+        var stopFile=logfile+".stop";
         using var log=new StreamWriter(logfile){AutoFlush=true};
         void Log(string message)
         {
@@ -60,7 +62,7 @@ internal static class OledFrameRateProbe
         }
 
         FastOledTransport? transport=null;
-        int frames=0, slowFrames=0;
+        int frames=0, slowFrames=0, reclaimPulses=0;
         double slowest=0;
         try
         {
@@ -73,20 +75,33 @@ internal static class OledFrameRateProbe
             transport.Open();
             transport.SendChatMixTestCommand(0x49,1);
             transport.SendChatMixTestCommand(0x8d,1);
-            Log("TEST START: "+fps+" FPS, 30 seconds; 0x93 only while drawing. ChatMix temporarily enabled.");
+            double duration=reclaimHz>0?15000:30000;
+            Log("TEST START: "+fps+" FPS, "+duration/1000+" seconds; "+
+                (reclaimHz==0?"0x93 only":"0x95->0x93 max 5 Hz; capped at 75 pulses")+
+                ". ChatMix temporarily enabled. STOP FILE: "+stopFile);
             var clock=Stopwatch.StartNew();
-            const double duration=30000;
             double nextAt=0;
             double lastProgress=0;
             while(clock.Elapsed.TotalMilliseconds<duration)
             {
+                if(reclaimHz>0 && frames%5==0 && File.Exists(stopFile))
+                {
+                    Log("STOP REQUEST received; restoring native display.");
+                    break;
+                }
                 double now=clock.Elapsed.TotalMilliseconds;
                 double remaining=nextAt-now;
                 if(remaining>2)Thread.Sleep((int)(remaining-1));
                 while(clock.Elapsed.TotalMilliseconds<nextAt)
                     Thread.SpinWait(24);
                 double before=clock.Elapsed.TotalMilliseconds;
-                transport.SendEncodedFrame(left,right);
+                if(reclaimHz>0 && reclaimPulses<75 &&
+                   before>=(reclaimPulses+1)*(1000d/reclaimHz))
+                {
+                    transport.ReclaimNativeOverlay(image);
+                    reclaimPulses++;
+                }
+                else transport.SendEncodedFrame(left,right);
                 double transfer=clock.Elapsed.TotalMilliseconds-before;
                 if(transfer>slowest)slowest=transfer;
                 if(transfer>100)slowFrames++;
@@ -97,17 +112,18 @@ internal static class OledFrameRateProbe
                     Log("PROGRESS t="+Math.Round(lastProgress)+
                         "ms frames="+frames+" actual="+
                         Math.Round(frames*1000/Math.Max(1,lastProgress),1)+
-                        " FPS maxSendMs="+Math.Round(slowest,1));
+                        " FPS maxSendMs="+Math.Round(slowest,1)+
+                        " reclaimPulses="+reclaimPulses);
                 }
-                if(slowFrames>8)
-                    throw new IOException("More than 8 HID frame sends exceeded 100 ms; stopped early.");
+                if(slowFrames>(reclaimHz>0?1:8))
+                    throw new IOException("Repeated >100ms HID writes; stopped early.");
                 nextAt=Math.Max(nextAt+(1000d/fps),clock.Elapsed.TotalMilliseconds);
             }
             clock.Stop();
             Log("RESULT requested="+fps+" FPS actual="+
                 Math.Round(frames*1000/clock.Elapsed.TotalMilliseconds,2)+
                 " FPS sent="+frames+" maxSendMs="+Math.Round(slowest,1)+
-                " slowFrames="+slowFrames);
+                " slowFrames="+slowFrames+" reclaimPulses="+reclaimPulses);
         }
         catch(Exception ex)
         {

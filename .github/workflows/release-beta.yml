@@ -1,0 +1,46 @@
+name: Windows beta prerelease
+
+on:
+  push:
+    tags: ['v*-beta.*']
+
+permissions:
+  contents: write
+
+jobs:
+  portable-beta:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish self-contained Windows x64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'steelseries-dock-beta'
+          dotnet publish SteelseriesDockCustomiser.csproj -c Release -r win-x64 --self-contained true -p:DebugType=None -p:DebugSymbols=false -o $stage -v minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Publish failed' }
+          dotnet (Join-Path $stage 'SteelseriesDockCustomiser.dll') --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Self tests failed' }
+          foreach ($name in @('README.md','CHANGELOG.md','KURULUM_TR.md','OLED_KNOWN_ISSUES_BETA.md','FIRMWARE_OLED_FINDINGS.md','THIRD_PARTY_NOTICES.md','RELEASE_NOTES_1.1.1-beta.1.md')) {
+            Copy-Item -LiteralPath $name -Destination $stage
+          }
+          Copy-Item -LiteralPath THIRD_PARTY_LICENSES -Destination $stage -Recurse
+          if (Test-Path (Join-Path $stage 'dock-photo-local.png')) { throw 'Private dock photo must not ship' }
+          $zipName = 'SteelseriesDockCustomiser-v1.1.1-beta.1-win-x64-portable.zip'
+          $zip = Join-Path $env:GITHUB_WORKSPACE $zipName
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          Set-Content -Path (Join-Path $env:GITHUB_WORKSPACE 'SHA256SUMS-beta.txt') -Value "$hash  $zipName" -Encoding ascii
+      - name: Create GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = '${{ github.ref_name }}'
+          gh release create $tag 'SteelseriesDockCustomiser-v1.1.1-beta.1-win-x64-portable.zip' 'SHA256SUMS-beta.txt' --prerelease --verify-tag --title 'Steelseries Dock Customiser 1.1.1 Beta 1' --notes-file 'RELEASE_NOTES_1.1.1-beta.1.md'
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub prerelease creation failed' }
