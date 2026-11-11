@@ -15,10 +15,18 @@ internal static class Program
         if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
-            var lines=BatterySources.Kinds.Select(kind =>
+            // Include dynamically discovered BLE devices; the built-in
+            // six categories alone would hide a successful GATT read.
+            var kinds=BatterySources.Kinds.Concat(snapshot.Values.Keys
+                .Where(kind=>!BatterySources.Kinds.Contains(kind,
+                    StringComparer.OrdinalIgnoreCase))
+                .OrderBy(kind=>kind,StringComparer.Ordinal)).ToArray();
+            var lines=kinds.Select(kind =>
             {
                 var b=snapshot[kind];
-                return $"{kind}: {b.Display} | {b.Source} | {b.Detail}";
+                var name=string.IsNullOrWhiteSpace(b.FriendlyName)
+                    ?BatteryPriority.DisplayName(kind):b.FriendlyName;
+                return $"{name} [{kind}]: {b.Display} | {b.Source} | {b.Detail}";
             }).ToArray();
             foreach(var line in lines) Console.WriteLine(line);
             var at=Array.IndexOf(args,"--battery-scan-file");
