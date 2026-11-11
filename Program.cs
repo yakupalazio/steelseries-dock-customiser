@@ -186,9 +186,11 @@ internal static class Program
            args.Contains("--oled-reclaim-watch")||
            args.Contains("--oled-reclaim-fast-watch")||
            args.Contains("--oled-reclaim-burst-watch")||
-           args.Contains("--oled-reclaim-single-watch"))
+           args.Contains("--oled-reclaim-single-watch")||
+           args.Contains("--oled-reclaim-delayed-watch"))
         {
-            bool singleReclaim=args.Contains("--oled-reclaim-single-watch");
+            bool delayedReclaim=args.Contains("--oled-reclaim-delayed-watch");
+            bool singleReclaim=delayedReclaim||args.Contains("--oled-reclaim-single-watch");
             bool burstReclaim=singleReclaim||args.Contains("--oled-reclaim-burst-watch");
             bool fastReclaim=burstReclaim||args.Contains("--oled-reclaim-fast-watch");
             bool reclaim=fastReclaim||args.Contains("--oled-reclaim-watch");
@@ -243,7 +245,8 @@ internal static class Program
                 transport.Open();
                 monitor.Start();
                 Log("30s OLED retention check ("+
-                    (singleReclaim?"SINGLE RECLAIM once per dial burst":
+                    (delayedReclaim?"DELAYED SINGLE RECLAIM 650ms after dial":
+                     singleReclaim?"SINGLE RECLAIM once per dial burst":
                      burstReclaim?"BURST RECLAIM 180ms for 550ms after dial":
                      fastReclaim?"FAST RECLAIM 180ms + 750ms tail":
                      reclaim?"RECLAIM 0x95->0x93":
@@ -265,7 +268,9 @@ internal static class Program
                     int cooldown=fastReclaim?180:700;
                     bool singlePending=singleReclaim && burstStart>0 &&
                         burstStart!=lastSingleReclaimedBurst;
-                    bool shouldReclaim=singleReclaim?singlePending:
+                    bool delayElapsed=!delayedReclaim || (burstStart>0 &&
+                        now-burstStart>=650);
+                    bool shouldReclaim=singleReclaim?(singlePending&&delayElapsed):
                         (burstReclaim?burstWindow:(pending||dialTail));
                     if(reclaim && reclaimAttempts<limit &&
                        stopwatch.ElapsedMilliseconds-lastReclaim>=cooldown &&
