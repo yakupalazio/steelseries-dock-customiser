@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>1.1.1-beta.2</Version>
+    <Version>1.1.1-beta.3</Version>
+    <ApplicationIcon>dock-customiser.ico</ApplicationIcon>
     <Product>Steelseries Dock Customiser</Product>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>

@@ -44,7 +44,7 @@ internal static class BatterySources
         // Do not display old Bluetooth PnP percentages when UIA is unavailable.
         BatteryReading? phone=null;
         if(enableAdbPhone) phone=await AdbPhoneBatteryProvider.ReadAsync();
-        phone ??= await PhoneLinkBatteryProvider.TryReadAsync(autoMinimizePhoneLink);
+        phone ??= await PhoneLinkBatteryProvider.TryReadAsync(false); // Never focus Phone Link.
         if(phone is not null)
             snapshot.Values["Phone"] = phone;
         else

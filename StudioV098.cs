@@ -206,6 +206,10 @@ internal sealed class StudioProject
             w.DialStyle=w.DialStyle=="Wheel"?"Wheel":"Bar";
             if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
             w.WheelGapAngle=Math.Clamp(w.WheelGapAngle,-180,180);
+            w.WheelGameOffsetX=Math.Clamp(w.WheelGameOffsetX,-15,15);
+            w.WheelGameOffsetY=Math.Clamp(w.WheelGameOffsetY,-15,15);
+            w.WheelChatOffsetX=Math.Clamp(w.WheelChatOffsetX,-15,15);
+            w.WheelChatOffsetY=Math.Clamp(w.WheelChatOffsetY,-15,15);
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
         }

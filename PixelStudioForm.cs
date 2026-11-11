@@ -104,7 +104,9 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 3 | OLED Studio";
+        try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+        catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(1540,960);
         MinimumSize = new Size(1120,730);
@@ -357,9 +359,15 @@ internal sealed partial class PixelStudioForm : Form
             dialMonitorStarted=true;
         }
         ticker.Start();
-        FormClosed += (_,_) => {ticker.Stop();dialMonitor.Dispose();};
+        FormClosing += HandleTrayClosing;
+        FormClosed += (_,_) => {ticker.Stop();dialMonitor.Dispose();DisposeTray();};
         Shown += async (_,_) =>
         {
+            if(!captureMode){InitializeTray();LoadMediaPreference();}
+            // Start the explicitly requested Live mode immediately on launch,
+            // before slower optional phone/media polling can delay the OLED.
+            if(!captureMode && !IsDisposed && dockPreview is not null)
+                await dockPreview.StartLiveOnLaunchAsync();
             await RefreshGameAsync();
             await RefreshMediaAsync();
             await RefreshBatteriesAsync();
@@ -662,7 +670,10 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(selected?.Kind!="VolumeChatMix"||selected.DialStyle!="Wheel")return;
         using var dialog=new WheelArtworkDialog(selected.WheelPixels,
-            selected.WheelAutoLabel,selected.WheelGapAngle);
+            selected.WheelAutoLabel,selected.WheelGapAngle,
+            selected.WheelIconsFollowRing,selected.WheelGameOffsetX,
+            selected.WheelGameOffsetY,selected.WheelChatOffsetX,
+            selected.WheelChatOffsetY);
         if(dialog.ShowDialog(this)!=DialogResult.OK)return;
         if(dialog.UseBar)
         {
@@ -672,11 +683,21 @@ internal sealed partial class PixelStudioForm : Form
         }
         if(selected.WheelPixels==dialog.Artwork &&
            selected.WheelAutoLabel==dialog.AutoLabel &&
-           selected.WheelGapAngle==dialog.GapAngle)return;
+           selected.WheelGapAngle==dialog.GapAngle &&
+           selected.WheelIconsFollowRing==dialog.FollowModeIcons &&
+           selected.WheelGameOffsetX==dialog.GameDX &&
+           selected.WheelGameOffsetY==dialog.GameDY &&
+           selected.WheelChatOffsetX==dialog.ChatDX &&
+           selected.WheelChatOffsetY==dialog.ChatDY)return;
         Record();
         selected.WheelPixels=dialog.Artwork;
         selected.WheelAutoLabel=dialog.AutoLabel;
         selected.WheelGapAngle=dialog.GapAngle;
+        selected.WheelIconsFollowRing=dialog.FollowModeIcons;
+        selected.WheelGameOffsetX=dialog.GameDX;
+        selected.WheelGameOffsetY=dialog.GameDY;
+        selected.WheelChatOffsetX=dialog.ChatDX;
+        selected.WheelChatOffsetY=dialog.ChatDY;
         Redraw();
         SetStatus(UiLanguage.T("Tekerlek pikselleri güncellendi. Kaydet ile sakla."));
     }

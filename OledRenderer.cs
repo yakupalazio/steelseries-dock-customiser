@@ -222,12 +222,26 @@ internal static class OledRenderer
             7*Scale(w.FontSize)+Math.Clamp(w.StrokeWidth,1,3)+2)),
         "SystemCpu" or "SystemRam" or "NetworkPing" =>
             new(w.X,w.Y,Math.Min(Width-w.X,83),8),
-        "VolumeChatMix" when w.DialStyle=="Wheel" => new(w.X,w.Y,
-            Math.Min(Width-w.X,WheelArtwork.Width),WheelArtwork.Height),
+        "VolumeChatMix" when w.DialStyle=="Wheel" => WheelBounds(w),
         "VolumeChatMix" => new(w.X,w.Y,Math.Min(Width-w.X,
             Math.Clamp(w.MiniWidth,60,128)),25),
         _ => new(w.X,w.Y,Math.Max(5,TextWidth(DisplayText(w),w.FontSize)),TextHeight(w.FontSize))
     };
+
+    private static Rectangle WheelBounds(DockWidget w)
+    {
+        // Custom endpoint icon offsets may extend beyond the 45×42 ring.
+        // Expand only the transparent wheel tile clipping area, preserving
+        // the rest of the OLED and other widgets.
+        int margin=6+new[]{w.WheelGameOffsetX,w.WheelGameOffsetY,
+            w.WheelChatOffsetX,w.WheelChatOffsetY}.Max(v=>Math.Abs(v));
+        int left=Math.Max(0,w.X-margin),top=Math.Max(10,w.Y-margin);
+        int right=Math.Min(Width,w.X+WheelArtwork.Width+margin);
+        // Never let optional icon offsets invade the separately reserved
+        // battery area at the bottom of the default Game/Idle OLED layout.
+        int bottom=Math.Min(53,w.Y+WheelArtwork.Height+margin);
+        return Rectangle.FromLTRB(left,top,right,bottom);
+    }
 
     public static bool IsDevice(string name)=>name is "Mouse" or "Phone" or
         "Headset" or "SpareBattery" or "Laptop" or "DualSense" or
@@ -312,8 +326,12 @@ internal static class OledRenderer
                     "GAME NOT RUNNING",x,y,Scale(w.FontSize));
                 break;
             case "GameLabel":
-                DrawText(px,string.IsNullOrWhiteSpace(w.Text)?"NOW PLAYING:":w.Text,
-                    x,y,Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
+                string label=w.Text?.Trim()??"";
+                if(label.Length==0 || label.Equals("GAME:",StringComparison.OrdinalIgnoreCase) ||
+                   label.Equals("NOW PLAYING:",StringComparison.OrdinalIgnoreCase) ||
+                   label.Equals("OYUN:",StringComparison.OrdinalIgnoreCase))
+                    label=UiLanguage.English?"Game:":"Oyun:";
+                DrawText(px,label,x,y,Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
                 break;
             case "GameMiniPlayer":
                 DrawGameMiniPlayer(px,w,playback);
@@ -428,7 +446,10 @@ internal static class OledRenderer
                 widget.WheelGapAngle,
                 fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2)
                     ?snapshot.VolumeAttenuationSteps:null,
-                fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2));
+                fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2),
+                widget.WheelIconsFollowRing,widget.WheelGameOffsetX,
+                widget.WheelGameOffsetY,widget.WheelChatOffsetX,
+                widget.WheelChatOffsetY);
         }
         else
         {

@@ -233,6 +233,10 @@ internal sealed class DockPreviewPanel : UserControl
     // silently ignores an invisible control; invoke the handlers directly.
     public void ApplyDesign() => _ = ApplyDesignAsync();
     public void ToggleLiveOutput() => _ = ToggleLiveMode();
+    // User-selected automatic Live startup: the same validation gate and
+    // low-rate renderer, without repeatedly asking consent on every launch.
+    public System.Threading.Tasks.Task StartLiveOnLaunchAsync()
+        => ToggleLiveMode(skipConsent:true);
     public void RestoreOriginalScreen() => ResetDock();
 
     /// <summary>
@@ -366,7 +370,7 @@ internal sealed class DockPreviewPanel : UserControl
                 :"Üst koruma kapalı. Sonraki testte tüm 128×64 OLED güncellenecek.";
     }
 
-    private async System.Threading.Tasks.Task ToggleLiveMode()
+    private async System.Threading.Tasks.Task ToggleLiveMode(bool skipConsent=false)
     {
         if(_liveEnabled)
         {
@@ -398,7 +402,7 @@ internal sealed class DockPreviewPanel : UserControl
                 "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
                 "Gerektiğinde OLED ekranı tekrar çizilir. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
                 "Canlı moda geçilsin mi?";
-        if(MessageBox.Show(this,liveConsent,
+        if(!skipConsent && MessageBox.Show(this,liveConsent,
             UiLanguage.English?"Dock live mode (experimental)":"Dock canlı modu (deneysel)",
             MessageBoxButtons.YesNo,MessageBoxIcon.Information)
             !=DialogResult.Yes) return;

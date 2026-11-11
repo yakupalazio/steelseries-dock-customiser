@@ -146,13 +146,17 @@ internal sealed class BatteryStatusDialog : Form
         });
         experimental.Checked=prefs.ExperimentalControllerHid;
         adb.Checked=prefs.UseAdbPhoneBattery;
-        minimizePhoneLink.Checked=prefs.AutoMinimizePhoneLink;
-        Controls.Add(experimental);Controls.Add(adb);Controls.Add(minimizePhoneLink);
+        // Do not open the phone app automatically, even if an older profile
+        // had the retired auto-minimize option enabled.
+        minimizePhoneLink.Checked=false;
+        minimizePhoneLink.Enabled=false;
+        minimizePhoneLink.Visible=false;
+        Controls.Add(experimental);Controls.Add(adb);
         Controls.Add(new Label{
             Left=17,Top=569,Width=832,Height=42,
             Text="Phone Link veri kaynağı: yalnızca pil durumunun erişilebilirlik metni. "+
-                "Arka plan servisi doğrudan pil API'si sunmuyor. Açıp küçültme isteğe bağlıdır; "+
-                "telefon verilerine veya mesajlara erişilmez.",
+                "Otomatik pencere açma kapalıdır. Erişilebilir pil etiketi yoksa --% görünür. "+
+                "Arka planda pil okuması için isteğe bağlı yetkilendirilmiş ADB kullanılabilir.",
             ForeColor=Color.DarkSlateGray
         });
         var applyButton=new DarkButton{Left=649,Top=617,Width=207,Height=32,
@@ -162,7 +166,7 @@ internal sealed class BatteryStatusDialog : Form
             prefs.AutoDualSense=dualSense.Checked;
             prefs.ExperimentalControllerHid=experimental.Checked;
             prefs.UseAdbPhoneBattery=adb.Checked;
-            prefs.AutoMinimizePhoneLink=minimizePhoneLink.Checked;
+            prefs.AutoMinimizePhoneLink=false;
             prefs.Save();
             onApply();
             if(TopLevel)Close();

@@ -126,6 +126,11 @@ internal static class UiLanguage
         ["Orta yazı (otomatik)"]="Centre label (automatic)",
         ["Otomatik VOL / MIX yazısı"]="Automatic VOL / MIX label",
         ["Örnek doluluk"]="Sample fill",
+        ["ChatMix simgeleri: konum ve dönüş"]="ChatMix icon positioning",
+        ["Game / Chat simgeleri çemberin uçlarını izlesin"]=
+            "Game / Chat icons follow ring endpoints",
+        ["Game X"]="Game X",["Game Y"]="Game Y",
+        ["Chat X"]="Chat X",["Chat Y"]="Chat Y",
         ["Önizleme"]="Preview",
         ["Orijinal tasarıma dön"]="Restore original style",
         ["Düz çubuğa geç"]="Switch to flat bar",

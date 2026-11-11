@@ -110,7 +110,9 @@ internal static class WheelArtwork
 
     public static void Draw(bool[] output,bool[] coverage,int x,int y,
         string? artwork,int? percent,DialView view,bool autoLabel=true,
-        int gapAngle=0,int? attenuationSteps=null,bool transientAttenuation=false)
+        int gapAngle=0,int? attenuationSteps=null,bool transientAttenuation=false,
+        bool followModeIcons=true,int gameOffsetX=0,int gameOffsetY=0,
+        int chatOffsetX=0,int chatOffsetY=0)
     {
         string src=Resolve(artwork);
         for(int sy=0;sy<Height;sy++)for(int sx=0;sx<Width;sx++)
@@ -137,11 +139,37 @@ internal static class WheelArtwork
         }
         if(view==DialView.ChatMix)
         {
-            // Independent icons share the same source-of-truth as Icon Workshop.
-            // They stay upright when the ring's gap is rotated.
-            DrawModeIcon(output,coverage,x+1,y+1,"Game",false);
-            DrawModeIcon(output,coverage,x+Width-1,y+1,"Chat",true);
+            // Icons stay upright, while their positions track the ring's
+            // actual start/end angles. Manual offsets remain independently
+            // editable and follow each endpoint when rotating.
+            if(followModeIcons)
+            {
+                DrawEndpointIcon(output,coverage,x,y,"Game",
+                    StartAngle+gapAngle,gameOffsetX,gameOffsetY);
+                DrawEndpointIcon(output,coverage,x,y,"Chat",
+                    StartAngle+Sweep+gapAngle,chatOffsetX,chatOffsetY);
+            }
+            else
+            {
+                DrawModeIcon(output,coverage,x+1+gameOffsetX,y+1+gameOffsetY,"Game",false);
+                DrawModeIcon(output,coverage,x+Width-1+chatOffsetX,
+                    y+1+chatOffsetY,"Chat",true);
+            }
         }
+    }
+
+    private static void DrawEndpointIcon(bool[] output,bool[] coverage,
+        int wheelX,int wheelY,string name,double angle,int offsetX,int offsetY)
+    {
+        var rows=IconLibrary.GetCurrent(name);
+        double rad=angle*Math.PI/180d;
+        // Place badges inside the 16-20px rim, avoiding the center label.
+        int cx=wheelX+CenterX+(int)Math.Round(13*Math.Cos(rad))+offsetX;
+        int cy=wheelY+CenterY+(int)Math.Round(13*Math.Sin(rad))+offsetY;
+        int left=cx-rows[0].Length/2, top=cy-rows.Length/2;
+        for(int yy=0;yy<rows.Length;yy++)
+        for(int xx=0;xx<rows[yy].Length;xx++)
+            if(rows[yy][xx]=='1')Put(output,coverage,left+xx,top+yy,true);
     }
 
     private static void DrawModeIcon(bool[] output,bool[] coverage,

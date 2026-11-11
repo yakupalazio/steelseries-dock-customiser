@@ -435,6 +435,9 @@ internal static class Program
             if(args.Contains("--capture-wheel"))
             {
                 using var wheel=new WheelArtworkDialog(null);
+                wheel.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
+                wheel.Location=new System.Drawing.Point(-5000,-5000);
+                wheel.ShowInTaskbar=false;
                 wheel.Show();
                 Application.DoEvents();
                 using var wheelCapture=new System.Drawing.Bitmap(wheel.Width,wheel.Height);
@@ -516,6 +519,13 @@ public sealed class DockWidget
     // Degrees clockwise relative to the factory ring. The VOL/MIX badge
     // remains upright, including when the surrounding artwork is rotated.
     public int WheelGapAngle { get; set; }
+    // Relative-to-ring endpoints by default. Each mode icon is independently
+    // adjustable in OLED pixels without changing custom Icon Workshop sprites.
+    public bool WheelIconsFollowRing { get; set; } = true;
+    public int WheelGameOffsetX { get; set; }
+    public int WheelGameOffsetY { get; set; }
+    public int WheelChatOffsetX { get; set; }
+    public int WheelChatOffsetY { get; set; }
     public string Format { get; set; } = "";
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;

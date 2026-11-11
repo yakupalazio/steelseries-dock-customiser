@@ -484,7 +484,7 @@ internal sealed partial class PixelStudioForm
             };
             modernRuntimeLabel.Text=UiLanguage.T("Bilgisayarın durumu: "+runtime+
                 "\n"+(gameSnapshot.IsRunning?
-                    ("Oyun: "+gameSnapshot.Name):
+                    (UiLanguage.T("Oyun: ")+gameSnapshot.Name):
                     mediaSnapshot.IsPlaying?
                     ("Medya: "+mediaSnapshot.Title):
                     "Oyun veya medya bulunmadı."));

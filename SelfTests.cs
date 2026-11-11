@@ -242,7 +242,8 @@ internal static class SelfTests
                     throw new Exception("Dial widget unavailable in "+mode);
             var radialDesign=StudioProject.Defaults(ScreenMode.Idle);
             var wheelWidget=radialDesign.Widgets.Single(w=>w.Kind=="VolumeChatMix");
-            if(OledRenderer.GetBounds(wheelWidget).Width!=WheelArtwork.Width ||
+            if(OledRenderer.GetBounds(wheelWidget).Width<WheelArtwork.Width ||
+               OledRenderer.GetBounds(wheelWidget).Bottom>53 ||
                !WheelArtwork.IsValid(WheelArtwork.Factory))
                 throw new Exception("Original-style wheel sprite has invalid geometry");
             // An empty gauge still has visible track borders, and its fill
@@ -271,6 +272,32 @@ internal static class SelfTests
                WheelArtwork.Sample(WheelArtwork.Factory,4,21,90)==
                WheelArtwork.Sample(WheelArtwork.Factory,4,21,0))
                 throw new Exception("Rotating the wheel did not move its fill track");
+            // With a transparent custom ring, only Game/Chat icon sprites
+            // remain. Rotation must move their coordinates independently of
+            // artwork pixels, while manual X/Y offsets must also take effect.
+            var blankWheel=new string('0',WheelArtwork.Width*WheelArtwork.Height);
+            var iconsZero=new bool[128*64];var iconsNinety=new bool[128*64];
+            var iconsShifted=new bool[128*64];var scratch=new bool[128*64];
+            WheelArtwork.Draw(iconsZero,scratch,20,10,blankWheel,50,DialView.ChatMix,
+                autoLabel:false,gapAngle:0,followModeIcons:true);
+            Array.Clear(scratch);
+            WheelArtwork.Draw(iconsNinety,scratch,20,10,blankWheel,50,DialView.ChatMix,
+                autoLabel:false,gapAngle:90,followModeIcons:true);
+            Array.Clear(scratch);
+            WheelArtwork.Draw(iconsShifted,scratch,20,10,blankWheel,50,DialView.ChatMix,
+                autoLabel:false,gapAngle:0,followModeIcons:true,
+                gameOffsetX:7,chatOffsetY:-6);
+            if(iconsZero.Count(p=>p)<10 || iconsZero.SequenceEqual(iconsNinety) ||
+               iconsZero.SequenceEqual(iconsShifted))
+                throw new Exception("ChatMix endpoint icons do not rotate or offset correctly");
+            var savedWheelWidget=new DockWidget{WheelIconsFollowRing=false,
+                WheelGameOffsetX=4,WheelGameOffsetY=-3,WheelChatOffsetX=-2,
+                WheelChatOffsetY=8};
+            var roundtripWheel=System.Text.Json.JsonSerializer.Deserialize<DockWidget>(
+                System.Text.Json.JsonSerializer.Serialize(savedWheelWidget));
+            if(roundtripWheel?.WheelIconsFollowRing!=false ||
+               roundtripWheel.WheelGameOffsetX!=4 || roundtripWheel.WheelChatOffsetY!=8)
+                throw new Exception("ChatMix endpoint customization did not persist");
             // Physical native ChatMix sends independent 0..100 channel gains.
             // G=100,C=100 is neutral, not G=50,C=50.
             static int? MixAt(int game,int chat)=>WheelArtwork.Value(
