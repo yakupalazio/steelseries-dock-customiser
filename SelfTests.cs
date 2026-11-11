@@ -703,7 +703,7 @@ internal static class SelfTests
                 var root=window.Controls.OfType<System.Windows.Forms.TableLayoutPanel>().Single();
                 if(root.ColumnCount!=3 || root.RowCount!=3 ||
                     !window.MaximizeBox || window.MinimumSize.Width<1100)
-                    throw new Exception("Responsive v1.0 layout was not constructed");
+                    throw new Exception($"Responsive v1.0 layout was not constructed: columns={root.ColumnCount}, rows={root.RowCount}, max={window.MaximizeBox}, minWidth={window.MinimumSize.Width}, dpi={window.DeviceDpi}");
                 var children=AllChildren(root).ToArray();
                 if(children.Count(c=>c is DockPreviewPanel)!=1 ||
                    children.Count(c=>c is System.Windows.Forms.PictureBox)==0)
