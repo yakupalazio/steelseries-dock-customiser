@@ -187,12 +187,14 @@ internal static class Program
            args.Contains("--oled-reclaim-fast-watch")||
            args.Contains("--oled-reclaim-burst-watch")||
            args.Contains("--oled-reclaim-single-watch")||
-           args.Contains("--oled-reclaim-delayed-watch"))
+           args.Contains("--oled-reclaim-delayed-watch")||
+           args.Contains("--oled-reclaim-idle-watch"))
         {
+            bool idleReclaim=args.Contains("--oled-reclaim-idle-watch");
             bool delayedReclaim=args.Contains("--oled-reclaim-delayed-watch");
             bool singleReclaim=delayedReclaim||args.Contains("--oled-reclaim-single-watch");
             bool burstReclaim=singleReclaim||args.Contains("--oled-reclaim-burst-watch");
-            bool fastReclaim=burstReclaim||args.Contains("--oled-reclaim-fast-watch");
+            bool fastReclaim=idleReclaim||burstReclaim||args.Contains("--oled-reclaim-fast-watch");
             bool reclaim=fastReclaim||args.Contains("--oled-reclaim-watch");
             bool fullScreen=reclaim||args.Contains("--oled-full-retention-watch");
             // Persist diagnostics even in a WinExe process with no console attached.
@@ -235,7 +237,7 @@ internal static class Program
             };
             var stopwatch=System.Diagnostics.Stopwatch.StartNew();
             int frames=0,slowest=0;
-            long lastProgress=0, lastReclaim=-1000, lastSingleReclaimedBurst=0;
+            long lastProgress=0, lastReclaim=-1000, lastSingleReclaimedBurst=0, lastIdleReclaimedDial=0;
             try
             {
                 using var bitmap=OledRenderer.Render(
@@ -245,7 +247,8 @@ internal static class Program
                 transport.Open();
                 monitor.Start();
                 Log("30s OLED retention check ("+
-                    (delayedReclaim?"DELAYED SINGLE RECLAIM 650ms after dial":
+                    (idleReclaim?"IDLE RECLAIM once after 450ms dial silence":
+                     delayedReclaim?"DELAYED SINGLE RECLAIM 650ms after dial":
                      singleReclaim?"SINGLE RECLAIM once per dial burst":
                      burstReclaim?"BURST RECLAIM 180ms for 550ms after dial":
                      fastReclaim?"FAST RECLAIM 180ms + 750ms tail":
@@ -256,8 +259,8 @@ internal static class Program
                 {
                     long before=stopwatch.ElapsedMilliseconds;
                     long now=Environment.TickCount64;
-                    long sinceDial=now-
-                        System.Threading.Interlocked.Read(ref lastDialAt);
+                    long lastDial=System.Threading.Interlocked.Read(ref lastDialAt);
+                    long sinceDial=now-lastDial;
                     long burstStart=System.Threading.Interlocked.Read(ref reclaimWindowStartedAt);
                     bool burstWindow=burstReclaim && burstStart>0 &&
                         now-burstStart>=0 && now-burstStart<=550;
@@ -270,8 +273,11 @@ internal static class Program
                         burstStart!=lastSingleReclaimedBurst;
                     bool delayElapsed=!delayedReclaim || (burstStart>0 &&
                         now-burstStart>=650);
-                    bool shouldReclaim=singleReclaim?(singlePending&&delayElapsed):
-                        (burstReclaim?burstWindow:(pending||dialTail));
+                    bool idlePending=idleReclaim && lastDial>0 &&
+                        lastDial!=lastIdleReclaimedDial && sinceDial>=450;
+                    bool shouldReclaim=idleReclaim?idlePending:
+                        (singleReclaim?(singlePending&&delayElapsed):
+                        (burstReclaim?burstWindow:(pending||dialTail)));
                     if(reclaim && reclaimAttempts<limit &&
                        stopwatch.ElapsedMilliseconds-lastReclaim>=cooldown &&
                        shouldReclaim)
@@ -281,6 +287,7 @@ internal static class Program
                         // Subsequent frames use the existing 0x93 transport.
                         transport.ReclaimNativeOverlay(bitmap);
                         if(singleReclaim)lastSingleReclaimedBurst=burstStart;
+                        if(idleReclaim)lastIdleReclaimedDial=lastDial;
                         lastReclaim=stopwatch.ElapsedMilliseconds;
                         reclaimAttempts++;
                         Log($"RECLAIM attempt={reclaimAttempts} at={lastReclaim}ms "+
