@@ -39,6 +39,8 @@ internal sealed partial class PixelStudioForm : Form
         Left=18,Top=8,Width=544,Height=38,SizeMode=TabSizeMode.Fixed,ItemSize=new Size(180,25)};
     private readonly DarkCheckBox headerProtect=new(){
         Left=570,Top=13,Width=240,Text="Üst 10 pikseli koru",Checked=true};
+    private readonly DarkCheckBox liveOwnsDisplay=new(){
+        Width=269,Height=34,Text="Canlıda tam ekran (128×64)",Checked=false};
     private readonly DarkNumberBox strokeWidth=new(){Minimum=1,Maximum=3,Width=85};
     private readonly DarkNumberBox miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=100};
     private readonly string savePath = Path.Combine(
@@ -58,6 +60,7 @@ internal sealed partial class PixelStudioForm : Form
     private bool telemetryPolling;
     private int telemetryTick;
     private bool dialMonitorStarted;
+    private int dialDispatchPending;
     private bool batteryPolling;
     private bool fastBatteryPolling;
     private int batteryRefreshCounter;
@@ -119,8 +122,10 @@ internal sealed partial class PixelStudioForm : Form
         editTab.Controls.Add(editor);
         dockPreview=new DockPreviewPanel(
             ()=>RenderScreen(editingMode),()=>project.ProtectHeader,
-            ()=>DisplayBurnIn.Apply(RenderScreen(ActiveMode),project.ProtectHeader,
-                displayPreferences.BurnInDrift,DateTimeOffset.UtcNow));
+            ()=>DisplayBurnIn.Apply(RenderLiveScreen(),
+                project.ProtectHeader&&!project.LiveOwnsDisplay,
+                displayPreferences.BurnInDrift,DateTimeOffset.UtcNow),
+            ()=>project.LiveOwnsDisplay);
         dockTab.Controls.Add(dockPreview);
         editor.Paint += (_,e) => PaintFrame(e.Graphics,true,Zoom);
 
@@ -150,16 +155,23 @@ internal sealed partial class PixelStudioForm : Form
         dialMonitor.Updated+=() =>
         {
             if(IsDisposed||!IsHandleCreated)return;
+            // One UI dispatch owns the newest state; a fast physical spin
+            // must not pile hundreds of stale preview frames in the queue.
+            if(System.Threading.Interlocked.Exchange(ref dialDispatchPending,1)!=0)return;
             try
             {
                 BeginInvoke((Action)(() =>
                 {
+                    System.Threading.Interlocked.Exchange(ref dialDispatchPending,0);
                     if(IsDisposed)return;
                     dockPreview?.OnPhysicalDialEvent();
                     Redraw();
                 }));
             }
-            catch(InvalidOperationException){ /* UI may be closing. */ }
+            catch(InvalidOperationException)
+            {
+                System.Threading.Interlocked.Exchange(ref dialDispatchPending,0);
+            }
         };
         source.Items.AddRange(["Spotify","Diğer medya"]);
         source.SelectedIndex=0;
@@ -217,6 +229,7 @@ internal sealed partial class PixelStudioForm : Form
         modeTabs.TabPages.Add("Idle");
         editTab.Controls.Add(modeTabs);
         headerProtect.Checked=project.ProtectHeader;
+        liveOwnsDisplay.Checked=project.LiveOwnsDisplay;
         editTab.Controls.Add(headerProtect);
         modeTabs.SelectedIndexChanged+=(_,_)=>SwitchEditingMode((ScreenMode)modeTabs.SelectedIndex);
         headerProtect.CheckedChanged+=(_,_)=>{
@@ -224,6 +237,12 @@ internal sealed partial class PixelStudioForm : Form
             foreach(var m in Enum.GetValues<ScreenMode>())
                 StudioProject.Sanitize(project.For(m),m,project.ProtectHeader);
             yPos.Minimum=LockedRows;
+            dockPreview?.OnProtectionChanged();
+            Redraw();
+        };
+        liveOwnsDisplay.CheckedChanged+=(_,_)=>
+        {
+            project.LiveOwnsDisplay=liveOwnsDisplay.Checked;
             dockPreview?.OnProtectionChanged();
             Redraw();
         };
@@ -329,6 +348,14 @@ internal sealed partial class PixelStudioForm : Form
         };
         BuildModernShell(editTab,add,remove,save,load,reset,export,clear,
             clockDateButton,batteryButton,iconButton);
+        // Start as soon as the form is constructed, not at the next 1s
+        // timer tick: initial ChatMix/Volume input must update immediately.
+        if(Enum.GetValues<ScreenMode>().Any(m=>
+            project.For(m).Widgets.Any(w=>w.Kind=="VolumeChatMix"&&w.Visible)))
+        {
+            dialMonitor.Start();
+            dialMonitorStarted=true;
+        }
         ticker.Start();
         FormClosed += (_,_) => {ticker.Stop();dialMonitor.Dispose();};
         Shown += async (_,_) =>
@@ -352,13 +379,35 @@ internal sealed partial class PixelStudioForm : Form
     private ScreenMode ActiveMode =>
         StudioProject.Choose(gameSnapshot.IsRunning,MediaActive);
 
-    private Bitmap RenderScreen(ScreenMode mode) =>
-        OledRenderer.Render(project.For(mode),mode==ScreenMode.Media,true,
+    private Bitmap RenderScreen(ScreenMode mode,bool liveFull=false)
+    {
+        var frame=OledRenderer.Render(project.For(mode),mode==ScreenMode.Media,true,
             SpotifyActive,batterySnapshot,
             mode==ScreenMode.Game ? (mediaSnapshot.IsPlaying ? mediaSnapshot : null) : LiveMedia,
             gameSnapshot,
-            batteryPreferences,project.ProtectHeader,mode,dialMonitor.Snapshot,
+            batteryPreferences,project.ProtectHeader&&!liveFull,mode,dialMonitor.Snapshot,
             telemetry);
+        if(liveFull&&project.ProtectHeader)
+        {
+            // Full ownership cannot retain the firmware's status strip.
+            // Recreate it with three real, user-prioritized battery slots;
+            // only this live bitmap gets the automatic header. Do not alter
+            // the saved design or the user's protected editing coordinates.
+            var stripLayout=new LayoutState{Widgets=[
+                new DockWidget{Kind="BatterySlot1",X=0,Y=0},
+                new DockWidget{Kind="BatterySlot2",X=43,Y=0},
+                new DockWidget{Kind="BatterySlot3",X=86,Y=0}
+            ]};
+            using var strip=OledRenderer.Render(stripLayout,false,true,false,
+                batterySnapshot,preferences:batteryPreferences,protectHeader:false);
+            for(int y=0;y<10;y++)for(int x=0;x<128;x++)
+                frame.SetPixel(x,y,strip.GetPixel(x,y));
+        }
+        return frame;
+    }
+
+    private Bitmap RenderLiveScreen()=>
+        RenderScreen(ActiveMode,project.LiveOwnsDisplay);
 
     private async System.Threading.Tasks.Task RefreshTelemetryAsync()
     {
@@ -783,6 +832,7 @@ internal sealed partial class PixelStudioForm : Form
         project=StudioProject.Load();
         state=project.For(editingMode);
         headerProtect.Checked=project.ProtectHeader;
+        liveOwnsDisplay.Checked=project.LiveOwnsDisplay;
         selected=null;undo.Clear();redo.Clear();
         UpdateHistoryButtons();RefreshWidgetList();Redraw();
         SetStatus("Medya, Oyun, Idle ve üst ekran ayarı yüklendi.");

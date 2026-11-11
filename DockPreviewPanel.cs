@@ -27,6 +27,8 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly Func<Bitmap> _frameFactory;
     private readonly Func<Bitmap> _liveFrameFactory;
     private readonly Func<bool> _protectHeader;
+    private readonly Func<bool> _liveOwnsDisplay;
+    private bool LiveHeaderProtected=>_protectHeader()&&!_liveOwnsDisplay();
     private bool _embeddedStudio;
     private Rectangle _visiblePhotoCrop;
     private readonly PictureBox _photoBox = new()
@@ -78,11 +80,12 @@ internal sealed class DockPreviewPanel : UserControl
     ];
 
     public DockPreviewPanel(Func<Bitmap> frameFactory,Func<bool>? protectHeader=null,
-        Func<Bitmap>? liveFrameFactory=null)
+        Func<Bitmap>? liveFrameFactory=null,Func<bool>? liveOwnsDisplay=null)
     {
         _frameFactory = frameFactory;
         _liveFrameFactory=liveFrameFactory??frameFactory;
         _protectHeader=protectHeader??(()=>true);
+        _liveOwnsDisplay=liveOwnsDisplay??(()=>false);
         Dock = DockStyle.Fill;
         BackColor = Color.FromArgb(245,247,249);
 
@@ -154,9 +157,9 @@ internal sealed class DockPreviewPanel : UserControl
 
     /// <summary>
     /// A physical input triggers a native firmware overlay. Request an
-    /// immediate write and briefly stream our selected content so that the
-    /// native screen cannot linger while the knob is being operated. This is
-    /// display-only; input and device volume continue to work as designed.
+    /// immediate write and briefly stream our selected content. This reduces
+    /// the native overlay duration but cannot stop firmware-priority frames.
+    /// Input and device volume continue to work as designed.
     /// </summary>
     public void OnPhysicalDialEvent()
     {
@@ -303,9 +306,11 @@ internal sealed class DockPreviewPanel : UserControl
         if(_liveEnabled)StopLiveMode();
         _cachedGlassBackground=null;
         InvalidateFrame();
-        _message.Text=_protectHeader()
-            ?"Üst 10 piksel korunuyor. Dock'a yalnızca Y=10–63 gönderilecek."
-            :"Üst koruma kapalı. Bir sonraki test onaylandığında TÜM 128×64 OLED yenilenecek.";
+        _message.Text=_liveOwnsDisplay()
+            ?"Canlı mod tüm 128×64 OLED'i yenileyecek. Firmware tekerlek ekranı yine görünebilir."
+            :_protectHeader()
+                ?"Üst 10 piksel korunuyor. Dock'a yalnızca Y=10–63 gönderilecek."
+                :"Üst koruma kapalı. Sonraki testte tüm 128×64 OLED güncellenecek.";
     }
 
     private async System.Threading.Tasks.Task ToggleLiveMode()
@@ -328,15 +333,15 @@ internal sealed class DockPreviewPanel : UserControl
         }
         string liveConsent=UiLanguage.English
             ?"Live OLED refreshes at up to 16 frames/sec and reasserts after dial input.\n"+
-                (_protectHeader()
+                (LiveHeaderProtected
                     ?"Only rows 10–63 will update; original top 10 pixels remain untouched.\n"
-                    :"WARNING: Full-screen 128×64 output will replace the OEM header.\n")+
+                    :"Full 128×64 output takes over the dock screen; a live battery strip replaces OEM indicators.\n")+
                 "SteelSeries GG Now Playing may conflict with this feature.\n"+
                 "Closing live mode restores the original OLED. Start live mode?"
             :"Canlı OLED saniyede 16 kareye kadar yenilenir; fiziksel tekerlekten sonra ekran geri alınır.\n"+
-                (_protectHeader()
-                    ?"Yalnızca 10–63. satırlar güncellenir; orijinal üst bölüm korunur.\n"
-                    :"UYARI: Üst koruma kapalı, tüm 128×64 ekran değiştirilecek.\n")+
+                (LiveHeaderProtected
+                    ?"Yalnızca 10–63. satırlar yenilenir; orijinal üst bölüm korunur.\n"
+                    :"Tüm 128×64 OLED canlı modca devralınır; OEM üst satır yerine canlı pil şeridi çizilir.\n")+
                 "Bu mod SteelSeries GG Now Playing ile yarışabilir. Mümkünse GG Now Playing'i kapat.\n"+
                 "Gerektiğinde OLED ekranı tekrar çizilir. Kapatınca SteelSeries ekranı geri yüklenir.\n"+
                 "Canlı moda geçilsin mi?";
@@ -353,9 +358,9 @@ internal sealed class DockPreviewPanel : UserControl
         _nextReconnect=DateTimeOffset.MinValue;
         _sendHardware.Enabled=false;
         _liveToggle.Text="Canlı modu durdur";
-        _message.Text=_protectHeader()
+        _message.Text=LiveHeaderProtected
             ?"Canlı dock modu etkin, üst 10 satır korunuyor."
-            :"Canlı dock modu etkin, TÜM 128×64 ekran kullanılıyor.";
+            :"Canlı dock modu tam 128×64 yazıyor; firmware tekerlek menüsünü kapatmaz.";
         _liveTimer.Start();
         await RefreshLiveDock();
     }
@@ -402,10 +407,10 @@ internal sealed class DockPreviewPanel : UserControl
             using var bitmap=_liveFrameFactory();
             var pixels=new byte[128*64];
             int ptr=0;
-            for(int y=_protectHeader()?10:0;y<64;y++)
+            for(int y=LiveHeaderProtected?10:0;y<64;y++)
             for(int x=0;x<128;x++)
                 pixels[ptr++]=bitmap.GetPixel(x,y).R>127?(byte)1:(byte)0;
-            string stamp=(_protectHeader()?"protected:":"full:")+
+            string stamp=(LiveHeaderProtected?"protected:":"full:")+
                 Convert.ToHexString(SHA256.HashData(pixels[..ptr]));
             // OLED report 0x93 already overwrites the display RAM, but the
             // firmware may draw its volume animation afterward. Reassert the
@@ -413,7 +418,7 @@ internal sealed class DockPreviewPanel : UserControl
             if(NeedsReassert(_lastLiveFrame,stamp,_lastLiveWrite,
                 DateTimeOffset.UtcNow,force||_forceNextLiveFrame))
             {
-                await _hardware.SendLiveFrameAsync(bitmap,_protectHeader());
+                await _hardware.SendLiveFrameAsync(bitmap,LiveHeaderProtected);
                 _lastLiveFrame=stamp;
                 _lastLiveWrite=DateTimeOffset.UtcNow;
                 _forceNextLiveFrame=false;
@@ -668,7 +673,7 @@ internal sealed class DockPreviewPanel : UserControl
         }
         else
         {
-            using var render=_frameFactory();
+            using var render=_liveEnabled?_liveFrameFactory():_frameFactory();
             // This dark-glass reference only depends on the photo/corners, not
             // on the changing OLED framebuffer. Cache the expensive medians.
             if(_cachedGlassBackground is null)
@@ -677,7 +682,8 @@ internal sealed class DockPreviewPanel : UserControl
                 _cachedGlassBackground=BuildSmoothBackground(reference,_settings.Corners);
             }
             using var combined=ComposePhotograph(_photo,render,
-                _settings.Corners,92,_cachedGlassBackground,_protectHeader());
+                _settings.Corners,92,_cachedGlassBackground,
+                _liveEnabled?LiveHeaderProtected:_protectHeader());
             g.DrawImage(combined,_imageRect,crop,GraphicsUnit.Pixel);
         }
 

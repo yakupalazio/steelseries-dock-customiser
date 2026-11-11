@@ -348,6 +348,13 @@ internal sealed partial class PixelStudioForm
         headerProtect.Width=269;headerProtect.Height=38;
         headerProtect.ForeColor=UiText;
         inspector.Controls.Add(headerProtect);
+        liveOwnsDisplay.ForeColor=UiAccent;
+        liveOwnsDisplay.BackColor=UiSidebar;
+        inspector.Controls.Add(liveOwnsDisplay);
+        inspector.Controls.Add(new Label{
+            Text="Deneysel: Tam OLED yazımı firmware'in tekerlek ekranını engellemez. Dock Reset ile geri dön.",
+            Width=267,Height=60,ForeColor=UiMuted,Font=new Font("Segoe UI",8.3f)
+        });
         inspector.Controls.Add(new Label{
             Text="Kapalıysa tam 128×64 OLED alanını düzenlersin. Dock'a göndermeden önce onay istenir.",
             Width=267,Height=54,ForeColor=UiMuted,Font=new Font("Segoe UI",8.4f)
@@ -528,8 +535,10 @@ internal sealed partial class PixelStudioForm
         }
         if(modernFooter!=null)
             modernFooter.Text="  ●  "+UiLanguage.T(status.Text)+
-                "     |     OLED: 128×64, "+(project.ProtectHeader?
-                UiLanguage.T("üst 10 piksel korunuyor"):UiLanguage.T("tam ekran düzenleme"));
+                "     |     OLED: 128×64, "+(dockPreview.LiveOutputActive&&project.LiveOwnsDisplay
+                ?UiLanguage.T("Canlı tam ekran devralma")
+                :project.ProtectHeader?UiLanguage.T("üst 10 piksel korunuyor")
+                    :UiLanguage.T("tam ekran düzenleme"));
     }
 
     private static Label Section(string text,int width)=>new()

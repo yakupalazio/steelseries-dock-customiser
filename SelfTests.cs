@@ -271,6 +271,25 @@ internal static class SelfTests
                WheelArtwork.Sample(WheelArtwork.Factory,4,21,90)==
                WheelArtwork.Sample(WheelArtwork.Factory,4,21,0))
                 throw new Exception("Rotating the wheel did not move its fill track");
+            // Physical native ChatMix sends independent 0..100 channel gains.
+            // G=100,C=100 is neutral, not G=50,C=50.
+            static int? MixAt(int game,int chat)=>WheelArtwork.Value(
+                new DialSnapshot(DialView.ChatMix,null,game,chat,
+                    DateTimeOffset.UtcNow,"test"),true);
+            if(MixAt(100,100)!=50 || MixAt(100,50)!=75 ||
+               MixAt(100,0)!=100 || MixAt(50,100)!=25 ||
+               MixAt(0,100)!=0 || MixAt(0,0)!=50)
+                throw new Exception("Hardware ChatMix midpoint/edge mapping is incorrect");
+            foreach(string key in new[]{"Game","Chat","Charging"})
+            {
+                if(!IconLibrary.Names.Contains(key))
+                    throw new Exception("Icon Workshop is missing "+key);
+                var rows=IconLibrary.GetCurrent(key);
+                if(rows.Length<4||rows[0].Length<4||
+                   rows.Any(row=>row.Length!=rows[0].Length ||
+                       row.Any(pixel=>pixel!='0'&&pixel!='1')))
+                    throw new Exception("Invalid editable OLED icon: "+key);
+            }
             var transientLow=new bool[128*64];var maskLow=new bool[128*64];
             var transientMax=new bool[128*64];var maskMax=new bool[128*64];
             WheelArtwork.Draw(transientLow,maskLow,0,0,null,10,DialView.Volume,

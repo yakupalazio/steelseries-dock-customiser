@@ -136,6 +136,9 @@ internal static class UiLanguage
             "Wheel pixels updated. Choose Save to keep changes.",
         ["EKRAN KORUMASI"]="SCREEN PROTECTION",
         ["Orijinal üst 10 pikseli koru"]="Preserve top 10 OEM pixels",
+        ["Canlıda tam ekran (128×64)"]="Full-screen live (128×64)",
+        ["Deneysel: Tam OLED yazımı firmware'in tekerlek ekranını engellemez. Dock Reset ile geri dön."]=
+            "Experimental: Full OLED output cannot stop the firmware's wheel overlay. Use Dock Reset to restore.",
         ["Kapalıysa tam 128×64 OLED alanını düzenlersin. Dock'a göndermeden önce onay istenir."]=
             "Off: edit the full 128×64 OLED. Confirmation is required before sending.",
         ["DOCK  /  CUSTOMISER"]="DOCK  /  CUSTOMISER",
@@ -163,6 +166,7 @@ internal static class UiLanguage
         ["● Dock üzerinde canlı mod açık"]="● Dock live mode on",
         ["üst 10 piksel korunuyor"]="top 10 pixels protected",
         ["tam ekran düzenleme"]="full-screen editing",
+        ["Canlı tam ekran devralma"]="Live full-screen draw",
         ["SEÇİLİ  ·  "]="SELECTED  ·  ",
         ["Saat"]="Clock",["Tarih"]="Date",
         ["Kaynak ikonu"]="Source icon",["Şarkı adı"]="Track title",

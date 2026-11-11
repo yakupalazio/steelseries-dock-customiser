@@ -101,8 +101,11 @@ internal static class WheelArtwork
         if(!fresh)return null;
         if(snapshot.View==DialView.Volume)return snapshot.Volume;
         if(!snapshot.Game.HasValue||!snapshot.Chat.HasValue)return null;
-        int total=snapshot.Game.Value+snapshot.Chat.Value;
-        return total>0?(int)Math.Round(snapshot.Game.Value*100d/total):50;
+        // Native ChatMix attenuates one channel while the other remains at
+        // 100. The physical midpoint is G=100/C=100 (not a 50/50 gain split).
+        // G=100/C=0 maps to the Game endpoint; G=0/C=100 to Chat.
+        return Math.Clamp((int)Math.Round(50d+
+            (snapshot.Game.Value-snapshot.Chat.Value)/2d),0,100);
     }
 
     public static void Draw(bool[] output,bool[] coverage,int x,int y,
@@ -134,21 +137,21 @@ internal static class WheelArtwork
         }
         if(view==DialView.ChatMix)
         {
-            DrawIcon(output,coverage,x+1,y+1,'G');
-            DrawIcon(output,coverage,x+Width-8,y+1,'C');
+            // Independent icons share the same source-of-truth as Icon Workshop.
+            // They stay upright when the ring's gap is rotated.
+            DrawModeIcon(output,coverage,x+1,y+1,"Game",false);
+            DrawModeIcon(output,coverage,x+Width-1,y+1,"Chat",true);
         }
     }
 
-    private static void DrawIcon(bool[] output,bool[] coverage,int x,int y,char symbol)
+    private static void DrawModeIcon(bool[] output,bool[] coverage,
+        int edgeX,int y,string name,bool alignRight)
     {
-        for(int xx=0;xx<7;xx++)for(int yy=0;yy<8;yy++)
-            if(xx==0||xx==6||yy==0||yy==7)
-                Put(output,coverage,x+xx,y+yy,true);
-        string[] glyph=symbol=='G'?
-            ["111","100","101","101","111"]:
-            ["111","100","100","100","111"];
-        for(int yy=0;yy<5;yy++)for(int xx=0;xx<3;xx++)
-            if(glyph[yy][xx]=='1')Put(output,coverage,x+2+xx,y+2+yy,true);
+        var rows=IconLibrary.GetCurrent(name);
+        int x=alignRight?edgeX-rows[0].Length:edgeX;
+        for(int yy=0;yy<rows.Length;yy++)
+        for(int xx=0;xx<rows[yy].Length;xx++)
+            if(rows[yy][xx]=='1')Put(output,coverage,x+xx,y+yy,true);
     }
 
     private static void Put(bool[] output,bool[] coverage,int x,int y,bool on)

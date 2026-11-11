@@ -33,6 +33,18 @@ internal sealed class IconEditorDialog : Form
         Controls.Add(new Label{Left=20,Top=12,Width=600,Height=28,Font=new Font("Segoe UI",13,FontStyle.Bold),
             Text="İkonları tek tek piksel piksel düzenle"});
         Controls.Add(iconNames);
+        iconNames.FormattingEnabled=true;
+        iconNames.Format+=(_,e)=>
+        {
+            if(e.ListItem is not string name)return;
+            e.Value=UiLanguage.English?name:name switch
+            {
+                "Game"=>"Oyun",
+                "Chat"=>"Sohbet",
+                "Charging"=>"Şarj oluyor",
+                _=>name
+            };
+        };
         iconNames.Items.AddRange(IconLibrary.Names);
         iconNames.SelectedIndexChanged+=(_,_)=>ChangeIcon();
         Controls.Add(pixelGrid); Controls.Add(preview);Controls.Add(info);
@@ -101,8 +113,11 @@ internal sealed class IconEditorDialog : Form
     {
         changing=true;
         var rows=IconLibrary.GetCurrent(CurrentIconName);
-        width=Math.Clamp(rows[0].Length,4,20);
-        height=Math.Clamp(rows.Length,4,20);
+        int maxWidth=CurrentIconName is "Game" or "Chat"?11:CurrentIconName=="Charging"?4:20;
+        int maxHeight=CurrentIconName is "Game" or "Chat"?9:CurrentIconName=="Charging"?7:20;
+        iconWidth.Maximum=maxWidth;iconHeight.Maximum=maxHeight;
+        width=Math.Clamp(rows[0].Length,4,maxWidth);
+        height=Math.Clamp(rows.Length,4,maxHeight);
         pixels=new bool[20,20];
         for(int y=0;y<height;y++)for(int x=0;x<width;x++)
             pixels[y,x]=rows[y][x]=='1';

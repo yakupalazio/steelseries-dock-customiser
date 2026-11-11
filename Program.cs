@@ -181,8 +181,10 @@ internal static class Program
             }
             return;
         }
-        if(args.Contains("--oled-retention-watch"))
+        if(args.Contains("--oled-retention-watch")||
+           args.Contains("--oled-full-retention-watch"))
         {
+            bool fullScreen=args.Contains("--oled-full-retention-watch");
             // Interactive diagnostic only: keep the user's normal idle design
             // on the OLED while they rotate the hardware knob. No firmware,
             // audio or configuration writes are made. Always hand back.
@@ -205,11 +207,13 @@ internal static class Program
                 using var transport=new FastOledTransport();
                 transport.Open();
                 monitor.Start();
-                Console.WriteLine("30s OLED retention check started. Rotate and press the physical dial now.");
+                Console.WriteLine("30s OLED retention check ("+
+                    (fullScreen?"128x64 FULL":"protected 10..63")+
+                    ") started. Rotate and press the physical dial now.");
                 while(stopwatch.Elapsed<TimeSpan.FromSeconds(30))
                 {
                     long before=stopwatch.ElapsedMilliseconds;
-                    transport.SendLiveFrame(bitmap,true);
+                    transport.SendLiveFrame(bitmap,!fullScreen);
                     slowest=Math.Max(slowest,(int)(stopwatch.ElapsedMilliseconds-before));
                     frames++;
                     System.Threading.Thread.Sleep(35);

@@ -8,7 +8,7 @@ namespace SteelseriesDockCustomiser;
 
 internal static class IconLibrary
 {
-    public static readonly string[] Names=["Mouse","Phone","DualSense","Headset","Laptop","Spotify","Media"];
+    public static readonly string[] Names=["Mouse","Phone","DualSense","Headset","Laptop","Spotify","Media","Game","Chat","Charging"];
     private static readonly string FileName=Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser","icons-v09.json");
@@ -33,7 +33,7 @@ internal static class IconLibrary
     public static void Set(string name,string[] rows)
     {
         if(!Names.Contains(name))throw new ArgumentException("Unknown icon");
-        Validate(rows);
+        Validate(rows,name);
         Custom[name]=rows.ToArray();
         Save();
     }
@@ -54,7 +54,7 @@ internal static class IconLibrary
             foreach(var (name,rows) in icons)
             {
                 if(!Names.Contains(name))continue;
-                try{Validate(rows);Custom[name]=rows.ToArray();}catch{}
+                try{Validate(rows,name);Custom[name]=rows.ToArray();}catch{}
             }
         }
         catch{}
@@ -64,11 +64,16 @@ internal static class IconLibrary
         Directory.CreateDirectory(Path.GetDirectoryName(FileName)!);
         File.WriteAllText(FileName,JsonSerializer.Serialize(Custom,new JsonSerializerOptions{WriteIndented=true}));
     }
-    private static void Validate(string[] rows)
+    private static void Validate(string[] rows,string? name=null)
     {
         if(rows is null||rows.Length<4||rows.Length>20)throw new ArgumentException("Height 4-20");
         int width=rows[0].Length;
         if(width<4||width>20||rows.Any(r=>r.Length!=width||r.Any(c=>c!='0'&&c!='1')))
             throw new ArgumentException("Every icon must have equal-sized 0/1 rows, 4-20 px.");
+        // Tiny fixed OLED slots cannot safely accommodate arbitrary 20px badges.
+        int maxWidth=name is "Game" or "Chat"?11:name=="Charging"?4:20;
+        int maxHeight=name is "Game" or "Chat"?9:name=="Charging"?7:20;
+        if(width>maxWidth||rows.Length>maxHeight)
+            throw new ArgumentException($"{name} icon limit: {maxWidth}x{maxHeight} pixels.");
     }
 }

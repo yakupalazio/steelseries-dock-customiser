@@ -113,6 +113,38 @@ internal static class OledRenderer
             "011110011100",
             "011100011000",
             "001000010000"
+        ],
+        // Purpose-built pixel sprites, shared by the ChatMix wheel and Icon Workshop.
+        ["Game"] = [
+            "00011111000",
+            "00111111100",
+            "01111111110",
+            "11000100011",
+            "10011111001",
+            "10100100101",
+            "11000000011",
+            "01100000110",
+            "00111111100"
+        ],
+        ["Chat"] = [
+            "00111111100",
+            "01100000110",
+            "11000000011",
+            "10001000001",
+            "10000100001",
+            "11000000011",
+            "01111111110",
+            "00110000000",
+            "00010000000"
+        ],
+        ["Charging"] = [
+            "0011",
+            "0110",
+            "1110",
+            "0111",
+            "0011",
+            "0110",
+            "1100"
         ]
     };
 
@@ -253,9 +285,12 @@ internal static class OledRenderer
                 int labelX=x+13;
                 DrawText(px,pct,labelX,y+2,1);
                 int boltX=labelX+TextWidth(pct,7)+2;
-                if(reading?.IsCharging==true &&
-                    boltX+3<=Math.Min(Width,x+42))
-                    DrawChargeBolt(px,boltX,y+2);
+                if(reading?.IsCharging==true)
+                {
+                    var chargingIcon=IconLibrary.GetCurrent("Charging");
+                    if(boltX+chargingIcon[0].Length<=Math.Min(Width,x+42))
+                        DrawChargeBolt(px,boltX,y+2,chargingIcon);
+                }
                 break;
             case "Progress":
                 DrawProgress(px,x,y,Math.Min(98,Width-x),
@@ -405,9 +440,10 @@ internal static class OledRenderer
             var right=fresh?snapshot.Chat:null;
             DrawText(tile,left.HasValue&&right.HasValue
                 ?$"G{left.Value} C{right.Value}":"G-- C--",x+1,y+10,1);
-            int sum=(left??0)+(right??0);
             DrawProgress(tile,x+1,y+19,width,
-                sum>0?(int)Math.Round((left??0)*100d/sum):0);
+                left.HasValue&&right.HasValue
+                    ?Math.Clamp((int)Math.Round(50d+(left.Value-right.Value)/2d),0,100)
+                    :50);
         }
         else
         {
@@ -433,12 +469,11 @@ internal static class OledRenderer
             }
     }
 
-    // Hand-drawn 3x7 native OLED lightning glyph shown only for confirmed charging.
-    private static void DrawChargeBolt(bool[] frame,int x,int y)
+    // The charging badge is an editable Icon Workshop sprite, not the OEM header icon.
+    private static void DrawChargeBolt(bool[] frame,int x,int y,string[] rows)
     {
-        string[] rows=[".11","11.","111",".11",".1.","11.","1.."];
         for(int row=0;row<rows.Length;row++)
-        for(int col=0;col<3;col++)
+        for(int col=0;col<rows[row].Length;col++)
             if(rows[row][col]=='1')Dot(frame,x+col,y+row);
     }
 

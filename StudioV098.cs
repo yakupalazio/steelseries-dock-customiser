@@ -15,6 +15,9 @@ internal sealed class StudioProject
     public LayoutState Game { get; set; } = Defaults(ScreenMode.Game);
     public LayoutState Idle { get; set; } = Defaults(ScreenMode.Idle);
     public bool ProtectHeader { get; set; } = true;
+    // Live output may own all 128x64 pixels to reclaim the screen after wheel input.
+    // Static Apply still follows ProtectHeader, and Reset always restores the OEM.
+    public bool LiveOwnsDisplay { get; set; } = false;
     // A one-time migration keeps pre-1.1 layouts intact and, crucially,
     // remembers when a user deliberately removes either default dial.
     public bool RadialDefaultsMigrated { get; set; }
