@@ -182,6 +182,21 @@ internal static class Beta5SelfTests
                 [id]=new(id,5,"GATT (uncached)","",now.AddSeconds(12))}
             },pref,now.AddSeconds(12)).Count!=1)
             throw new Exception("Critical low battery escalation not delivered");
+        // User-configured warning interval applies only to fresh readings.
+        var repeat=new BatteryWarningMonitor();
+        var repeatPref=new BatteryPreferences{
+            WarningRepeatMinutes=5,EnableLowBatteryWarnings=true
+        };
+        BatterySnapshot AtMinutes(int minutes)=>new(){
+            Values=new Dictionary<string,BatteryReading>{
+                [id]=new(id,19,"GATT (uncached)","",
+                    now.AddMinutes(minutes))
+            }
+        };
+        if(repeat.Evaluate(AtMinutes(0),repeatPref,now).Count!=1||
+           repeat.Evaluate(AtMinutes(3),repeatPref,now.AddMinutes(3)).Count!=0||
+           repeat.Evaluate(AtMinutes(6),repeatPref,now.AddMinutes(6)).Count!=1)
+            throw new Exception("Configurable low battery reminder interval failed");
         using(var boldClock=OledRenderer.RenderDateTimeFontSample("08:08",3,true))
         using(var thinClock=OledRenderer.RenderDateTimeFontSample("08:08",1,true))
         {

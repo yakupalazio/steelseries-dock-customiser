@@ -137,6 +137,14 @@ internal static class UiLanguage
         ["Çubuk çerçevesi"]="Bar border thickness",
         ["Çubuk dolgusu"]="Bar fill thickness",
         ["Kontrolcü"]="Controller",
+        ["Kontrolcü bağlandığında otomatik öne çıkar"]=
+            "Prioritize controller when connected",
+        ["Uyarı tekrarı (dakika)"]="Repeat warning (minutes)",
+        ["Game ve Chat konumlarını önizlemede sürükle veya X/Y ayarla."]=
+            "Drag Game/Chat icons in preview or set X/Y.",
+        ["Sürüklenen logo:"]="Drag logo:",
+        ["Önizlemede sürüklemek için logo seç:"]=
+            "Select icon to drag in preview:",
         ["Düşük pil uyarıları"]="Low battery alerts",
         ["Cihaz pil uyarısı eşiği..."]="Device low battery threshold...",
         ["Uyarı %"]="Warning %",["Kritik %"]="Critical %",

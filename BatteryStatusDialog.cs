@@ -17,6 +17,7 @@ internal sealed class BatteryPreferences
     public bool EnableLowBatteryWarnings {get;set;}=true;
     public int LowBatteryWarningPercent {get;set;}=20;
     public int CriticalBatteryWarningPercent {get;set;}=10;
+    public int WarningRepeatMinutes {get;set;}=30;
     public Dictionary<string,int> LowBatteryThresholds {get;set;}=new();
     public bool AutoMinimizePhoneLink {get;set;}=false;
     public static string FilePath=>Path.Combine(
@@ -81,7 +82,7 @@ internal sealed class BatteryStatusDialog : Form
     private readonly Label lastUpdated=new(){Left=150,Top=234,Width=700,Height=27};
     private readonly DarkCheckBox dualSense=new()
     {
-        Left=403,Top=412,Width=450,Text="DualSense bağlandığında otomatik öne çıkar"
+        Left=403,Top=412,Width=450,Text="Kontrolcü bağlandığında otomatik öne çıkar"
     };
     private readonly DarkCheckBox experimental=new()
     {
@@ -98,6 +99,8 @@ internal sealed class BatteryStatusDialog : Form
         Left=500,Top=614,Width=70,Minimum=1,Maximum=99};
     private readonly DarkNumberBox criticalPercent=new(){
         Left=674,Top=614,Width=70,Minimum=1,Maximum=99};
+    private readonly DarkNumberBox warningRepeat=new(){
+        Left=500,Top=650,Width=86,Minimum=5,Maximum=240};
     private readonly DarkCheckBox minimizePhoneLink=new()
     {
         Left=17,Top=536,Width=790,
@@ -110,8 +113,8 @@ internal sealed class BatteryStatusDialog : Form
         prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
         Text="Pil cihazları — öncelik sıralaması";
         StartPosition=FormStartPosition.CenterParent;
-        ClientSize=new Size(900,806);
-        MinimumSize=new Size(900,806);
+        ClientSize=new Size(900,875);
+        MinimumSize=new Size(900,875);
         AutoScroll=true;
         Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
@@ -201,11 +204,15 @@ internal sealed class BatteryStatusDialog : Form
         lowWarning.Checked=prefs.EnableLowBatteryWarnings;
         warningPercent.Value=Math.Clamp(prefs.LowBatteryWarningPercent,1,99);
         criticalPercent.Value=Math.Clamp(prefs.CriticalBatteryWarningPercent,1,99);
+        warningRepeat.Value=Math.Clamp(prefs.WarningRepeatMinutes,5,240);
         Controls.Add(lowWarning);Controls.Add(warningPercent);
         Controls.Add(criticalPercent);
+        Controls.Add(warningRepeat);
+        Controls.Add(new Label{
+            Text="Uyarı tekrarı (dakika)",Left=265,Top=653,Width=215,Height=24});
         Controls.Add(new Label{Text="Uyarı %",Left=440,Top=617,Width=55,Height=21});
         Controls.Add(new Label{Text="Kritik %",Left=614,Top=617,Width=56,Height=21});
-        var applyButton=new DarkButton{Left=649,Top=679,Width=207,Height=32,
+        var applyButton=new DarkButton{Left=649,Top=718,Width=207,Height=32,
             Text="Öncelikleri uygula"};
         applyButton.Click+=(_,_)=>{
             prefs.PriorityKinds=priority.Items.Cast<string>().ToArray();
@@ -215,6 +222,7 @@ internal sealed class BatteryStatusDialog : Form
             prefs.EnableLowBatteryWarnings=lowWarning.Checked;
             prefs.LowBatteryWarningPercent=(int)warningPercent.Value;
             prefs.CriticalBatteryWarningPercent=(int)criticalPercent.Value;
+            prefs.WarningRepeatMinutes=(int)warningRepeat.Value;
             prefs.AutoMinimizePhoneLink=false;
             prefs.Save();
             onApply();

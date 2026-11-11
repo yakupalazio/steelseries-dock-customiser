@@ -35,7 +35,8 @@ internal sealed class BatteryWarningMonitor
             }
             if(sent.TryGetValue(kind,out var previous) &&
                previous.Band>=band &&
-               now-previous.WarnedAt<TimeSpan.FromMinutes(30))continue;
+               now-previous.WarnedAt<TimeSpan.FromMinutes(
+                    Math.Clamp(prefs.WarningRepeatMinutes,5,240)))continue;
             sent[kind]=(band,now);
             alerts.Add((kind,value));
         }
