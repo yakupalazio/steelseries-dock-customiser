@@ -70,7 +70,11 @@ internal static class BatterySources
         }
         // Only live GATT 0x2A19 reads from already-paired devices may
         // populate additional, dynamically discovered battery slots.
-        MergeVerifiedBleReadings(snapshot,await BleBatteryProvider.ReadAsync());
+        // Extend brand coverage through internal provider adapters.
+        // A single failed provider never discards another source's reading.
+        var genericReadings=await PeripheralBatteryProviderRegistry.ReadAsync();
+        MergeVerifiedBleReadings(snapshot,genericReadings);
+        MergeVerifiedHidReadings(snapshot,genericReadings);
         // SetupAPI is useful for unsupported Classic Bluetooth hardware,
         // including checking whether Windows has ever seen a phone battery.
         // Its percentages can be stale while the device is disconnected,
@@ -118,6 +122,42 @@ internal static class BatterySources
                 continue;
             }
             snapshot.Values[value.Kind]=value;
+        }
+    }
+
+    /// <summary>
+    /// Generic USB/Bluetooth HID usage 0x06/0x20 supports more brands
+    /// without asking users to write a custom model-specific reader.
+    /// The vendor-agnostic report is valid only during this actual read.
+    /// </summary>
+    internal static void MergeVerifiedHidReadings(BatterySnapshot snapshot,
+        IReadOnlyList<BatteryReading> discovered)
+    {
+        foreach(var reading in discovered)
+        {
+            if(!reading.Available ||
+               !reading.Kind.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase))
+                continue;
+            string name=reading.FriendlyName.ToLowerInvariant();
+            string? known=name.Contains("aerox 3")?"Mouse":
+                name.Contains("arctis nova pro")?"Headset":
+                name.Contains("galaxy s24")?"Phone":
+                name.Contains("dualsense")?"DualSense":null;
+            if(known is not null)
+            {
+                if(!snapshot[known].Available)
+                    snapshot.Values[known]=reading with {Kind=known};
+                continue;
+            }
+            // If the same exact model is already available over GATT,
+            // prefer the existing one instead of duplicating OLED slots.
+            if(snapshot.Values.Values.Any(old=>
+                old.Available &&
+                old.FriendlyName.Length>2 &&
+                string.Equals(old.FriendlyName,reading.FriendlyName,
+                    StringComparison.OrdinalIgnoreCase)))
+                continue;
+            snapshot.Values[reading.Kind]=reading;
         }
     }
 

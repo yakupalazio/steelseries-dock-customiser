@@ -124,6 +124,16 @@ internal sealed class BatteryStatusDialog : Form
             try{await refresh();UpdateRows();}finally{now.Enabled=true;}
         };
         Controls.Add(now);Controls.Add(lastUpdated);
+        lastUpdated.Width=400;
+        var connectedDevices=new DarkButton{
+            Left=604,Top=232,Width=252,Height=32,
+            Text=UiLanguage.English?"Connected devices":"Bağlı cihazlar"
+        };
+        connectedDevices.Click+=(_,_)=>{
+            using var inventory=new ConnectedDevicesDialog(snapshotGetter);
+            inventory.ShowDialog(this);
+        };
+        Controls.Add(connectedDevices);
         Controls.Add(new Label{
             Left=17,Top=271,Width=360,Height=23,
             Text="Öncelik sırası (yukarıdaki üç uygun cihaz):"
@@ -295,7 +305,8 @@ internal sealed class BatteryStatusDialog : Form
         if(IsDisposed)return;
         var snap=snapshotGetter();
         var kinds=BatteryPriority.AllKinds.Concat(snap.Values.Keys
-            .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)))
+            .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase) ||
+                k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if(grid.Rows.Count!=kinds.Length ||
            kinds.Where((kind,i)=>i<grid.Rows.Count &&

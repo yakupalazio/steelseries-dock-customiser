@@ -1,3 +1,9 @@
+# Steelseries Dock Customiser — Universal Device Discovery Preview
+
+> Experimental development branch. See [Universal Device Discovery Preview](UNIVERSAL_DEVICE_DISCOVERY_PREVIEW.md). Connected Bluetooth and USB/dock devices are now listed regardless of whether their battery protocol is readable. Standard BLE GATT and HID Battery Strength work without brand-specific setup; proprietary Logitech/ASUS/ATK battery protocols still require verified internal adapters.
+
+## Previous Beta 5 RC2 acceptance build
+
 # Steelseries Dock Customiser — Beta 5 RC2 (private acceptance build)
 
 > **Local Beta 5 acceptance build, not a public GitHub release.** The

@@ -19,6 +19,22 @@ internal static class Program
             Beta5SelfTests.RenderExamples(args[pos+1]);
             return;
         }
+        if(args.Contains("--device-inventory-file"))
+        {
+            var position=Array.IndexOf(args,"--device-inventory-file");
+            if(position+1>=args.Length)throw new ArgumentException(
+                "Missing device inventory file path");
+            var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
+            var devices=ConnectedPeripheralInventory
+                .DiscoverAsync(snapshot).GetAwaiter().GetResult();
+            var lines=devices.Select(d=>
+                $"{d.Name} | {d.Connection} | {d.BatteryDisplay} | "+
+                $"{d.BatterySource} | {d.Detail}").ToArray();
+            System.IO.File.WriteAllLines(args[position+1],lines);
+            Console.WriteLine($"Discovered {devices.Count} connected peripherals; "+
+                $"{devices.Count(d=>d.Percent.HasValue)} verified readings.");
+            return;
+        }
         if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
@@ -622,6 +638,29 @@ internal static class Program
                     args.Contains("--capture-critical-off")
                         ?atTime.AddMilliseconds(1200):atTime);
                 warning.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                return;
+            }
+            if(args.Contains("--capture-connected-devices"))
+            {
+                var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();
+                using var inventory=new ConnectedDevicesDialog(()=>snapshot);
+                inventory.StartPosition=FormStartPosition.Manual;
+                inventory.Location=new System.Drawing.Point(-5000,-5000);
+                inventory.ShowInTaskbar=false;
+                inventory.Show();
+                var clock=System.Diagnostics.Stopwatch.StartNew();
+                while(clock.ElapsedMilliseconds<7000 && inventory.Latest.Count==0)
+                {
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(100);
+                }
+                Application.DoEvents();
+                using var screenshot=new System.Drawing.Bitmap(
+                    inventory.Width,inventory.Height);
+                inventory.DrawToBitmap(screenshot,new System.Drawing.Rectangle(
+                    0,0,screenshot.Width,screenshot.Height));
+                screenshot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                inventory.Close();
                 return;
             }
             if(args.Contains("--capture-icons") ||

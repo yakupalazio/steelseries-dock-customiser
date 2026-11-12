@@ -26,7 +26,9 @@ internal static class BatteryPriority
     public static string[] Sanitize(IEnumerable<string>? priority)
     {
         var result=(priority??[])
-            .Where(k=>AllKinds.Contains(k)||k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase))
+            .Where(k=>AllKinds.Contains(k)||
+                k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
+                k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.Ordinal).ToList();
         foreach(var kind in DefaultKinds)
             if(!result.Contains(kind)) result.Add(kind);
@@ -46,7 +48,8 @@ internal static class BatteryPriority
         BatteryPreferences preferences,DateTimeOffset now)
         => Sanitize(preferences.PriorityKinds)
             .Concat(snapshot.Values.Keys
-                .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase))
+                .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
+                    k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase))
                 .OrderBy(k=>k,StringComparer.Ordinal))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(kind=>IsCurrent(snapshot[kind],now))
@@ -60,7 +63,9 @@ internal static class BatteryPriority
         // Readings from Phone Link / ADB / optional controller HID are polled
         // every 60s; GG and laptop are refreshed in the realtime loop.
         double ttl=reading.Kind is "Phone" or "DualSense" ? 25 :
-            reading.Kind.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)?25:12;
+            reading.Kind.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
+            reading.Kind.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)
+                ?25:12;
         return age>=TimeSpan.FromSeconds(-5) &&
             age<=TimeSpan.FromSeconds(ttl);
     }

@@ -36,6 +36,66 @@ internal static class Beta5SelfTests
            !BatteryPreferences.FilePath.StartsWith(
                 Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
             throw new Exception("Beta 5 accidentally shares Beta 4's settings");
+        // Generic discovery never fakes values for unknown manufacturers:
+        // two interfaces in one USB container must be a single device.
+        var discoveredAt=DateTimeOffset.Now;
+        var catalogSnapshot=new BatterySnapshot{
+            CheckedAt=discoveredAt,
+            Values=new Dictionary<string,BatteryReading>{
+                ["DualSense"]=new("DualSense",70,"Bluetooth HID","",
+                    discoveredAt),
+                ["Hid:1234567"]=new("Hid:1234567",83,"HID Battery Strength",
+                    "",discoveredAt){FriendlyName="ATK X1 Mouse",IconKind="Mouse"}
+            }
+        };
+        var samplePeripherals=new[]{
+            (Id:"usb-container-1",Name:"Logitech MX Master 3S",
+                Connection:"USB / Dock",Manufacturer:"Logitech"),
+            (Id:"usb-container-1",Name:"USB Composite Device",
+                Connection:"USB / Dock",Manufacturer:"Logitech"),
+            (Id:"bt-container-1",Name:"DualSense Wireless Controller",
+                Connection:"Bluetooth",Manufacturer:"Sony"),
+            (Id:"usb-container-2",Name:"ATK X1 Mouse",
+                Connection:"USB / Dock",Manufacturer:"ATK")
+        };
+        var rows=ConnectedPeripheralInventory.MergeAndAttachBatteries(
+            samplePeripherals,catalogSnapshot);
+        if(rows.Count!=3 ||
+           rows.Single(r=>r.Name.Contains("Logitech")).Percent is not null ||
+           rows.Single(r=>r.Name.Contains("DualSense")).Percent!=70 ||
+           rows.Single(r=>r.Name.Contains("ATK")).Percent!=83)
+            throw new Exception("Universal device inventory/verified read mismatch");
+        if(!StandardHidBatteryProvider.IsStandardBatteryUsage(
+                new uint[]{0x00060020}) ||
+           StandardHidBatteryProvider.IsStandardBatteryUsage(
+                new uint[]{0x00060021}))
+            throw new Exception("HID standard Battery Strength detection failed");
+        // Synthetic standards-compliant HID descriptor: input and feature
+        // values are normalized from their advertised logical 0..100 range.
+        byte[] batteryDescriptorPrefix=[
+            0x05,0x06,0x09,0x20,0xA1,0x01,
+            0x15,0x00,0x25,0x64,0x75,0x08,0x95,0x01,
+            0x09,0x20
+        ];
+        foreach(byte reportTag in new byte[]{0x81,0xB1})
+        {
+            var descriptor=new HidSharp.Reports.ReportDescriptor(
+                [..batteryDescriptorPrefix,reportTag,0x02,0xC0]);
+            var report=reportTag==0x81
+                ?descriptor.InputReports.Single()
+                :descriptor.FeatureReports.Single();
+            var packet=new byte[report.Length];
+            packet[0]=report.ReportID;
+            packet[^1]=73;
+            if(StandardHidBatteryProvider.DecodeStandardReport(report,packet)!=73)
+                throw new Exception("HID Battery Strength input/feature report misread");
+        }
+        var hidPriority=new BatteryPreferences{
+            PriorityKinds=["Hid:1234567","DualSense","Phone"]
+        };
+        if(BatteryPriority.SelectThreeAt(catalogSnapshot,hidPriority,
+               discoveredAt).FirstOrDefault()!="Hid:1234567")
+            throw new Exception("New HID battery cannot enter user priority");
         // Only validation here: no OLED HID sends during smoke tests.
         // Live and static Apply require their own visible UI consent dialog.
         var hardwareStatus=new DockHardwareTest().Validate();
