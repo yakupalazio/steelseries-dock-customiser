@@ -10,7 +10,8 @@ internal sealed class BatteryAlertThresholdDialog:Form
         Left=170,Top=85,Width=93,Minimum=1,Maximum=99
     };
     public int Percent=20;
-    public BatteryAlertThresholdDialog(string device,int current)
+    public BatteryAlertThresholdDialog(string device,int current,
+        BatterySnapshot? snapshot=null)
     {
         Text=UiLanguage.English?"Device low battery alert":"Cihaz düşük pil uyarısı";
         ClientSize=new Size(390,186);
@@ -22,7 +23,7 @@ internal sealed class BatteryAlertThresholdDialog:Form
         Font=new Font("Segoe UI",10f);
         Controls.Add(new Label{
             Left=18,Top=19,Width=350,Height=40,
-            Text=BatteryPriority.DisplayName(device),
+            Text=BatteryPriority.DisplayName(device,snapshot),
             Font=new Font("Segoe UI Semibold",12f,FontStyle.Bold)
         });
         Controls.Add(new Label{

@@ -164,7 +164,14 @@ internal static class GgBatteryProvider
         }
 
         reading=new BatteryReading(kind,pct,"SteelSeries GG Engine (canlı)",
-            detail,at,charging);
+            detail,at,charging)
+        {
+            // GG reports these exact hardware identifiers only after it
+            // detects the corresponding device on THIS computer.
+            FriendlyName=kind=="Mouse"?"SteelSeries Aerox 3 Wireless Gen 2":
+                "SteelSeries Arctis Nova Pro Wireless",
+            IconKind=kind
+        };
         return true;
     }
 
@@ -181,7 +188,11 @@ internal static class GgBatteryProvider
            known.ValueKind==JsonValueKind.False)return false;
         reading=new BatteryReading("SpareBattery",percent,
             "SteelSeries GG Engine (canlı)",
-            GetBool(b,"backupCharging")?"Dock'ta şarj oluyor":"Yedek pil takılı",at,GetBool(b,"backupCharging"));
+            GetBool(b,"backupCharging")?"Dock'ta şarj oluyor":"Yedek pil takılı",at,GetBool(b,"backupCharging"))
+        {
+            FriendlyName="Arctis Nova Pro Wireless - Spare Battery",
+            IconKind="SpareBattery"
+        };
         return true;
     }
 

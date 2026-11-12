@@ -116,7 +116,7 @@ internal sealed class BatteryStatusDialog : Form
         grid.Columns[2].FillWeight=115;
         grid.Columns[3].FillWeight=190;
         foreach(var kind in BatteryPriority.AllKinds)
-            grid.Rows.Add(BatteryPriority.DisplayName(kind),"--%","","");
+            grid.Rows.Add(BatteryPriority.DisplayName(kind,snapshotGetter()),"--%","","");
 
         var now=new DarkButton{Left=17,Top=232,Width=125,Height=31,Text="Şimdi yenile"};
         now.Click+=async (_,_)=>{
@@ -143,7 +143,7 @@ internal sealed class BatteryStatusDialog : Form
             if(e.Index<0)return;
             e.DrawBackground();
             var kind=priority.Items[e.Index]?.ToString()??"";
-            TextRenderer.DrawText(e.Graphics,BatteryPriority.DisplayName(kind),
+            TextRenderer.DrawText(e.Graphics,BatteryPriority.DisplayName(kind,snapshotGetter()),
                 priority.Font,new Rectangle(e.Bounds.Left+8,e.Bounds.Top,
                     e.Bounds.Width-12,e.Bounds.Height),
                 e.State.HasFlag(DrawItemState.Selected)
@@ -160,7 +160,7 @@ internal sealed class BatteryStatusDialog : Form
             if(priority.SelectedItem is not string kind)return;
             int current=prefs.LowBatteryThresholds.TryGetValue(kind,out var set)
                 ?set:prefs.LowBatteryWarningPercent;
-            using var editor=new BatteryAlertThresholdDialog(kind,current);
+            using var editor=new BatteryAlertThresholdDialog(kind,current,snapshotGetter());
             if(editor.ShowDialog(this)!=DialogResult.OK)return;
             prefs.LowBatteryThresholds[kind]=editor.Percent;
         };
@@ -277,7 +277,7 @@ internal sealed class BatteryStatusDialog : Form
             grid.Columns[i].HeaderText=UiLanguage.T(headers[i]);
         for(int i=0;i<grid.Rows.Count;i++)
             if(grid.Rows[i].Tag is string kind)
-                grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(kind);
+                grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(kind,snapshotGetter());
         UpdateRows();
     }
 
@@ -298,7 +298,7 @@ internal sealed class BatteryStatusDialog : Form
         };
         string[] display=BatteryPriority.SelectThree(snapshotGetter(),local);
         active.Text=UiLanguage.T("Şu anda seçilenler:\n")+string.Join("  ·  ",
-            display.Select(BatteryPriority.DisplayName));
+            display.Select(k=>BatteryPriority.DisplayName(k,snapshotGetter())));
     }
     public void UpdateRows()
     {
@@ -316,7 +316,7 @@ internal sealed class BatteryStatusDialog : Form
             grid.Rows.Clear();
             foreach(var kind in kinds)
             {
-                int row=grid.Rows.Add(BatteryPriority.DisplayName(kind),"--%","","");
+                int row=grid.Rows.Add(BatteryPriority.DisplayName(kind,snap),"--%","","");
                 grid.Rows[row].Tag=kind;
             }
         }
@@ -328,7 +328,7 @@ internal sealed class BatteryStatusDialog : Form
         {
             string kind=kinds[i];
             var reading=snap[kind];
-            grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(kind);
+            grid.Rows[i].Cells[0].Value=BatteryPriority.DisplayName(kind,snap);
             grid.Rows[i].Cells[1].Value=reading.Display;
             grid.Rows[i].Cells[2].Value=UiLanguage.T(reading.Source);
             grid.Rows[i].Cells[3].Value=UiLanguage.T(reading.Detail);
@@ -337,5 +337,6 @@ internal sealed class BatteryStatusDialog : Form
             ?UiLanguage.T("Tarama bekleniyor"):
             UiLanguage.T("Son okuma: ")+snap.CheckedAt.ToLocalTime().ToString("HH:mm:ss");
         ShowActive();
+        priority.Invalidate(); // redraw current PC device names after each scan
     }
 }

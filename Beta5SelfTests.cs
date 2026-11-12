@@ -36,6 +36,65 @@ internal static class Beta5SelfTests
            !BatteryPreferences.FilePath.StartsWith(
                 Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
             throw new Exception("Beta 5 accidentally shares Beta 4's settings");
+        // Release packages must NOT print the developer's own phone/mouse/
+        // headset labels. All unidentified roles use generic localized names.
+        foreach(var kind in new[]{"Phone","Mouse","Headset","SpareBattery"})
+            if(LocalBatteryDeviceNames.DefaultName(kind).Contains("Galaxy",
+                   StringComparison.OrdinalIgnoreCase) ||
+               LocalBatteryDeviceNames.DefaultName(kind).Contains("Aerox",
+                   StringComparison.OrdinalIgnoreCase) ||
+               LocalBatteryDeviceNames.DefaultName(kind).Contains("Nova Pro",
+                   StringComparison.OrdinalIgnoreCase))
+                throw new Exception("A private device name is in shipped defaults");
+        if(LocalBatteryDeviceNames.ClassifyConnectedBluetooth("Demo User's S24+")!="Phone" ||
+           LocalBatteryDeviceNames.ClassifyConnectedBluetooth("iPhone 15 Pro")!="Phone" ||
+           LocalBatteryDeviceNames.ClassifyConnectedBluetooth("Google Pixel 9")!="Phone" ||
+           LocalBatteryDeviceNames.ClassifyConnectedBluetooth("Galaxy Buds 3")=="Phone" ||
+           LocalBatteryDeviceNames.ClassifyConnectedBluetooth("Galaxy Watch 7")=="Phone")
+            throw new Exception("Connected phone class detection mismatch");
+        var onePhone=LocalBatteryDeviceNames.ResolveUnique(new[]{
+            (Name:"Friend's Pixel 9",Kind:"Phone"),
+            (Name:"Friend's Pixel 9",Kind:"Phone")
+        });
+        var twoPhones=LocalBatteryDeviceNames.ResolveUnique(new[]{
+            (Name:"Pixel 9",Kind:"Phone"),(Name:"iPhone 16",Kind:"Phone")
+        });
+        if(onePhone.Count!=1 || onePhone["Phone"]!="Friend's Pixel 9" ||
+           twoPhones.Count!=0)
+            throw new Exception("Ambiguous phones received a wrong owner's name");
+        var personalBattery=new BatterySnapshot
+        {
+            CheckedAt=DateTimeOffset.Now,
+            Values=new Dictionary<string,BatteryReading>{
+                ["Phone"]=new("Phone",58,"Phone Link","",DateTimeOffset.Now)
+                    {FriendlyName="My own Pixel 9"}
+            }
+        };
+        if(BatteryPriority.DisplayName("Phone",personalBattery)!="My own Pixel 9")
+            throw new Exception("User's own source name was not preferred");
+        var freshPhone=new BatterySnapshot{
+            CheckedAt=DateTimeOffset.Now,
+            Values=new Dictionary<string,BatteryReading>{
+                ["Phone"]=new("Phone",67,"Phone Link","",DateTimeOffset.Now)
+            }
+        };
+        var ownDevice=ConnectedPeripheralInventory.MergeAndAttachBatteries(
+            new[]{(Id:"phone-container-1",Name:"Other user's iPhone 16",
+                Connection:"Bluetooth",Manufacturer:"Apple")},freshPhone);
+        if(ownDevice.Count!=1 ||
+           ownDevice[0].Name!="Other user's iPhone 16" ||
+           ownDevice[0].Percent!=67)
+            throw new Exception("New user's phone is not discovered by name");
+        var ambiguousDevices=ConnectedPeripheralInventory.MergeAndAttachBatteries(
+            new[]{
+                (Id:"phone-container-1",Name:"iPhone 16",
+                    Connection:"Bluetooth",Manufacturer:"Apple"),
+                (Id:"phone-container-2",Name:"Google Pixel 9",
+                    Connection:"Bluetooth",Manufacturer:"Google")
+            },freshPhone);
+        if(ambiguousDevices.Count!=2 ||
+           ambiguousDevices.Any(x=>x.Percent.HasValue))
+            throw new Exception("One Phone Link battery was assigned to two phones");
         // OEM header simulation is derived from the same original dock
         // photograph as the larger photo preview, never user OLED pixels.
         string photoPath=Path.Combine(AppContext.BaseDirectory,

@@ -48,7 +48,7 @@ internal static class Program
             {
                 var b=snapshot[kind];
                 var name=string.IsNullOrWhiteSpace(b.FriendlyName)
-                    ?BatteryPriority.DisplayName(kind):b.FriendlyName;
+                    ?BatteryPriority.DisplayName(kind,snapshot):b.FriendlyName;
                 return $"{name} [{kind}]: {b.Display} | {b.Source} | {b.Detail}";
             }).ToArray();
             foreach(var line in lines) Console.WriteLine(line);

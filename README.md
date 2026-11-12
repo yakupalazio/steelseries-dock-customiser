@@ -1,5 +1,7 @@
 # Steelseries Dock Customiser — Universal Device Discovery Preview
 
+> **Device-name privacy fix:** device names in battery settings and warnings now come from the user's own connected devices. Clean installations show generic role names, never the original developer's phone/mouse/headset models. See [Device Name Privacy Fix](DEVICE_NAME_PRIVACY_FIX.md).
+
 > **Universal Preview 2:** the Pixel Editor now shows the same native 128x10 OEM headphone/battery indicators as the calibrated dock photograph while top-ten-pixel protection is enabled. Unprotecting the header hides the guide and exposes editable pixels. The reference is display-only, never saved or written to the physical OLED. See [OEM Header Editor Preview](OEM_HEADER_EDITOR_PREVIEW.md).
 
 > Experimental development branch. See [Universal Device Discovery Preview](UNIVERSAL_DEVICE_DISCOVERY_PREVIEW.md). Connected Bluetooth and USB/dock devices are now listed regardless of whether their battery protocol is readable. Standard BLE GATT and HID Battery Strength work without brand-specific setup; proprietary Logitech/ASUS/ATK battery protocols still require verified internal adapters.

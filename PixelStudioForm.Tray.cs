@@ -232,7 +232,7 @@ internal sealed partial class PixelStudioForm
     private void NotifyLowBattery(string kind,int percent)
     {
         if(tray is null || !tray.Visible)return;
-        string name=BatteryPriority.DisplayName(kind);
+        string name=BatteryPriority.DisplayName(kind,batterySnapshot);
         tray.ShowBalloonTip(6000,
             UiLanguage.English?"Low battery":"Düşük pil",
             $"{name}: {percent}%",

@@ -210,11 +210,20 @@ internal static class ConnectedPeripheralInventory
         IEnumerable<Candidate> candidates,BatterySnapshot snapshot)
     {
         var rows=new List<ConnectedPeripheral>();
+        var candidatesArray=candidates.Take(250).ToArray();
+        // Matching a phone's battery to a different phone is worse than
+        // displaying unknown. Only one connected phone may receive the
+        // Phone Link / ADB battery reading without explicit pairing.
+        int phoneCount=candidatesArray
+            .Where(c=>LocalBatteryDeviceNames.ClassifyConnectedBluetooth(c.Name)
+                =="Phone")
+            .Select(c=>c.Identity).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
         var now=DateTimeOffset.Now;
         var usable=snapshot.Values.Values.Where(r=>BatteryPriority.IsCurrent(r,now))
             .ToArray();
-        foreach(var group in candidates.GroupBy(x=>x.Identity,
-            StringComparer.OrdinalIgnoreCase).Take(250))
+        foreach(var group in candidatesArray.GroupBy(x=>x.Identity,
+            StringComparer.OrdinalIgnoreCase))
         {
             var selected=group.OrderByDescending(x=>NameScore(x.Name)).First();
             string name=selected.Name;
@@ -223,6 +232,8 @@ internal static class ConnectedPeripheralInventory
             string maker=group.Select(x=>x.Manufacturer).FirstOrDefault(
                 x=>!string.IsNullOrWhiteSpace(x))??"";
             string? kind=RecognizedKind(name);
+            if(LocalBatteryDeviceNames.ClassifyConnectedBluetooth(name)=="Phone")
+                kind=phoneCount==1?"Phone":null;
             BatteryReading? reading=kind is not null
                 ?usable.FirstOrDefault(r=>r.Kind==kind)
                 :null;

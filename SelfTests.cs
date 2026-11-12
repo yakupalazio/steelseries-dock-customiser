@@ -340,7 +340,7 @@ internal static class SelfTests
                    UiLanguage.T("Düz çubuğa geç")!="Switch to flat bar" ||
                    UiLanguage.T("◉   Dil / Language")!="◉   Language" ||
                    UiLanguage.T("Tekerlek bekleniyor")!="Waiting for wheel input" ||
-                   BatteryPriority.DisplayName("Headset")!="Nova Pro Headset")
+                   BatteryPriority.DisplayName("Headset")!="Headset")
                     throw new Exception("English UI translations are incomplete");
                 UiLanguage.PreviewOnly(false);
                 if(UiLanguage.T("Dairesel tekerlek")!="Dairesel tekerlek")

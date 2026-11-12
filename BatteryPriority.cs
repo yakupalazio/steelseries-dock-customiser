@@ -12,16 +12,10 @@ internal static class BatteryPriority
     public static readonly string[] DefaultKinds =
         ["Mouse","Phone","DualSense","Laptop","Headset","SpareBattery"];
 
-    public static string DisplayName(string kind)=>UiLanguage.T(kind switch
-    {
-        "Mouse"=>"Aerox Mouse",
-        "Phone"=>"Galaxy S24+",
-        "DualSense"=>"Kontrolcü",
-        "Laptop"=>"Laptop",
-        "Headset"=>"Nova Pro Kulaklık",
-        "SpareBattery"=>"Nova Pro Yedek Pil",
-        _=>BatteryDeviceCatalog.Name(kind)
-    });
+    // Labels come from THIS PC's live sources or connected Bluetooth
+    // device inventory. No owner's phone/headset/mouse model is shipped.
+    public static string DisplayName(string kind,BatterySnapshot? snapshot=null)
+        =>LocalBatteryDeviceNames.DisplayName(kind,snapshot);
 
     public static string[] Sanitize(IEnumerable<string>? priority)
     {

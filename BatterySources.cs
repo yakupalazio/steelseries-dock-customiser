@@ -42,6 +42,9 @@ internal static class BatterySources
         // path is expensive and carries no trustworthy live percentages.
         // GG and laptop are read from their current sources instead.
         var snapshot=await PollRealtimeAsync(new BatterySnapshot());
+        // Discover display names on the current user's PC only. The
+        // connected-device cache is never written into portable defaults.
+        await LocalBatteryDeviceNames.RefreshAsync();
         // Phone Link's accessibility status is available while minimized.
         // Do not display old Bluetooth PnP percentages when UIA is unavailable.
         BatteryReading? phone=null;
@@ -66,7 +69,11 @@ internal static class BatterySources
                 snapshot.Values["DualSense"]=new BatteryReading("DualSense",value,
                     "Bluetooth HID (read-only; approximate 10% bands)",
                     "Deneysel: son alınan HID raporundan yaklaşık seviye.",
-                    DateTimeOffset.Now);
+                    DateTimeOffset.Now)
+                {
+                    FriendlyName="DualSense Wireless Controller",
+                    IconKind="DualSense"
+                };
         }
         // Only live GATT 0x2A19 reads from already-paired devices may
         // populate additional, dynamically discovered battery slots.
@@ -270,11 +277,11 @@ internal static class BatterySources
             string info=kind switch
             {
                 "Mouse"=>"Bluetooth'ta eski kayıt: "+cached+
-                    "%. Aerox 3 Gen 2 için GG/USB canlı verisi gerekli.",
+                    "%. Güncel fare pil seviyesi için canlı bir okuyucu gerekiyor.",
                 "Phone"=>"Bluetooth'ta eski kayıt: "+cached+
                     "%. Telefon Bağlantısı'nın canlı değeri ayrı.",
                 "Headset"=>"Bluetooth'ta doğrulanmamış son değer: "+cached+
-                    "%. Nova Pro baz istasyonu bağlantısı ayrı.",
+                    "%. Güncel kulaklık pili için uygun canlı kaynak gerekiyor.",
                 "DualSense"=>"Bluetooth'ta son kayıt: "+cached+
                     "%. Aktif kontrolcü bağlantısı doğrulanmadı.",
                 _=>"Windows Bluetooth geçmişi: "+cached+"%."
