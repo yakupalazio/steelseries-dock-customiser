@@ -80,6 +80,7 @@ internal sealed partial class PixelStudioForm : Form
         }
     }
     private readonly BatteryWarningMonitor warningMonitor=new();
+    private readonly BatteryChargingMonitor chargingMonitor=new();
     private BatteryStatusDialog? batteryDialog;
     private SettingsDialog? settingsDialog;
     private readonly ArctisDialMonitor dialMonitor = new();
@@ -133,7 +134,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 RC1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 RC2 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -383,6 +384,9 @@ internal sealed partial class PixelStudioForm : Form
         };
         BuildModernShell(editTab,add,remove,save,load,reset,export,clear,
             clockDateButton,batteryButton,iconButton);
+        // Begin with the user's personal Idle/Boşta layout in the editor.
+        // Automatic Game > Media > Idle priority for the LIVE dock is unchanged.
+        SelectModernMode(ScreenMode.Idle);
         // Start as soon as the form is constructed, not at the next 1s
         // timer tick: initial ChatMix/Volume input must update immediately.
         if(Enum.GetValues<ScreenMode>().Any(m=>
@@ -588,6 +592,10 @@ internal sealed partial class PixelStudioForm : Form
             var before=batterySnapshot;
             batterySnapshot=updated;
             CheckNativeHeaderBatteryChange(before,updated);
+            foreach(var (kind,pct) in chargingMonitor.Evaluate(
+                updated,DateTimeOffset.Now))
+                dockPreview?.QueueChargingAlert(kind,pct,updated[kind].IconKind,
+                    UiLanguage.English);
             batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
             Redraw();
         }
@@ -604,6 +612,10 @@ internal sealed partial class PixelStudioForm : Form
             var newest=await BatterySources.PollAsync();
             if(IsDisposed)return;
             batterySnapshot=newest;
+            foreach(var (kind,pct) in chargingMonitor.Evaluate(
+                newest,DateTimeOffset.Now))
+                dockPreview?.QueueChargingAlert(kind,pct,newest[kind].IconKind,
+                    UiLanguage.English);
             foreach(var (kind,pct) in warningMonitor.Evaluate(
                 newest,batteryPreferences,DateTimeOffset.Now))
             {

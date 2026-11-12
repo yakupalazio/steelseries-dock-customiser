@@ -21,10 +21,43 @@ namespace SteelseriesDockCustomiser;
 internal static class PhoneLinkBatteryProvider
 {
     public static string LastDiagnostic { get; private set; } = "Henüz sorgulanmadı";
-    // The integration is strictly passive: never launch, restore, activate
-    // or minimize Phone Link as a side effect of battery polling.
-    public static Task<BatteryReading?> TryReadAsync(bool allowAutoMinimize)
-        => Task.Run(TryRead);
+    private static readonly object recoveryGate=new();
+    private static DateTimeOffset nextRecovery=DateTimeOffset.MinValue;
+    private static bool recoveryRunning;
+
+    public static async Task<BatteryReading?> TryReadAsync(bool allowAutoMinimize)
+    {
+        var found=await Task.Run(TryRead);
+        if(found is not null || !allowAutoMinimize)return found;
+        // Don't minimize a Phone Link window while the owner is actively
+        // using it. Recovery is only needed when its UI is genuinely absent.
+        bool missingWindow=LastDiagnostic.Contains("UIA penceresi yok",
+            StringComparison.OrdinalIgnoreCase) ||
+            LastDiagnostic.Contains("çalışmıyor",
+                StringComparison.OrdinalIgnoreCase);
+        if(!missingWindow)return null;
+        // Windows starts PhoneExperienceHost as a COM background process
+        // with no accessible battery window. Once per 10 minutes, try to
+        // expose the already installed Phone Link window and minimize it.
+        // Never install, authenticate, or pair anything on the user's behalf.
+        lock(recoveryGate)
+        {
+            if(recoveryRunning || DateTimeOffset.UtcNow<nextRecovery)
+                return null;
+            recoveryRunning=true;
+            nextRecovery=DateTimeOffset.UtcNow.AddMinutes(10);
+        }
+        try
+        {
+            await PhoneLinkLauncher.OpenMinimizedAsync();
+            await Task.Delay(450);
+            return await Task.Run(TryRead);
+        }
+        finally
+        {
+            lock(recoveryGate)recoveryRunning=false;
+        }
+    }
 
     private static readonly Regex PercentBefore = new(
         @"%\s*(?<percent>\d{1,3})(?!\d)",

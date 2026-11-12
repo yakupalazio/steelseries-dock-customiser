@@ -14,11 +14,13 @@ internal static class BatteryOledAlert
     internal sealed record Alert(string Kind,int Percent,string IconKind,
         bool Critical,bool English,DateTimeOffset Started)
     {
-        public TimeSpan Duration => TimeSpan.FromMilliseconds(Critical?5500:4000);
+        public bool Charging {get;init;}=false;
+        public TimeSpan Duration => TimeSpan.FromMilliseconds(
+            !Charging && Critical?5500:4000);
         public bool Expired(DateTimeOffset at)=>at-Started>=Duration;
         public bool Lit(DateTimeOffset at)
         {
-            if(!Critical)return true;
+            if(Charging||!Critical)return true;
             long millis=Math.Max(0,(long)(at-Started).TotalMilliseconds);
             return millis%1500<1000; // 1 s on, 0.5 s black
         }
@@ -101,10 +103,18 @@ internal static class BatteryOledAlert
                     if(rows[j][i]=='1')
                         Fill(pixels,x+i*scale,y+j*scale,scale,scale);
             }
-            DrawText(pixels,"!"+alert.Percent+"%",64,14,2);
-            string caption=alert.English
-                ?(alert.Critical?"BATTERY CRITICAL":"BATTERY LOW")
-                :(alert.Critical?"ŞARJ KRİTİK":"ŞARJ DÜŞÜK");
+            if(alert.Charging)
+            {
+                DrawBolt(pixels,56,11);
+                // 100% uses four characters, 4*12 pixels = 48, and fits.
+                DrawText(pixels,alert.Percent+"%",80,17,2);
+            }
+            else DrawText(pixels,"!"+alert.Percent+"%",64,14,2);
+            string caption=alert.Charging
+                ?(alert.English?"CHARGING":"ŞARJ OLUYOR")
+                :alert.English
+                    ?(alert.Critical?"BATTERY CRITICAL":"BATTERY LOW")
+                    :(alert.Critical?"ŞARJ KRİTİK":"ŞARJ DÜŞÜK");
             int textWidth=caption.Length*6-1;
             DrawText(pixels,caption,(128-textWidth)/2,47,1);
             // Separation line is content, not part of the OEM indicator.
@@ -115,6 +125,20 @@ internal static class BatteryOledAlert
         for(int x=0;x<128;x++)
             frame.SetPixel(x,y,pixels[y*128+x]?Color.White:Color.Black);
         return frame;
+    }
+
+    private static void DrawBolt(bool[] pixels,int left,int top)
+    {
+        // A large, original, 1-bit lightning mark for charging events.
+        string[] bolt=[
+            "......1111",".....1111.","....1111..","...1111...",
+            "..11111111",".111111111","....1111..","...1111...",
+            "..1111....",".1111.....","1111......"
+        ];
+        for(int y=0;y<bolt.Length;y++)
+        for(int x=0;x<bolt[y].Length;x++)
+            if(bolt[y][x]=='1')
+                Fill(pixels,left+x*2,top+y*2,2,2);
     }
 
     private static void DrawText(bool[] pixels,string value,int x,int y,int scale)

@@ -273,7 +273,9 @@ internal sealed class StudioProject
             w.MiniWheelSize=Math.Clamp(w.MiniWheelSize,70,100);
             w.DialStyle=w.DialStyle is "Wheel" or "MiniWheel" ? w.DialStyle : "Bar";
             if(!WheelArtwork.IsValid(w.WheelPixels))w.WheelPixels="";
-            if(!WheelArtwork.IsValid(w.MiniWheelPixels))w.MiniWheelPixels="";
+            // Upgrade previously saved 45x42 mini art to its native 31x29
+            // canvas; never mutate the separate full-size WheelPixels.
+            w.MiniWheelPixels=MiniWheelArtwork.Normalize(w.MiniWheelPixels);
             w.WheelGapAngle=Math.Clamp(w.WheelGapAngle,-180,180);
             w.WheelGameOffsetX=Math.Clamp(w.WheelGameOffsetX,-64,64);
             w.WheelGameOffsetY=Math.Clamp(w.WheelGameOffsetY,-64,64);

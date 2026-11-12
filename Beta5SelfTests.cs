@@ -68,6 +68,82 @@ internal static class Beta5SelfTests
             if(white<65||criticalWhite<65||off!=0)
                 throw new Exception("Battery OLED alert pixels or blink invalid");
         }
+        var charging=new BatteryOledAlert.Alert(
+            "Phone",57,"Phone",false,false,at){Charging=true};
+        if(charging.Duration!=TimeSpan.FromSeconds(4) ||
+           !charging.Lit(at.AddMilliseconds(1200)) ||
+           charging.Expired(at.AddMilliseconds(3999)) ||
+           !charging.Expired(at.AddMilliseconds(4000)))
+            throw new Exception("Charging OLED overlay timing failed");
+        using(var chargingImage=BatteryOledAlert.Render(charging,at))
+        {
+            int count=0,lightning=0;
+            for(int y=0;y<64;y++)for(int x=0;x<128;x++)
+            {
+                if(!Lit(chargingImage,x,y))continue;
+                count++;
+                if(x is >=56 and <=78 && y is >=11 and <=34)lightning++;
+            }
+            if(count<100||lightning<35)
+                throw new Exception("Charging overlay lightning missing");
+        }
+        var chargerMonitor=new BatteryChargingMonitor();
+        BatterySnapshot Charge(bool? attached,int seconds=0)=>new(){
+            Values=new Dictionary<string,BatteryReading>{
+                ["Phone"]=new("Phone",57,"Phone Link","",
+                    at.AddSeconds(seconds),attached)
+            }
+        };
+        if(chargerMonitor.Evaluate(Charge(null),at).Count!=0 ||
+           chargerMonitor.Evaluate(Charge(false),at).Count!=0 ||
+           chargerMonitor.Evaluate(Charge(true,10),at.AddSeconds(10)).Count!=1 ||
+           chargerMonitor.Evaluate(Charge(true,20),at.AddSeconds(20)).Count!=0 ||
+           chargerMonitor.Evaluate(Charge(false,30),at.AddSeconds(30)).Count!=0 ||
+           chargerMonitor.Evaluate(Charge(true,40),at.AddSeconds(40)).Count!=1)
+            throw new Exception("Charging transitions repeated or were missed");
+        var initialCharger=new BatteryChargingMonitor();
+        if(initialCharger.Evaluate(Charge(true),at).Count!=0)
+            throw new Exception("Charged-on-start device displayed false alert");
+        if(MiniWheelArtwork.Factory.Length!=MiniWheelArtwork.Width*
+            MiniWheelArtwork.Height||
+           !MiniWheelArtwork.IsValid(MiniWheelArtwork.Factory)||
+           !MiniWheelArtwork.IsValid(
+                MiniWheelArtwork.Normalize(WheelArtwork.Factory)))
+            throw new Exception("Native mini artwork/legacy conversion invalid");
+        using(var miniEditor=new WheelArtworkDialog(null,compact:true))
+        using(var fullEditor=new WheelArtworkDialog(null))
+        {
+            if(miniEditor.EditorGridSize!=(31,29) ||
+               fullEditor.EditorGridSize!=(45,42) ||
+               !miniEditor.TestHistoryRoundTrip() ||
+               !fullEditor.TestHistoryRoundTrip())
+                throw new Exception("Wheel editor grid/undo/redo inconsistent");
+        }
+        for(int deg=0;deg<=WheelArtwork.Sweep;deg+=10)
+        {
+            double rad=(WheelArtwork.StartAngle+deg)*Math.PI/180d;
+            int x=MiniWheelArtwork.CenterX+(int)Math.Round(13d*Math.Cos(rad));
+            int y=MiniWheelArtwork.CenterY+(int)Math.Round(13d*Math.Sin(rad));
+            if(x<0||x>=MiniWheelArtwork.Width||
+               y<0||y>=MiniWheelArtwork.Height||
+               MiniWheelArtwork.Factory[y*MiniWheelArtwork.Width+x]!='1')
+                throw new Exception("Compact wheel missing outer arc pixel");
+        }
+        foreach(bool gameSide in new[]{true,false})
+        {
+            bool[] DrawMiniAt(int offset)
+            {
+                var image=new bool[8192];
+                var mask=new bool[8192];
+                MiniWheelArtwork.Draw(image,mask,53,15,50,DialView.ChatMix,
+                    showGame:gameSide,showChat:!gameSide,
+                    gameDX:gameSide?offset:0,chatDX:gameSide?0:offset);
+                return image;
+            }
+            if(DrawMiniAt(-20).SequenceEqual(DrawMiniAt(20)))
+                throw new Exception(
+                    "Mini Game/Chat drag offset snapped to a fixed position");
+        }
         using(var neutral=DrawDial("Bar",100,100))
         using(var game=DrawDial("Bar",100,0))
         using(var chat=DrawDial("Bar",0,100))

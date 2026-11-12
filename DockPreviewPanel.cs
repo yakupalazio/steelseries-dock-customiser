@@ -68,17 +68,35 @@ internal sealed class DockPreviewPanel : UserControl
     public void QueueBatteryAlert(string kind,int percent,string iconKind,
         bool critical,bool english)
     {
-        // A notification is a transient live-display event, never a
-        // deferred image replayed when Live is enabled hours later.
-        if(percent is <0 or >20 || IsDisposed || !_liveEnabled)return;
-        var entry=new BatteryOledAlert.Alert(kind,percent,iconKind,
-            critical,english,DateTimeOffset.UtcNow);
+        if(percent is <0 or >20)return;
+        EnqueueBatteryOverlay(new BatteryOledAlert.Alert(
+            kind,percent,iconKind,critical,english,DateTimeOffset.UtcNow));
+    }
+
+    public void QueueChargingAlert(string kind,int percent,string iconKind,
+        bool english)
+    {
+        if(percent is <0 or >100)return;
+        EnqueueBatteryOverlay(new BatteryOledAlert.Alert(
+            kind,percent,iconKind,false,english,DateTimeOffset.UtcNow)
+        {
+            Charging=true
+        });
+    }
+
+    private void EnqueueBatteryOverlay(BatteryOledAlert.Alert entry)
+    {
+        // Alerts only happen during authorized Live; never replay hours later.
+        if(IsDisposed || !_liveEnabled)return;
         if(_batteryAlert is null)
+        {
             _batteryAlert=entry;
+            _batteryAlertNeedsRestore=false;
+        }
         else if(_pendingBatteryAlerts.Count<8)
             _pendingBatteryAlerts.Enqueue(entry);
         _forceNextLiveFrame=true;
-        if(_liveEnabled)_=RefreshLiveDock(force:true);
+        _=RefreshLiveDock(force:true);
     }
     private bool _forceNextLiveFrame;
     private int _reconnectFailures;

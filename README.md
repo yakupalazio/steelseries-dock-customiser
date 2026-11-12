@@ -1,4 +1,4 @@
-# Steelseries Dock Customiser — Beta 5 local development
+# Steelseries Dock Customiser — Beta 5 RC2 (private acceptance build)
 
 > **Local Beta 5 acceptance build, not a public GitHub release.** The
 > application uses `%LOCALAPPDATA%\SteelseriesDockCustomiser-Beta5-Development`.
@@ -28,7 +28,7 @@
   with an independent 70–100% compact scale and separately persisted pixels.
 - Optional experimental HID/ADB and forced controller priority controls are
   hidden; read-only, previously authorized sources are selected automatically.
-- Real user-guided first-time DualSense pairing, repeated battery swaps and
+- The initial Studio view is **Idle / Boşta**, while the Live dock keeps`r`n  its existing Game > Media > Idle automatic priority.`r`n- Verified charging-start events show a **4-second full-screen OLED charging`r`n  alert** with device icon, battery percentage, large lightning symbol and`r`n  Turkish/English caption. First-seen already charging devices do not alert.`r`n- Galaxy S24+ battery was read via built-in Windows Phone Link during local`r`n  testing (87%, later 84%). When Phone Link has no accessible window,`r`n  the app attempts a rate-limited (10 minute) launch/minimize recovery.`r`n  Windows Phone Link does not promise a stable public battery API.`r`n- See [Beta 5 RC2 release notes](BETA5_RC2_RELEASE_NOTES.md).`r`n- Real user-guided first-time DualSense pairing, repeated battery swaps and
   complete image redistribution review remain open. No GitHub release yet.
 
 **Copyright © 2026 Yakup Can Palaz. All rights reserved.**

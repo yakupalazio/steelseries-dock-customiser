@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace SteelseriesDockCustomiser;
@@ -11,11 +12,17 @@ namespace SteelseriesDockCustomiser;
 /// </summary>
 internal sealed class WheelArtworkDialog : Form
 {
-    private const int Zoom=10;
+    private readonly int pixelZoom;
+    private readonly int gridWidth,gridHeight;
     private readonly char[] pixels;
+    private readonly System.Collections.Generic.Stack<string> undoPixels=new();
+    private readonly System.Collections.Generic.Stack<string> redoPixels=new();
+    private bool strokeActive;
+    private readonly Button undoButton=Button("Geri al",290,664,94);
+    private readonly Button redoButton=Button("İleri al",394,664,94);
     private readonly PictureBox canvas=new(){
         BackColor=Color.Black,BorderStyle=BorderStyle.None,
-        Width=WheelArtwork.Width*Zoom,Height=WheelArtwork.Height*Zoom,
+        Width=450,Height=420, // updated for 31x29 mini art in constructor
         Cursor=Cursors.Cross};
     private readonly TrackBar sample=new(){Minimum=0,Maximum=100,Value=55,
         TickFrequency=25,Width=215};
@@ -71,8 +78,16 @@ internal sealed class WheelArtworkDialog : Form
     {
         this.compact=compact;
         CompactSize=Math.Clamp(sizePercent,70,100);
-        pixels=WheelArtwork.Resolve(saved).ToCharArray();
-        initialArtwork=WheelArtwork.IsValid(saved)?saved!:"";
+        pixelZoom=compact?13:10;
+        gridWidth=compact?MiniWheelArtwork.Width:WheelArtwork.Width;
+        gridHeight=compact?MiniWheelArtwork.Height:WheelArtwork.Height;
+        pixels=(compact?MiniWheelArtwork.Resolve(saved):
+            WheelArtwork.Resolve(saved)).ToCharArray();
+        initialArtwork=compact
+            ?MiniWheelArtwork.Normalize(saved)
+            :WheelArtwork.IsValid(saved)?saved!:"";
+        canvas.Width=gridWidth*pixelZoom;
+        canvas.Height=gridHeight*pixelZoom;
         Artwork=initialArtwork;
         AutoLabel=labelEnabled;
         GapAngle=Math.Clamp(gapAngle,-180,180);
@@ -118,6 +133,10 @@ internal sealed class WheelArtworkDialog : Form
         canvas.Invalidated+=(_,_)=>overview.Invalidate();
         canvas.MouseDown+=PaintPoint;
         canvas.MouseMove+=PaintPoint;
+        canvas.MouseUp+=(_,_)=>strokeActive=false;
+        brush.SelectedIndexChanged+=(_,_)=>{
+            canvas.Cursor=brush.SelectedIndex==4?Cursors.SizeAll:Cursors.Cross;
+        };
         Controls.Add(canvas);
 
         int right=500;
@@ -127,7 +146,8 @@ internal sealed class WheelArtworkDialog : Form
             UiLanguage.T("Beyaz piksel"),
             UiLanguage.T("Sesle değişen halka"),
             UiLanguage.T("Siyah piksel"),
-            UiLanguage.T("Saydam / Silgi")]);
+            UiLanguage.T("Saydam / Silgi"),
+            UiLanguage.T("Game/Chat logosunu taşı")]);
         brush.SelectedIndex=0;
         brush.Left=right;brush.Top=113;
         Controls.Add(brush);
@@ -225,6 +245,16 @@ internal sealed class WheelArtworkDialog : Form
         showChat.Left=251;showChat.Top=624;showChat.Checked=ShowChatLogo;
         showChat.CheckedChanged+=(_,_)=>{ShowChatLogo=showChat.Checked;canvas.Invalidate();};
         Controls.Add(showChat);
+        undoButton.Click+=(_,_)=>UndoPixels();
+        redoButton.Click+=(_,_)=>RedoPixels();
+        Controls.Add(undoButton);Controls.Add(redoButton);
+        UpdateUndoButtons();
+        KeyPreview=true;
+        KeyDown+=(_,e)=>{
+            if(!e.Control)return;
+            if(e.KeyCode==Keys.Z){UndoPixels();e.SuppressKeyPress=true;}
+            if(e.KeyCode==Keys.Y){RedoPixels();e.SuppressKeyPress=true;}
+        };
         if(compact)
         {
             Controls.Add(new Label{
@@ -243,8 +273,10 @@ internal sealed class WheelArtworkDialog : Form
         var reset=Button(UiLanguage.T("Orijinal tasarıma dön"),right,536,218);
         reset.Click+=(_,_)=>
         {
-            WheelArtwork.Factory.CopyTo(0,pixels,0,pixels.Length);
-            artworkEdited=false;
+            PushHistory();
+            string factory=compact?MiniWheelArtwork.Factory:WheelArtwork.Factory;
+            factory.CopyTo(0,pixels,0,pixels.Length);
+            artworkEdited=true;
             automaticLabel.Checked=true;
             rotation.Value=0;
             followIcons.Checked=true;
@@ -288,7 +320,8 @@ internal sealed class WheelArtworkDialog : Form
         save.Click+=(_,_)=>
         {
             string next=new(pixels);
-            Artwork=artworkEdited ? next==WheelArtwork.Factory?"":next :
+            string factory=compact?MiniWheelArtwork.Factory:WheelArtwork.Factory;
+            Artwork=artworkEdited ? next==factory?"":next :
                 initialArtwork;
             AutoLabel=automaticLabel.Checked;
             FollowModeIcons=followIcons.Checked;
@@ -320,8 +353,63 @@ internal sealed class WheelArtworkDialog : Form
     private void UpdateSample()
     {
         previewLabel.Text=UiLanguage.T("Önizleme")+$": {sample.Value}%";
-        canvas.Invalidate();
+        canvas.Invalidate();overview.Invalidate();
     }
+
+    private void PushHistory()
+    {
+        undoPixels.Push(new string(pixels));
+        if(undoPixels.Count>120)
+        {
+            var recent=undoPixels.Take(120).Reverse().ToArray();
+            undoPixels.Clear();
+            foreach(var state in recent)undoPixels.Push(state);
+        }
+        redoPixels.Clear();
+        UpdateUndoButtons();
+    }
+    private void UndoPixels()
+    {
+        if(undoPixels.Count==0)return;
+        redoPixels.Push(new string(pixels));
+        undoPixels.Pop().CopyTo(0,pixels,0,pixels.Length);
+        artworkEdited=true;
+        strokeActive=false;
+        UpdateUndoButtons();canvas.Invalidate();overview.Invalidate();
+    }
+    private void RedoPixels()
+    {
+        if(redoPixels.Count==0)return;
+        undoPixels.Push(new string(pixels));
+        redoPixels.Pop().CopyTo(0,pixels,0,pixels.Length);
+        artworkEdited=true;
+        strokeActive=false;
+        UpdateUndoButtons();canvas.Invalidate();overview.Invalidate();
+    }
+    private void UpdateUndoButtons()
+    {
+        undoButton.Enabled=undoPixels.Count>0;
+        redoButton.Enabled=redoPixels.Count>0;
+    }
+
+    internal bool TestHistoryRoundTrip()
+    {
+        // Execute the same editor history callbacks as the visible buttons.
+        int index=gridWidth*(gridHeight/2)+gridWidth/2;
+        char initial=pixels[index];
+        char edited=initial=='1'?'0':'1';
+        PushHistory();
+        pixels[index]=edited;artworkEdited=true;
+        UndoPixels();
+        if(pixels[index]!=initial || !redoButton.Enabled)return false;
+        RedoPixels();
+        if(pixels[index]!=edited || !undoButton.Enabled)return false;
+        UndoPixels();
+        return pixels[index]==initial;
+    }
+
+    internal (int Width,int Height) EditorGridSize=>
+        (gridWidth,gridHeight);
 
     private void SelectIconAt(MouseEventArgs e)
     {
@@ -349,15 +437,36 @@ internal sealed class WheelArtworkDialog : Form
         var chatFrame=Ring(false,true);
         // Clicking a visible sprite picks the correct channel automatically.
         // Otherwise retain the user's explicit Game/Chat selector.
-        if(gameFrame[point]&&!baseFrame[point])dragTarget.SelectedIndex=0;
-        else if(chatFrame[point]&&!baseFrame[point])dragTarget.SelectedIndex=1;
+        if(gameFrame[point]&&!baseFrame[point])
+        {
+            dragTarget.SelectedIndex=0;return;
+        }
+        if(chatFrame[point]&&!baseFrame[point])
+        {
+            dragTarget.SelectedIndex=1;return;
+        }
+        // The icon is often only 7-11 OLED pixels: make grabbing intuitive
+        // by accepting nearby clicks within its own wheel sector.
+        double cx=compact?9+MiniWheelArtwork.CenterX:1+WheelArtwork.CenterX;
+        double cy=compact?15+MiniWheelArtwork.CenterY:10+WheelArtwork.CenterY;
+        double radius=Math.Sqrt((x-cx)*(x-cx)+(y-cy)*(y-cy));
+        if(radius<11||radius>40)return;
+        double az=Math.Atan2(y-cy,x-cx)*180d/Math.PI;
+        double arc=(az-WheelArtwork.StartAngle-GapAngle+7200d)%360d;
+        if(arc<=WheelArtwork.Sweep)
+            dragTarget.SelectedIndex=arc>=WheelArtwork.Sweep/2d?0:1;
     }
 
     private void MoveIconOnOverview(MouseEventArgs e)
     {
-        bool game=dragTarget.SelectedIndex==0;
         int px=Math.Clamp((int)Math.Round(e.X*128d/overview.ClientSize.Width),0,127);
         int py=Math.Clamp((int)Math.Round(e.Y*64d/overview.ClientSize.Height),10,63);
+        MoveIconToOled(px,py);
+    }
+
+    private void MoveIconToOled(int px,int py)
+    {
+        bool game=dragTarget.SelectedIndex==0;
         var sprite=IconLibrary.GetCurrent(game?"Game":"Chat");
         double angle=(WheelArtwork.StartAngle+GapAngle+
             WheelArtwork.Sweep*(game ? 0.75d : 0.25d))*Math.PI/180d;
@@ -370,31 +479,33 @@ internal sealed class WheelArtworkDialog : Form
         int dx=Math.Clamp((int)Math.Round(px-sprite[0].Length/2d-baseX),-64,64);
         int dy=Math.Clamp((int)Math.Round(py-sprite.Length/2d-baseY),-64,64);
         if(game){gameDX.Value=dx;gameDY.Value=dy;}
-        else {chatDX.Value=dx;chatDY.Value=dy;}
-        // Renderer performs nearest-valid placement within the own arc,
-        // and rejects overlapping positions rather than drawing illegally.
-        overview.Invalidate();
+        else{chatDX.Value=dx;chatDY.Value=dy;}
+        // The nearest valid position stays in the appropriate rotating arc.
+        canvas.Invalidate();overview.Invalidate();
     }
 
     private void PaintPoint(object? sender,MouseEventArgs e)
     {
         if(e.Button is not (MouseButtons.Left or MouseButtons.Right))return;
-        int x=e.X/Zoom,y=e.Y/Zoom;
-        if(x<0||y<0||x>=WheelArtwork.Width||y>=WheelArtwork.Height)return;
-        (x,y)=WheelArtwork.SourceAt(x,y,GapAngle);
-        if(x<0||y<0||x>=WheelArtwork.Width||y>=WheelArtwork.Height)return;
+        int x=e.X/pixelZoom,y=e.Y/pixelZoom;
+        if(x<0||y<0||x>=gridWidth||y>=gridHeight)return;
+        if(brush.SelectedIndex==4)
+        {
+            if(e.Button==MouseButtons.Left && mode.SelectedIndex==1)
+                MoveIconToOled((compact?9:1)+x,(compact?15:10)+y);
+            return;
+        }
+        (x,y)=compact?MiniWheelArtwork.SourceAt(x,y,GapAngle):
+            WheelArtwork.SourceAt(x,y,GapAngle);
+        if(x<0||y<0||x>=gridWidth||y>=gridHeight)return;
         char chosen=e.Button==MouseButtons.Right?'0':brush.SelectedIndex switch{
             0=>'1',1=>'2',2=>'3',_=>'0'};
-        int index=y*WheelArtwork.Width+x;
+        int index=y*gridWidth+x;
         if(pixels[index]==chosen)return;
+        if(!strokeActive){PushHistory();strokeActive=true;}
         pixels[index]=chosen;
         artworkEdited=true;
-        // Rotated source pixels affect different on-screen positions.
-        canvas.Invalidate();
-        // Centre mode text is also overlaid in the preview. Redraw the entire
-        // badge when changing any pixel under that lettering.
-        if(Math.Abs(x-WheelArtwork.CenterX)<=10 &&
-           Math.Abs(y-WheelArtwork.CenterY)<=10)canvas.Invalidate();
+        canvas.Invalidate();overview.Invalidate();
     }
 
     private void PaintOverview(object? sender,PaintEventArgs e)
@@ -427,28 +538,36 @@ internal sealed class WheelArtworkDialog : Form
     {
         var bitmap=new bool[128*64];
         var coverage=new bool[128*64];
-        string source=WheelArtwork.PreviewSource(
-            artworkEdited?new string(pixels):initialArtwork,RingThickness);
-        WheelArtwork.Draw(bitmap,coverage,0,0,artworkEdited?source:initialArtwork,
-            sample.Value,
-            mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
-            automaticLabel.Checked,GapAngle,null,false,FollowModeIcons,
-            GameDX,GameDY,ChatDX,ChatDY,
-            ShowGameLogo,ShowChatLogo,CloseRingEnds,RingThickness);
+        string editSource=artworkEdited?new string(pixels):initialArtwork;
+        string source=compact
+            ?MiniWheelArtwork.PreviewSource(editSource,RingThickness)
+            :WheelArtwork.PreviewSource(editSource,RingThickness);
+        DialView active=mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume;
+        if(compact)
+            MiniWheelArtwork.Draw(bitmap,coverage,0,0,sample.Value,active,
+                GapAngle,RingThickness,false,false,0,0,0,0,
+                100,editSource,automaticLabel.Checked,CloseRingEnds);
+        else
+            WheelArtwork.Draw(bitmap,coverage,0,0,editSource,sample.Value,
+                active,automaticLabel.Checked,GapAngle,null,false,
+                FollowModeIcons,GameDX,GameDY,ChatDX,ChatDY,
+                ShowGameLogo,ShowChatLogo,CloseRingEnds,RingThickness);
         e.Graphics.Clear(Color.FromArgb(6,10,15));
-        for(int y=0;y<WheelArtwork.Height;y++)for(int x=0;x<WheelArtwork.Width;x++)
+        for(int y=0;y<gridHeight;y++)for(int x=0;x<gridWidth;x++)
         {
-            char px=WheelArtwork.Sample(source,x,y,GapAngle);
+            char px=compact?MiniWheelArtwork.Sample(source,x,y,GapAngle):
+                WheelArtwork.Sample(source,x,y,GapAngle);
             var fill=bitmap[y*128+x]?Color.FromArgb(235,242,248):
                 px=='2'?Color.FromArgb(30,75,100):
                 px=='3'?Color.FromArgb(30,26,31):Color.Black;
             using var brushFill=new SolidBrush(fill);
-            e.Graphics.FillRectangle(brushFill,x*Zoom,y*Zoom,Zoom,Zoom);
+            e.Graphics.FillRectangle(brushFill,x*pixelZoom,y*pixelZoom,
+                pixelZoom,pixelZoom);
         }
         using var grid=new Pen(Color.FromArgb(25,47,63),1f);
-        for(int x=0;x<=WheelArtwork.Width;x++)
-            e.Graphics.DrawLine(grid,x*Zoom,0,x*Zoom,WheelArtwork.Height*Zoom);
-        for(int y=0;y<=WheelArtwork.Height;y++)
-            e.Graphics.DrawLine(grid,0,y*Zoom,WheelArtwork.Width*Zoom,y*Zoom);
+        for(int x=0;x<=gridWidth;x++)
+            e.Graphics.DrawLine(grid,x*pixelZoom,0,x*pixelZoom,gridHeight*pixelZoom);
+        for(int y=0;y<=gridHeight;y++)
+            e.Graphics.DrawLine(grid,0,y*pixelZoom,gridWidth*pixelZoom,y*pixelZoom);
     }
 }

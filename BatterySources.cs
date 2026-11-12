@@ -48,7 +48,9 @@ internal static class BatterySources
         // Automatically prefer the low-overhead Phone Link source. Only
         // query an already-installed, previously authorized ADB connection
         // if the usual source is unavailable. Nothing is installed/prompted.
-        phone=await PhoneLinkBatteryProvider.TryReadAsync(false);
+        // One bounded background recovery for Windows' built-in Phone Link
+        // is attempted when the COM server has no accessible battery window.
+        phone=await PhoneLinkBatteryProvider.TryReadAsync(true);
         if(phone is null && AdbPhoneBatteryProvider.Installed)
             phone=await AdbPhoneBatteryProvider.ReadAsync();
         if(phone is not null)

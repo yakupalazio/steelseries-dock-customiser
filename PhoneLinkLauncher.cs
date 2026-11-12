@@ -25,7 +25,9 @@ internal static class PhoneLinkLauncher
                 UseShellExecute=true
             };
             Process.Start(command)?.Dispose();
-            for(int i=0;i<35;i++)
+            // A WinUI splash window is not the accessible battery window.
+            // Wait for the real application surface before minimizing it.
+            for(int i=0;i<60;i++)
             {
                 await Task.Delay(150);
                 foreach(var p in Process.GetProcessesByName("PhoneExperienceHost"))
@@ -34,6 +36,8 @@ internal static class PhoneLinkLauncher
                     {
                         p.Refresh();
                         if(p.MainWindowHandle==IntPtr.Zero)continue;
+                        if(p.MainWindowTitle.Contains("SplashScreen",
+                            StringComparison.OrdinalIgnoreCase))continue;
                         ShowWindow(p.MainWindowHandle,6); // SW_MINIMIZE
                         return "Phone Link küçültülmüş açıldı; pil okuyucu yeniden denenecek.";
                     }

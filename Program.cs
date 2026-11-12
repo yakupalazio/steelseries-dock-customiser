@@ -411,9 +411,14 @@ internal static class Program
                     if(!panel.LiveOutputActive)
                         throw new InvalidOperationException(
                             "Live ended unexpectedly during alert");
+                    panel.QueueChargingAlert("Phone",87,"Phone",false);
+                    await System.Threading.Tasks.Task.Delay(4800);
+                    if(panel.BatteryAlertActive)
+                        throw new InvalidOperationException(
+                            "Charging overlay failed to end after four seconds");
                     Console.WriteLine(
-                        "Queued low and critical overlays, blink, and OEM"+
-                        " header reclaim completed through the Live UI timer.");
+                        "Low, critical, charging and OEM header-reclaim "+
+                        "overlays completed through the real Live UI timer.");
                     panel.RestoreOriginalScreen();
                     if(panel.LiveOutputActive)
                         throw new InvalidOperationException(
@@ -597,15 +602,22 @@ internal static class Program
             Application.SetColorMode(SystemColorMode.Dark);
             if(args.Contains("--capture-english"))UiLanguage.PreviewOnly(true);
             if(args.Contains("--capture-warning") ||
+               args.Contains("--capture-charging") ||
                args.Contains("--capture-critical") ||
                args.Contains("--capture-critical-off"))
             {
                 var atTime=DateTimeOffset.UtcNow;
                 bool critical=args.Contains("--capture-critical") ||
                     args.Contains("--capture-critical-off");
-                var info=new BatteryOledAlert.Alert("Mouse",
-                    critical?10:20,"Mouse",critical,
-                    args.Contains("--capture-english"),atTime);
+                bool charging=args.Contains("--capture-charging");
+                var info=new BatteryOledAlert.Alert(
+                    charging?"Phone":"Mouse",
+                    charging?57:critical?10:20,
+                    charging?"Phone":"Mouse",critical,
+                    args.Contains("--capture-english"),atTime)
+                {
+                    Charging=charging
+                };
                 using var warning=BatteryOledAlert.Render(info,
                     args.Contains("--capture-critical-off")
                         ?atTime.AddMilliseconds(1200):atTime);
