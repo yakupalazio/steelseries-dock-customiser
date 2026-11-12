@@ -36,6 +36,26 @@ internal static class Beta5SelfTests
            !BatteryPreferences.FilePath.StartsWith(
                 Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
             throw new Exception("Beta 5 accidentally shares Beta 4's settings");
+        // OEM header simulation is derived from the same original dock
+        // photograph as the larger photo preview, never user OLED pixels.
+        string photoPath=Path.Combine(AppContext.BaseDirectory,
+            "dock-photo-local.png");
+        using(var photo=new Bitmap(photoPath))
+        using(var header=DockFactoryHeaderReference.Extract(photo,
+            [
+                new PointF(346,301),new PointF(589,302),
+                new PointF(589,420),new PointF(346,419)
+            ]))
+        {
+            if(header is null || header.Size!=new Size(128,10))
+                throw new Exception("128x10 native OEM photo header unavailable");
+            int[] counts=[0,0,0];
+            for(int yy=0;yy<10;yy++)for(int xx=0;xx<128;xx++)
+                if(Lit(header,xx,yy))counts[Math.Min(2,xx/43)]++;
+            if(counts.Any(n=>n<15))
+                throw new Exception(
+                    "OEM headset, center and battery reference icons missing");
+        }
         // The owner's personal 2026-11-13 baseline is shipped read-only
         // inside the single EXE. Existing local saves are not overwritten.
         var baseline=FactoryPresetDefaults.LoadStudio();

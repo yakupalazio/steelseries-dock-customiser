@@ -34,6 +34,18 @@ internal sealed partial class PixelStudioForm : Form
         selected=state.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
         RefreshWidgetList();
     }
+    // Offscreen acceptance only: no hardware write or persistence.
+    internal void SetHeaderProtectionForCapture(bool protect)
+        =>headerProtect.Checked=protect;
+
+    // Inspect the actual rendered editor canvas without the outer window.
+    internal Bitmap CaptureEditorCanvasForTest()
+    {
+        var capture=new Bitmap(editor.Width,editor.Height);
+        editor.DrawToBitmap(capture,new Rectangle(0,0,
+            capture.Width,capture.Height));
+        return capture;
+    }
     protected override bool ShowWithoutActivation=>captureMode||traySmokeMode;
     private const int CanvasWidth=128, CanvasHeight=64;
     private int Zoom=6;
@@ -134,7 +146,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Universal Preview | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Universal Preview 2 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -891,6 +903,15 @@ internal sealed partial class PixelStudioForm : Form
         g.DrawImage(frame,new Rectangle(0,0,128*zoom,64*zoom),new Rectangle(0,0,128,64),GraphicsUnit.Pixel);
         if(edit)
         {
+            // The protected top 10 rows are firmware-owned and deliberately
+            // absent from the editable/saved bitmap. Show the same 1-bit OEM
+            // indicators as the dock photograph here as a visual guide only.
+            // Unchecking "Orijinal üst 10 pikseli koru" hides the guide and
+            // reveals the user's editable full-screen pixels immediately.
+            if(project.ProtectHeader &&
+               dockPreview?.ProtectedHeaderReference() is Bitmap reference)
+                g.DrawImage(reference,new Rectangle(0,0,128*zoom,10*zoom),
+                    new Rectangle(0,0,128,10),GraphicsUnit.Pixel);
             using var rule=new Pen(Color.FromArgb(235,230,116,104),1);
             g.DrawLine(rule,0,LockedRows*zoom,128*zoom,LockedRows*zoom);
             if(selected!=null)

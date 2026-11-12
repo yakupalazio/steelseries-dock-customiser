@@ -112,7 +112,29 @@ internal sealed class DockPreviewPanel : UserControl
     private readonly string _settingsFile = Path.Combine(
         Beta5Sandbox.SettingsDirectory,"dock-preview-v07.json");
     private Image? _photo;
+    private Bitmap? _protectedHeaderReference;
     private Color[]? _cachedGlassBackground;
+
+    /// <summary>
+    /// Display-only native top-ten pixels from the SAME photo as the dock
+    /// preview. The main editor can draw this reference while firmware rows
+    /// are protected without putting any of its pixels in the saved layout.
+    /// </summary>
+    internal Bitmap? ProtectedHeaderReference()
+    {
+        if(_protectedHeaderReference is not null)
+            return _protectedHeaderReference;
+        if(_photo is null || _settings.Corners.Count!=4)return null;
+        _protectedHeaderReference=DockFactoryHeaderReference.Extract(
+            _photo,_settings.Corners);
+        return _protectedHeaderReference;
+    }
+
+    private void InvalidateProtectedHeaderReference()
+    {
+        _protectedHeaderReference?.Dispose();
+        _protectedHeaderReference=null;
+    }
     private PhotoSettings _settings = new();
     private bool _calibrating;
     private readonly List<PointF> _newCorners = [];
@@ -166,6 +188,7 @@ internal sealed class DockPreviewPanel : UserControl
         _restoreHardware.Click += (_,_) => ResetDock();
         Disposed += (_,_) =>
         {
+            InvalidateProtectedHeaderReference();
             _liveTimer.Stop();
             _dialRefreshTimer.Stop();
             _dialReclaimTimer.Stop();
@@ -728,6 +751,7 @@ internal sealed class DockPreviewPanel : UserControl
             _photo=clone;
             ComputeVisiblePhotoCrop();
             _cachedGlassBackground=null;
+            InvalidateProtectedHeaderReference();
             old?.Dispose();
             if(_settings.Corners.Count!=4 && _settings.ImagePath==null)
                 _settings.Corners=_factoryCorners.ToList();
@@ -759,6 +783,7 @@ internal sealed class DockPreviewPanel : UserControl
         {
             _settings.Corners=_newCorners.ToList();
             _cachedGlassBackground=null;
+            InvalidateProtectedHeaderReference();
             SaveSettings();
             _message.Text="OLED perspektifi kaydedildi. Tasarım şimdi işaretlediğin alana yerleşiyor.";
         }

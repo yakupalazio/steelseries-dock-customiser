@@ -761,14 +761,19 @@ internal static class Program
                 studio.ClientSize=new System.Drawing.Size(1120,730);
             if(args.Contains("--capture-idle"))studio.SelectCaptureMode(ScreenMode.Idle);
             else if(args.Contains("--capture-game"))studio.SelectCaptureMode(ScreenMode.Game);
+            if(args.Contains("--capture-header-unlocked"))
+                studio.SetHeaderProtectionForCapture(false);
             studio.EnableOffscreenCapture();
             studio.Show();
             Application.DoEvents();
             studio.PerformLayout();
             Application.DoEvents();
-            using var preview=new System.Drawing.Bitmap(studio.Width,studio.Height);
-            studio.DrawToBitmap(preview,new System.Drawing.Rectangle(0,0,
-                preview.Width,preview.Height));
+            using var preview=args.Contains("--capture-editor-only")
+                ?studio.CaptureEditorCanvasForTest()
+                :new System.Drawing.Bitmap(studio.Width,studio.Height);
+            if(!args.Contains("--capture-editor-only"))
+                studio.DrawToBitmap(preview,new System.Drawing.Rectangle(0,0,
+                    preview.Width,preview.Height));
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(
                 System.IO.Path.GetFullPath(args[at+1]))!);
             preview.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
