@@ -79,6 +79,14 @@ internal static class BatterySources
             await SetupApiBatteryDiagnostics.ReadAsync(),DateTimeOffset.Now);
         // Query actual Bluetooth connection status only in the slow loop.
         bool connected=await DualSenseConnection.IsConnectedAsync();
+        if(connected && !snapshot["DualSense"].Available)
+            snapshot.Values["DualSense"]=new BatteryReading(
+                "DualSense",null,"Bluetooth HID (bağlı)",
+                DualSenseReadOnly.LastDiagnostic,DateTimeOffset.Now)
+            {
+                FriendlyName="DualSense Wireless Controller",
+                IconKind="DualSense"
+            };
         return new BatterySnapshot{
             CheckedAt=snapshot.CheckedAt,Values=snapshot.Values,
             DualSenseConnected=connected || snapshot["DualSense"].Available

@@ -59,9 +59,7 @@ internal static class DualSenseReadOnly
                     Marshal.WriteInt32(buffer,IntPtr.Size==8?8:6);
                     if(!SetupDiGetDeviceInterfaceDetail(set,ref d,buffer,needed,out _,IntPtr.Zero))continue;
                     var path=Marshal.PtrToStringUni(IntPtr.Add(buffer,4));
-                    if(path is not null && path.Contains("vid_054c",StringComparison.OrdinalIgnoreCase)
-                        && (path.Contains("pid_0ce6",StringComparison.OrdinalIgnoreCase)
-                            || path.Contains("pid_0df2",StringComparison.OrdinalIgnoreCase)))
+                    if(path is not null && IsSupportedDualSensePath(path))
                         paths.Add(path);
                 }
                 finally {Marshal.FreeHGlobal(buffer);}
@@ -71,15 +69,39 @@ internal static class DualSenseReadOnly
         return paths;
     }
 
+    // Classic Bluetooth HID paths use VID&0002054C_PID&0CE6 rather than
+    // USB's VID_054C&PID_0CE6. Both are Sony's same hardware, not aliases
+    // for random Bluetooth devices.
+    internal static bool IsSupportedDualSensePath(string path)
+    {
+        bool sony=path.Contains("vid_054c",StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("vid&0002054c",StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("vid&0001054c",StringComparison.OrdinalIgnoreCase);
+        bool product=path.Contains("pid_0ce6",StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("pid&0ce6",StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("pid_0df2",StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("pid&0df2",StringComparison.OrdinalIgnoreCase);
+        return sony&&product;
+    }
+
+    public static string LastDiagnostic {get;private set;}="Henüz sorgulanmadı.";
     public static async Task<int?> TryBatteryPercentAsync()
     {
-        foreach(string path in EnumeratePaths())
+        var paths=EnumeratePaths();
+        LastDiagnostic=paths.Count==0?
+            "DualSense HID yolu bulunamadı. Bluetooth HID aygıtını kontrol et.":
+            $"DualSense HID yolu bulundu ({paths.Count}), pil raporu bekleniyor.";
+        foreach(string path in paths)
         {
             try
             {
                 using var handle=CreateFile(path,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,
                     IntPtr.Zero,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,IntPtr.Zero);
-                if(handle.IsInvalid)continue;
+                if(handle.IsInvalid)
+                {
+                    LastDiagnostic="DualSense HID açma izni yok. Steam/oyun kontrolcüyü kullanıyor olabilir.";
+                    continue;
+                }
                 using var stream=new FileStream(handle,FileAccess.Read,128,isAsync:true);
                 using var timeout=new CancellationTokenSource(TimeSpan.FromMilliseconds(1300));
                 var bytes=new byte[128];
@@ -87,12 +109,29 @@ internal static class DualSenseReadOnly
                 int count=await stream.ReadAsync(bytes.AsMemory(),timeout.Token);
                 if(count==0)continue;
                 int? result=DecodeReport(bytes,count);
-                if(result is int level)return level;
+                if(result is int level)
+                {
+                    LastDiagnostic=$"DualSense pili: yaklaşık %{level} (HID raporu).";
+                    return level;
+                }
+                LastDiagnostic=$"DualSense HID raporu geldi ({count} bayt); pil alanı doğrulanamadı.";
             }
-            catch(OperationCanceledException){}
-            catch(IOException){}
-            catch(UnauthorizedAccessException){}
-            catch(ArgumentException){}
+            catch(OperationCanceledException)
+            {
+                LastDiagnostic="DualSense HID pil raporu zaman aşımına uğradı.";
+            }
+            catch(IOException)
+            {
+                LastDiagnostic="DualSense HID verisine erişilemedi (başka uygulama kullanıyor olabilir).";
+            }
+            catch(UnauthorizedAccessException)
+            {
+                LastDiagnostic="DualSense HID okuma izni yok.";
+            }
+            catch(ArgumentException)
+            {
+                LastDiagnostic="DualSense HID rapor biçimi desteklenmiyor.";
+            }
         }
         return null;
     }

@@ -23,6 +23,15 @@ internal static class SelfTests
     {
         try
         {
+            // Windows' Bluetooth HID path uses VID&0002054C_PID&0CE6;
+            // the USB controller uses the VID_054C&PID_0CE6 form.
+            if(!DualSenseReadOnly.IsSupportedDualSensePath(
+                    @"\\?\hid#{00001124}_vid&0002054c_pid&0ce6#controller") ||
+               !DualSenseReadOnly.IsSupportedDualSensePath(
+                    @"\\?\hid#vid_054c&pid_0ce6#controller") ||
+               DualSenseReadOnly.IsSupportedDualSensePath(
+                    @"\\?\hid#vid_054c&pid_1234#not-dualsense"))
+                throw new Exception("DualSense Windows Bluetooth/USB HID path detection failed");
             // DualSense firmware reports *bands*, not a precise percentage.
             var dualSensePacket=new byte[78];
             dualSensePacket[0]=0x31; dualSensePacket[54]=0x06;
