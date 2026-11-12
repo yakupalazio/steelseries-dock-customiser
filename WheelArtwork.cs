@@ -164,22 +164,14 @@ internal static class WheelArtwork
             // Manual offsets are constrained to each channel's own arc sector.
             if(showGame)
             {
-                if(followModeIcons)
-                    DrawEndpointIcon(output,coverage,x,y,"Game",
-                        StartAngle+Sweep*.75+gapAngle,gameOffsetX,gameOffsetY,
-                        StartAngle+gapAngle,gameSide:true);
-                else DrawEndpointIcon(output,coverage,x,y,"Game",
-                    StartAngle+Sweep*.75,gameOffsetX,gameOffsetY,
+                DrawEndpointIcon(output,coverage,x,y,"Game",
+                    StartAngle+Sweep*.75+gapAngle,gameOffsetX,gameOffsetY,
                     StartAngle+gapAngle,gameSide:true);
             }
             if(showChat)
             {
-                if(followModeIcons)
-                    DrawEndpointIcon(output,coverage,x,y,"Chat",
-                        StartAngle+Sweep*.25+gapAngle,chatOffsetX,chatOffsetY,
-                        StartAngle+gapAngle,gameSide:false);
-                else DrawEndpointIcon(output,coverage,x,y,"Chat",
-                    StartAngle+Sweep*.25,chatOffsetX,chatOffsetY,
+                DrawEndpointIcon(output,coverage,x,y,"Chat",
+                    StartAngle+Sweep*.25+gapAngle,chatOffsetX,chatOffsetY,
                     StartAngle+gapAngle,gameSide:false);
             }
         }
@@ -246,6 +238,9 @@ internal static class WheelArtwork
                 int px=left+xx,py=top+yy;
                 byte flags=obstacles[py*128+px];
                 if((flags&2)!=0)interior++;
+                // Keep both icons directly adjacent to their assigned arc.
+                double distanceFromWheel=Math.Sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));
+                if(distanceFromWheel>38d)interior++;
                 if((flags&1)!=0)conflict++;
                 if(startAngle.HasValue && gameSide.HasValue)
                 {

@@ -24,6 +24,8 @@ internal sealed class SettingsDialog : Form
     private readonly Action onLanguageChanged;
     private bool aboutActive;
     private BatteryStatusDialog? batteryEditor;
+    private Action<int>? selectPageForCapture;
+    internal void SelectPageForCapture(int page)=>selectPageForCapture?.Invoke(page);
 
     public void UpdateBatteryRows()
     {
@@ -102,9 +104,9 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO   •   1.1.0", Left = 18, Top = 704,
-            Width = 160, Height = 23, ForeColor = Muted,
-            Font = new Font("Segoe UI", 8f)
+            Text = "OLED STUDIO • Beta 5", Left = 18, Top = 704,
+            Width = 180, Height = 23, ForeColor = Muted,
+            Font = new Font("Segoe UI", 7.6f)
         });
 
         var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Background };
@@ -136,7 +138,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.1.1 Beta 5 DEV\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.1.1 Beta 5 RC1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });
@@ -300,6 +302,7 @@ internal sealed class SettingsDialog : Form
             }
             if(page==1)batteryEditor?.UpdateRows();
         }
+        selectPageForCapture=SwitchPage;
         languageItem.Click+=(_,_)=>SwitchPage(0);
         aboutItem.Click+=(_,_)=>SwitchPage(2);
         if(batteryButton!=null)batteryButton.Click+=(_,_)=>SwitchPage(1);

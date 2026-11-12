@@ -43,10 +43,32 @@ internal sealed class DockHardwareTest
             throw new InvalidDataException("Only full 128×64 native frames are accepted.");
         return full.Clone(new Rectangle(0,y,128,h),PixelFormat.Format24bppRgb);
     }
+    private static readonly object validationGate=new();
+    private static DateTimeOffset validatedAt=DateTimeOffset.MinValue;
+    private static string? validatedResult;
+
     public string Validate()
     {
-        if(!Beta5Sandbox.AllowPhysicalDockWrites)
-            return "Beta 5 geliştirme modunda fiziksel dock çıkışı kapalı. Ayrı donanım testi izni gerekir.";
+        // Live mode may refresh at 16 Hz. Do not enumerate HID collections or
+        // hash an external CLI every frame: keep a short capability cache.
+        lock(validationGate)
+        {
+            var now=DateTimeOffset.UtcNow;
+            if(validatedResult is not null &&
+               now-validatedAt<TimeSpan.FromSeconds(5))
+                return validatedResult;
+            // Prefer the built-in, OEM-limited OLED HID transport. The
+            // verified ggoled CLI is an optional fallback.
+            string result=FastOledTransport.ValidateAvailable()==""
+                ?"":ValidateCli();
+            validatedAt=now;
+            validatedResult=result;
+            return result;
+        }
+    }
+
+    private string ValidateCli()
+    {
         if(!File.Exists(cliPath))
             return "ggoled v0.3.0 aracı bulunamadı. Araç yalnızca resmî GitHub sürümünden edinilmeli.";
         string hash=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(cliPath)));
@@ -75,6 +97,23 @@ internal sealed class DockHardwareTest
         string full=Path.Combine(folder,"applied-dock-full-128x64.png");
         try
         {
+            if(FastOledTransport.ValidateAvailable()=="")
+            {
+                try
+                {
+                    using var device=new FastOledTransport();
+                    device.Open();
+                    device.SendLiveFrame(image,protectHeader);
+                    staticApplied=true;
+                    return "Tasarım dock'a uygulandı. Orijinale dönmek için Reset'i kullan.";
+                }
+                catch
+                {
+                    // An explicitly verified legacy CLI may still drive
+                    // hardware versions that reject the direct HID writer.
+                    if(ValidateCli()!="")throw;
+                }
+            }
             using(var editable=ExtractEditableArea(image))
                 editable.Save(main,ImageFormat.Png);
             using(var remainder=ExtractBottomTail(image))
@@ -98,7 +137,17 @@ internal sealed class DockHardwareTest
         catch(Exception ex)
         {
             staticApplied=false;
-            try {RunCli("return");}catch { /* Reset remains available. */ }
+            try
+            {
+                using var rescue=new FastOledTransport();
+                rescue.Open();
+                rescue.ReturnToFactory();
+            }
+            catch
+            {
+                if(ValidateCli()=="")
+                    try{RunCli("return");}catch{ }
+            }
             return "Uygulama hatası: "+ex.Message+"; orijinal ekrana dönüş denendi.";
         }
         finally
@@ -218,9 +267,29 @@ internal sealed class DockHardwareTest
             return "Dock güncellemesi sürüyor; dönüş komutu henüz gönderilemedi.";
         try
         {
-            directLive?.Dispose();
-            directLive=null;
-            RunCli("return");
+            try
+            {
+                if(directLive!=null)
+                {
+                    directLive.ReturnToFactory();
+                    directLive.Dispose();
+                    directLive=null;
+                }
+                else
+                {
+                    using var temporary=new FastOledTransport();
+                    temporary.Open();
+                    temporary.ReturnToFactory();
+                }
+            }
+            catch
+            {
+                directLive?.Dispose();
+                directLive=null;
+                if(ValidateCli()!="")
+                    throw;
+                RunCli("return");
+            }
             staticApplied=false;
             return "SteelSeries varsayılan OLED ekranına dönüş komutu başarılı.";
         }

@@ -1,9 +1,10 @@
 # Steelseries Dock Customiser — Beta 5 local development
 
-> **Not a public release.** This isolated development branch uses
-> `%LOCALAPPDATA%\SteelseriesDockCustomiser-Beta5-Development` and disables
-> physical OLED writes unless explicitly unlocked for a supervised test.
-> Beta 4's personalized layouts and stable dock handoff are not modified.
+> **Local Beta 5 acceptance build, not a public GitHub release.** The
+> application uses `%LOCALAPPDATA%\SteelseriesDockCustomiser-Beta5-Development`.
+> Physical OLED writes are allowed only after the application's explicit
+> Apply/Live confirmation. Automated tests never modify Beta 4 settings.
+> Beta 4's personalized layouts and stable dock handoff remain untouched.
 
 ## Beta 5 changes under verification
 
@@ -17,8 +18,18 @@
   battery notifications with configurable repeat intervals. No BQC dependency.
 - Compact wheel and revised bold clock/date glyphs; 10-second slow battery
   polling with faster supported event-driven refreshes.
-- Physical OLED acceptance, handset/first-pair DualSense tests and copyright
-  audit remain outstanding. No firmware modification or GitHub release.
+- The broken Live start authorization was repaired; direct Nova Pro HID
+  output, protected frame, full-screen battery alert and OEM handback passed
+  Windows hardware smoke tests. Beta 5 uses its built-in HID writer first;
+  the verified ggoled CLI is an optional legacy fallback, not a required app.
+- The original dock photograph was restored from the protected local Beta 4
+  build and is included in **local testing packages only**.
+- Mini wheel now uses the same full pixel workshop as the large wheel,
+  with an independent 70–100% compact scale and separately persisted pixels.
+- Optional experimental HID/ADB and forced controller priority controls are
+  hidden; read-only, previously authorized sources are selected automatically.
+- Real user-guided first-time DualSense pairing, repeated battery swaps and
+  complete image redistribution review remain open. No GitHub release yet.
 
 **Copyright © 2026 Yakup Can Palaz. All rights reserved.**
 Official unmodified releases are free to use. Modification and

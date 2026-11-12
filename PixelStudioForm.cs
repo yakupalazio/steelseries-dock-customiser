@@ -133,7 +133,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 DEV | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 RC1 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -601,13 +601,17 @@ internal sealed partial class PixelStudioForm : Form
         batteryPolling=true;
         try
         {
-            var newest=await BatterySources.PollAsync(batteryPreferences.ExperimentalControllerHid,
-                batteryPreferences.UseAdbPhoneBattery,batteryPreferences.AutoMinimizePhoneLink);
+            var newest=await BatterySources.PollAsync();
             if(IsDisposed)return;
             batterySnapshot=newest;
             foreach(var (kind,pct) in warningMonitor.Evaluate(
                 newest,batteryPreferences,DateTimeOffset.Now))
+            {
                 NotifyLowBattery(kind,pct);
+                if(pct<=20)
+                    dockPreview?.QueueBatteryAlert(kind,pct,newest[kind].IconKind,
+                        critical:pct<=10,english:UiLanguage.English);
+            }
             Redraw();
             batteryDialog?.UpdateRows();settingsDialog?.UpdateBatteryRows();
             SetStatus("Piller: "+
@@ -716,30 +720,15 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(selected?.Kind!="VolumeChatMix"||
             selected.DialStyle is not ("Wheel" or "MiniWheel"))return;
-        if(selected.DialStyle=="MiniWheel")
-        {
-            using var compact=new MiniWheelSettingsDialog(selected);
-            if(compact.ShowDialog(this)!=DialogResult.OK)return;
-            Record();
-            selected.WheelGapAngle=compact.GapAngle;
-            selected.WheelRingThickness=compact.Thickness;
-            selected.MiniWheelSize=compact.SizePercent;
-            selected.WheelShowGame=compact.ShowGame;
-            selected.WheelShowChat=compact.ShowChat;
-            selected.WheelGameOffsetX=compact.GameX;
-            selected.WheelGameOffsetY=compact.GameY;
-            selected.WheelChatOffsetX=compact.ChatX;
-            selected.WheelChatOffsetY=compact.ChatY;
-            Redraw();
-            return;
-        }
-        using var dialog=new WheelArtworkDialog(selected.WheelPixels,
+        bool compact=selected.DialStyle=="MiniWheel";
+        using var dialog=new WheelArtworkDialog(
+            compact?selected.MiniWheelPixels:selected.WheelPixels,
             selected.WheelAutoLabel,selected.WheelGapAngle,
             selected.WheelIconsFollowRing,selected.WheelGameOffsetX,
             selected.WheelGameOffsetY,selected.WheelChatOffsetX,
             selected.WheelChatOffsetY,selected.WheelShowGame,
             selected.WheelShowChat,selected.WheelCloseEnds,
-            selected.WheelRingThickness);
+            selected.WheelRingThickness,compact,selected.MiniWheelSize);
         if(dialog.ShowDialog(this)!=DialogResult.OK)return;
         if(dialog.UseBar)
         {
@@ -747,7 +736,8 @@ internal sealed partial class PixelStudioForm : Form
             RefreshWidgetList();Redraw();
             return;
         }
-        if(selected.WheelPixels==dialog.Artwork &&
+        if((compact?selected.MiniWheelPixels:selected.WheelPixels)==dialog.Artwork &&
+           (!compact||selected.MiniWheelSize==dialog.CompactSize) &&
            selected.WheelAutoLabel==dialog.AutoLabel &&
            selected.WheelGapAngle==dialog.GapAngle &&
            selected.WheelIconsFollowRing==dialog.FollowModeIcons &&
@@ -760,7 +750,12 @@ internal sealed partial class PixelStudioForm : Form
            selected.WheelCloseEnds==dialog.CloseRingEnds &&
            selected.WheelRingThickness==dialog.RingThickness)return;
         Record();
-        selected.WheelPixels=dialog.Artwork;
+        if(compact)
+        {
+            selected.MiniWheelPixels=dialog.Artwork;
+            selected.MiniWheelSize=dialog.CompactSize;
+        }
+        else selected.WheelPixels=dialog.Artwork;
         selected.WheelAutoLabel=dialog.AutoLabel;
         selected.WheelGapAngle=dialog.GapAngle;
         selected.WheelIconsFollowRing=dialog.FollowModeIcons;

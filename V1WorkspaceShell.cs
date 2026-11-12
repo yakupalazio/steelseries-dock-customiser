@@ -78,7 +78,7 @@ internal sealed partial class PixelStudioForm
         top.Controls.Add(brand);
         top.Controls.Add(new Label
         {
-            Text="OLED STUDIO    •    VERSION 1.1",
+            Text="OLED STUDIO    •    BETA 5",
             ForeColor=UiMuted,Font=new Font("Segoe UI",8.1f,FontStyle.Bold),
             AutoSize=true,Left=21,Top=44
         });
@@ -168,7 +168,7 @@ internal sealed partial class PixelStudioForm
             ColumnCount=1,RowCount=6,Padding=new Padding(18,10,18,10)
         };
         workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute,52));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute,66));
         workspace.RowStyles.Add(new RowStyle(SizeType.Percent,52));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute,47));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute,48));
@@ -182,12 +182,16 @@ internal sealed partial class PixelStudioForm
             ForeColor=UiText,Text="Canlı önizleme"
         };
         modernHint=new Label{
-            Left=5,Top=32,Width=710,Height=16,ForeColor=UiMuted,
+            Left=5,Top=43,Width=710,Height=20,AutoEllipsis=true,
+            ForeColor=UiMuted,
             Font=new Font("Segoe UI",8.3f),
             Text="Seçili moddaki her değişiklik bu gerçekçi dock üzerinde anında görünür."
         };
         titleRow.Controls.Add(modernModeLabel);
         titleRow.Controls.Add(modernHint);
+        titleRow.Resize+=(_,_)=>{
+            modernHint.Width=Math.Max(100,titleRow.ClientSize.Width-10);
+        };
         workspace.Controls.Add(titleRow,0,0);
 
         var stage=new Panel
@@ -200,15 +204,17 @@ internal sealed partial class PixelStudioForm
         stage.Controls.Add(dockPreview);
 
         var photoActions=new FlowLayoutPanel{
-            Dock=DockStyle.Fill,WrapContents=false,AutoScroll=true,
+            Dock=DockStyle.Fill,WrapContents=false,AutoScroll=false,
             BackColor=UiBg,Padding=new Padding(2,4,0,0),Margin=Padding.Empty
         };
         workspace.Controls.Add(photoActions,0,2);
-        modernCustom=ModernButton("Özel tasarım",133);
-        modernOriginal=ModernButton("Orijinal",82);
-        var apply=ModernButton("✓ Uygula",105);
-        modernLive=ModernButton("▶ Canlı",105);
-        var home=ModernButton("↻ Dock Reset",112);
+        // Fits the 1120px minimum application width without horizontal
+        // scrollbars covering actions. All five controls remain reachable.
+        modernCustom=ModernButton("Özel tasarım",109);
+        modernOriginal=ModernButton("Orijinal",75);
+        var apply=ModernButton("✓ Uygula",88);
+        modernLive=ModernButton("▶ Canlı",88);
+        var home=ModernButton("↻ Dock Reset",115);
         photoActions.Controls.AddRange([
             modernCustom,modernOriginal,apply,modernLive,home
         ]);
@@ -221,7 +227,7 @@ internal sealed partial class PixelStudioForm
         var canvasTitle=new Panel{Dock=DockStyle.Fill,BackColor=UiBg};
         canvasTitle.Controls.Add(new Label
         {
-            Text="PİKSEL EDİTÖRÜ  ·  128 × 64",
+            Text="PİKSEL · 128 × 64",
             Font=new Font("Segoe UI Semibold",12.3f,FontStyle.Bold),
             ForeColor=UiText,Left=4,Top=12,AutoSize=true
         });
@@ -627,6 +633,7 @@ internal sealed partial class PixelStudioForm
             var item=combo.Items[e.Index]?.ToString()??"";
             string label=ReferenceEquals(combo,dialStyle)
                 ?(item=="Wheel"?UiLanguage.T("Dairesel tekerlek"):
+                   item=="MiniWheel"?UiLanguage.T("Mini dairesel tekerlek"):
                     UiLanguage.T("Düz çubuk"))
                 :ReferenceEquals(combo,kind)?WidgetLabels.Display(item):
                     UiLanguage.T(item);

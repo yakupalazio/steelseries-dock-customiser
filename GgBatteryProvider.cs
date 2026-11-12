@@ -62,8 +62,14 @@ internal static class GgBatteryProvider
                 if(!device.TryGetProperty("name",out var nameProp))continue;
                 string name=nameProp.GetString()??"";
                 if(!ExpectedNames.Contains(name) ||
-                   !device.TryGetProperty("connected",out var connected) ||
-                   !IsConnected(connected))continue;
+                   !device.TryGetProperty("connected",out var connected))continue;
+                bool headsetConnected=IsConnected(connected);
+                // The base station's spare battery is physically available
+                // even while the headset itself is powered off. Check the
+                // verified base HID collection separately in that case.
+                bool dockPresent=name=="arctis_nova_pro_wireless_tx" &&
+                    (headsetConnected || IsDockPresent());
+                if(!headsetConnected && !dockPresent)continue;
 
                 string relative="v2/device/config/loadout?device="+
                     Uri.EscapeDataString(name)+"&loadoutId="+Uri.EscapeDataString(id);
@@ -74,9 +80,11 @@ internal static class GgBatteryProvider
                        !config.TryGetProperty("statuses",out var statuses) ||
                        !statuses.TryGetProperty("batteryLevels",out var battery))
                         continue;
-                    if(!TryParseBattery(name,battery,DateTimeOffset.Now,out var reading))continue;
-                    found[reading.Kind]=reading;
-                    if(TryParseSpareBattery(name,battery,DateTimeOffset.Now,out var spare))
+                    if(headsetConnected &&
+                       TryParseBattery(name,battery,DateTimeOffset.Now,out var reading))
+                        found[reading.Kind]=reading;
+                    if(dockPresent &&
+                       TryParseSpareBattery(name,battery,DateTimeOffset.Now,out var spare))
                         found["SpareBattery"]=spare;
                 }
                 catch(HttpRequestException){}
@@ -89,6 +97,21 @@ internal static class GgBatteryProvider
         catch(JsonException){}
         catch(InvalidOperationException){}
         return found;
+    }
+
+    private static readonly object presenceLock=new();
+    private static DateTimeOffset lastDockCheck=DateTimeOffset.MinValue;
+    private static bool lastDockPresent;
+    private static bool IsDockPresent()
+    {
+        lock(presenceLock)
+        {
+            if(DateTimeOffset.UtcNow-lastDockCheck<TimeSpan.FromSeconds(10))
+                return lastDockPresent;
+            lastDockCheck=DateTimeOffset.UtcNow;
+            lastDockPresent=FastOledTransport.ValidateAvailable()=="";
+            return lastDockPresent;
+        }
     }
 
     internal static bool TryEngineUri(string? text,out Uri? uri)

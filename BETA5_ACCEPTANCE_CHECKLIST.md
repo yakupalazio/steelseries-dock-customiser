@@ -13,8 +13,9 @@ installation during acceptance.
   `%LOCALAPPDATA%\SteelseriesDockCustomiser-Beta5-Development`.
 - [x] The separate directory initially contains a COPY of the protected
   personal layout; no Beta 4 application settings were modified.
-- [x] Disable all physical OLED writes in dev builds unless launched with
-  `--allow-beta5-hardware-test`. Default smoke tests never pass this flag.
+- [x] UI requires explicit user confirmation before physical Apply/Live.
+  Read-only and visual tests do not write to the hardware. Test-only CLI
+  smoke commands send transient frames and restore OEM ownership.
 - [x] Do not merge into the Beta 4 branch, alter current EXE or publish.
 
 ## 1. ChatMix appearance / wheel (CODE + SELF-TEST COMPLETE)
@@ -33,7 +34,10 @@ installation during acceptance.
 - [x] Flat bar border/fill thickness adjustable.
 - [x] Bold date/time three-level stroke retains readable digit counters.
 - [x] Off-screen dialog screenshots reviewed and footer overlap corrected.
-- [ ] Confirm visible placement and legibility on *real* Nova Pro 128×64 OLED.
+- [ ] Confirm user-customized Game/Chat icon placement visually on
+  the real Nova Pro OLED after multiple changes and physical dial turns.
+- [x] Confirm protected live OLED framebuffer and factory handback on device.
+- [x] Confirm app's Live-mode WinForms activation and clean OEM restoration.
 
 ## 2. Battery discovery / notification (CODE + SELF-TEST COMPLETE)
 
@@ -54,8 +58,10 @@ installation during acceptance.
   provide coarse approximate bands.
 - [ ] Test Galaxy S24+ GATT availability and verify Phone Link reads without
   stale SetupAPI percentage overwriting. Some phones do not expose GATT 180F.
-- [ ] Test GG Aerox/Headset/SpareBattery while swapping headset pack,
-  checking measured reported battery and priority/slot 3 on each screen.
+- [x] Read the dock's spare battery even while the headset is disconnected:
+  live GG check returned 100% spare while the headset slot was unavailable.
+- [ ] Confirm new physical battery swaps, GG Aerox and priority/slot 3
+  in all OLED modes.
 - [ ] Verify reconnect, duplicate-model, unsupported wireless/USB handling.
 
 ## 3. Native header and dial handoff (RESEARCH ONLY)

@@ -519,7 +519,8 @@ internal static class OledRenderer
                 widget.WheelRingThickness,widget.WheelShowGame,widget.WheelShowChat,
                 widget.WheelGameOffsetX,widget.WheelGameOffsetY,
                 widget.WheelChatOffsetX,widget.WheelChatOffsetY,
-                widget.MiniWheelSize);
+                widget.MiniWheelSize,widget.MiniWheelPixels,
+                widget.WheelAutoLabel,widget.WheelCloseEnds);
         }
         else if(widget.DialStyle=="Wheel")
         {

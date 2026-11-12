@@ -61,6 +61,25 @@ internal sealed class DockPreviewPanel : UserControl
     private DateTimeOffset _lastDialReclaim=DateTimeOffset.MinValue;
     private bool _dialReclaimPending,_dialReclaimBusy;
     private bool _liveEnabled,_liveSending;
+    private readonly Queue<BatteryOledAlert.Alert> _pendingBatteryAlerts=new();
+    private BatteryOledAlert.Alert? _batteryAlert;
+    private bool _batteryAlertNeedsRestore;
+
+    public void QueueBatteryAlert(string kind,int percent,string iconKind,
+        bool critical,bool english)
+    {
+        // A notification is a transient live-display event, never a
+        // deferred image replayed when Live is enabled hours later.
+        if(percent is <0 or >20 || IsDisposed || !_liveEnabled)return;
+        var entry=new BatteryOledAlert.Alert(kind,percent,iconKind,
+            critical,english,DateTimeOffset.UtcNow);
+        if(_batteryAlert is null)
+            _batteryAlert=entry;
+        else if(_pendingBatteryAlerts.Count<8)
+            _pendingBatteryAlerts.Enqueue(entry);
+        _forceNextLiveFrame=true;
+        if(_liveEnabled)_=RefreshLiveDock(force:true);
+    }
     private bool _forceNextLiveFrame;
     private int _reconnectFailures;
     private DateTimeOffset _nextReconnect=DateTimeOffset.MinValue;
@@ -159,6 +178,8 @@ internal sealed class DockPreviewPanel : UserControl
     public void InvalidateFrame() => _photoBox.Invalidate();
 
     public bool LiveOutputActive => _liveEnabled;
+    internal bool BatteryAlertActive=>_batteryAlert is not null ||
+        _pendingBatteryAlerts.Count>0 || _batteryAlertNeedsRestore;
     public bool OledWriterActive => _liveEnabled||_hardware.Active;
     public string HardwareStatus => _message.Text;
     public bool FactoryPreviewActive => _factory.Checked;
@@ -187,6 +208,8 @@ internal sealed class DockPreviewPanel : UserControl
     public void OnPhysicalDialEvent()
     {
         if(!_liveEnabled||IsDisposed)return;
+        // An explicit low-battery alert owns all rows for its short duration.
+        if(_batteryAlert is not null)return;
         _forceNextLiveFrame=true;
         _dialTakeoverUntil=DateTimeOffset.UtcNow.AddSeconds(3);
         _lastDialInput=DateTimeOffset.UtcNow;
@@ -477,13 +500,32 @@ internal sealed class DockPreviewPanel : UserControl
         _liveSending=true;
         try
         {
-            using var bitmap=_liveFrameFactory();
+            var now=DateTimeOffset.UtcNow;
+            if(_batteryAlert is { } current && current.Expired(now))
+            {
+                if(_pendingBatteryAlerts.Count>0)
+                {
+                    var next=_pendingBatteryAlerts.Dequeue();
+                    _batteryAlert=next with {Started=now};
+                }
+                else
+                {
+                    _batteryAlert=null;
+                    _batteryAlertNeedsRestore=true;
+                }
+                _lastLiveFrame=null; // force transition even if same glyphs
+            }
+            bool warningActive=_batteryAlert is not null;
+            bool protectHeader=warningActive?false:LiveHeaderProtected;
+            using var bitmap=warningActive
+                ?BatteryOledAlert.Render(_batteryAlert!,now)
+                :_liveFrameFactory();
             var pixels=new byte[128*64];
             int ptr=0;
-            for(int y=LiveHeaderProtected?10:0;y<64;y++)
+            for(int y=protectHeader?10:0;y<64;y++)
             for(int x=0;x<128;x++)
                 pixels[ptr++]=bitmap.GetPixel(x,y).R>127?(byte)1:(byte)0;
-            string stamp=(LiveHeaderProtected?"protected:":"full:")+
+            string stamp=(protectHeader?"protected:":"full:")+
                 Convert.ToHexString(SHA256.HashData(pixels[..ptr]));
             // OLED report 0x93 already overwrites the display RAM, but the
             // firmware may draw its volume animation afterward. Reassert the
@@ -491,7 +533,15 @@ internal sealed class DockPreviewPanel : UserControl
             if(NeedsReassert(_lastLiveFrame,stamp,_lastLiveWrite,
                 DateTimeOffset.UtcNow,force||_forceNextLiveFrame))
             {
-                await _hardware.SendLiveFrameAsync(bitmap,LiveHeaderProtected);
+                if(_batteryAlertNeedsRestore)
+                {
+                    // One 0x95 hand-back restores the firmware-owned top
+                    // battery rows, followed by the user's custom frame.
+                    // Never repeat 0x95 on a periodic live timer.
+                    await _hardware.ReclaimLiveFrameAsync(bitmap,protectHeader);
+                    _batteryAlertNeedsRestore=false;
+                }
+                else await _hardware.SendLiveFrameAsync(bitmap,protectHeader);
                 _lastLiveFrame=stamp;
                 _lastLiveWrite=DateTimeOffset.UtcNow;
                 _forceNextLiveFrame=false;

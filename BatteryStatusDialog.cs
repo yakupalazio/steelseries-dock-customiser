@@ -77,35 +77,24 @@ internal sealed class BatteryStatusDialog : Form
         AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,
         BackgroundColor=Color.White
     };
-    private readonly ListBox priority=new(){Left=17,Top=292,Width=355,Height=164};
+    private readonly ListBox priority=new(){
+        Left=17,Top=292,Width=355,Height=164,
+        DrawMode=DrawMode.OwnerDrawFixed,ItemHeight=24
+    };
     private readonly Label active=new(){Left=402,Top=329,Width=450,Height=73};
     private readonly Label lastUpdated=new(){Left=150,Top=234,Width=700,Height=27};
-    private readonly DarkCheckBox dualSense=new()
-    {
-        Left=403,Top=412,Width=450,Text="Kontrolcü bağlandığında otomatik öne çıkar"
-    };
-    private readonly DarkCheckBox experimental=new()
-    {
-        Left=17,Top=482,Width=790,Text="Deneysel DualSense HID pil okuması (salt-okunur)"
-    };
-    private readonly DarkCheckBox adb=new()
-    {
-        Left=17,Top=509,Width=790,Text="Android ADB pil kaynağı (isteğe bağlı)"
-    };
+    // Sources are selected by verified connections automatically.
+    // No redundant HID/ADB/priority-override checkboxes.
     private readonly DarkCheckBox lowWarning=new(){
-        Left=17,Top=614,Width=400,Height=28,
+        Left=17,Top=517,Width=400,Height=28,
         Text="Düşük pil uyarıları"};
     private readonly DarkNumberBox warningPercent=new(){
-        Left=500,Top=614,Width=70,Minimum=1,Maximum=99};
+        Left=500,Top=517,Width=100,Minimum=1,Maximum=99};
     private readonly DarkNumberBox criticalPercent=new(){
-        Left=674,Top=614,Width=70,Minimum=1,Maximum=99};
+        Left=720,Top=517,Width=100,Minimum=1,Maximum=99};
     private readonly DarkNumberBox warningRepeat=new(){
-        Left=500,Top=650,Width=86,Minimum=5,Maximum=240};
-    private readonly DarkCheckBox minimizePhoneLink=new()
-    {
-        Left=17,Top=536,Width=790,
-        Text="Phone Link'i gerekirse açıp küçült (pencereyi kapalı tutmaya alternatif)"
-    };
+        Left=500,Top=555,Width=100,Minimum=5,Maximum=240};
+    // The app never opens Phone Link without an explicit user action.
 
     public BatteryStatusDialog(BatteryPreferences preferences,
         Func<BatterySnapshot> getSnapshot,Func<Task> update,Action apply)
@@ -113,8 +102,8 @@ internal sealed class BatteryStatusDialog : Form
         prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
         Text="Pil cihazları — öncelik sıralaması";
         StartPosition=FormStartPosition.CenterParent;
-        ClientSize=new Size(900,875);
-        MinimumSize=new Size(900,875);
+        ClientSize=new Size(900,760);
+        MinimumSize=new Size(900,760);
         AutoScroll=true;
         Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
@@ -140,6 +129,17 @@ internal sealed class BatteryStatusDialog : Form
             Text="Öncelik sırası (yukarıdaki üç uygun cihaz):"
         });
         Controls.Add(priority);
+        priority.DrawItem+=(_,e)=>{
+            if(e.Index<0)return;
+            e.DrawBackground();
+            var kind=priority.Items[e.Index]?.ToString()??"";
+            TextRenderer.DrawText(e.Graphics,BatteryPriority.DisplayName(kind),
+                priority.Font,new Rectangle(e.Bounds.Left+8,e.Bounds.Top,
+                    e.Bounds.Width-12,e.Bounds.Height),
+                e.State.HasFlag(DrawItemState.Selected)
+                    ?Color.FromArgb(72,194,238):Color.FromArgb(235,242,248),
+                TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+        };
         foreach(var kind in BatteryPriority.Sanitize(prefs.PriorityKinds))
             priority.Items.Add(kind);
         priority.SelectedIndex=0;
@@ -170,35 +170,11 @@ internal sealed class BatteryStatusDialog : Form
         Controls.Add(up);Controls.Add(down);
         active.Left=470;active.Top=290;active.Width=384;
         Controls.Add(active);
-        dualSense.Checked=prefs.AutoDualSense;
-        dualSense.Left=403;dualSense.Top=403;
-        Controls.Add(dualSense);
         Controls.Add(new Label{
-            Left=17,Top=459,Width=834,Height=22,
-            Text="Pil kaynakları 10 saniyede bir; bağlantı olayları mümkünse anında.",
-            ForeColor=Color.DarkSlateGray
-        });
-        experimental.Checked=prefs.ExperimentalControllerHid;
-        adb.Checked=prefs.UseAdbPhoneBattery;
-        // Do not open the phone app automatically, even if an older profile
-        // had the retired auto-minimize option enabled.
-        minimizePhoneLink.Checked=false;
-        minimizePhoneLink.Enabled=false;
-        minimizePhoneLink.Visible=false;
-        Controls.Add(experimental);Controls.Add(adb);
-        var phoneGuide=new DarkButton{
-            Left=17,Top=538,Width=300,Height=30,
-            Text="Telefon pilini arka planda bağla"};
-        phoneGuide.Click+=(_,_)=>{
-            using var setup=new PhoneBatterySetupDialog(adb.Checked);
-            setup.ShowDialog(this);
-        };
-        Controls.Add(phoneGuide);
-        Controls.Add(new Label{
-            Left=17,Top=569,Width=832,Height=42,
-            Text="Phone Link veri kaynağı: yalnızca pil durumunun erişilebilirlik metni. "+
-                "Otomatik pencere açma kapalıdır. Erişilebilir pil etiketi yoksa --% görünür. "+
-                "Arka planda pil okuması için isteğe bağlı yetkilendirilmiş ADB kullanılabilir.",
+            Left=17,Top=456,Width=834,Height=47,
+            Text="Kaynaklar otomatik seçilir: GG, Windows BLE/GATT, Phone Link, bağlı kontrolcü ve "+
+                "önceden yetkilendirilmiş ADB. Her 10 saniyede güncellenir; "+
+                "güvenilir olmayan yüzdeler OLED'e çıkmaz.",
             ForeColor=Color.DarkSlateGray
         });
         lowWarning.Checked=prefs.EnableLowBatteryWarnings;
@@ -209,16 +185,15 @@ internal sealed class BatteryStatusDialog : Form
         Controls.Add(criticalPercent);
         Controls.Add(warningRepeat);
         Controls.Add(new Label{
-            Text="Uyarı tekrarı (dakika)",Left=265,Top=653,Width=215,Height=24});
-        Controls.Add(new Label{Text="Uyarı %",Left=440,Top=617,Width=55,Height=21});
-        Controls.Add(new Label{Text="Kritik %",Left=614,Top=617,Width=56,Height=21});
-        var applyButton=new DarkButton{Left=649,Top=718,Width=207,Height=32,
+            Text="Uyarı tekrarı (dakika)",Left=265,Top=558,Width=215,Height=24});
+        Controls.Add(new Label{Text="Uyarı %",Left=420,Top=520,Width=75,Height=21});
+        Controls.Add(new Label{Text="Kritik %",Left=630,Top=520,Width=75,Height=21});
+        var applyButton=new DarkButton{Left=649,Top=627,Width=207,Height=36,
             Text="Öncelikleri uygula"};
         applyButton.Click+=(_,_)=>{
             prefs.PriorityKinds=priority.Items.Cast<string>().ToArray();
-            prefs.AutoDualSense=dualSense.Checked;
-            prefs.ExperimentalControllerHid=experimental.Checked;
-            prefs.UseAdbPhoneBattery=adb.Checked;
+            // Older source toggles are deliberately not exposed: the app
+            // chooses already-authorized, connected providers itself.
             prefs.EnableLowBatteryWarnings=lowWarning.Checked;
             prefs.LowBatteryWarningPercent=(int)warningPercent.Value;
             prefs.CriticalBatteryWarningPercent=(int)criticalPercent.Value;
@@ -231,7 +206,7 @@ internal sealed class BatteryStatusDialog : Form
         };
         Controls.Add(applyButton);
         priority.SelectedIndexChanged+=(_,_)=>ShowActive();
-        dualSense.CheckedChanged+=(_,_)=>ShowActive();
+        // Priority order alone decides which devices occupy the OLED.
         UpdateRows();
 
         // Embedded Settings page: maintain the studio's dark visual language.
@@ -309,8 +284,7 @@ internal sealed class BatteryStatusDialog : Form
     private void ShowActive()
     {
         var local=new BatteryPreferences{
-            PriorityKinds=priority.Items.Cast<string>().ToArray(),
-            AutoDualSense=dualSense.Checked
+            PriorityKinds=priority.Items.Cast<string>().ToArray()
         };
         string[] display=BatteryPriority.SelectThree(snapshotGetter(),local);
         active.Text=UiLanguage.T("Şu anda seçilenler:\n")+string.Join("  ·  ",

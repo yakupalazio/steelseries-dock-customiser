@@ -49,7 +49,6 @@ internal static class BatteryPriority
                 .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase))
                 .OrderBy(k=>k,StringComparer.Ordinal))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(kind=>kind!="DualSense" || preferences.AutoDualSense)
             .Where(kind=>IsCurrent(snapshot[kind],now))
             .Take(3).ToArray();
 

@@ -1,13 +1,13 @@
 using System;
 using System.IO;
-using System.Linq;
+// Only personal settings isolation belongs here.
 
 namespace SteelseriesDockCustomiser;
 
 /// <summary>
 /// Beta 5 engineering builds never use Beta 4's user settings directory.
-/// Physical writes to the dock require an explicit hardware-test switch.
-/// These guards must be reviewed before preparing any release package.
+/// Hardware output is initiated from an explicit, user-confirmed OLED UI
+/// action; data files are always isolated from the installed Beta 4 build.
 /// </summary>
 internal static class Beta5Sandbox
 {
@@ -15,7 +15,4 @@ internal static class Beta5Sandbox
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SteelseriesDockCustomiser-Beta5-Development");
 
-    internal static bool AllowPhysicalDockWrites =>
-        Environment.GetCommandLineArgs().Contains("--allow-beta5-hardware-test",
-            StringComparer.OrdinalIgnoreCase);
 }

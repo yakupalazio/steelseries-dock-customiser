@@ -12,9 +12,9 @@ internal sealed class IconEditorDialog : Form
     private readonly ComboBox iconNames=new(){Left=20,Top=48,Width=205,DropDownStyle=ComboBoxStyle.DropDownList};
     private readonly PictureBox pixelGrid=new(){Left=20,Top=93,Width=Cell*MaxCells,Height=Cell*MaxCells,BackColor=Color.FromArgb(25,28,31),BorderStyle=BorderStyle.FixedSingle};
     private readonly PictureBox preview=new(){Left=488,Top=112,Width=145,Height=145,BackColor=Color.Black,BorderStyle=BorderStyle.FixedSingle};
-    private readonly DarkNumberBox iconWidth=new(){Minimum=4,Maximum=20,Width=75};
-    private readonly DarkNumberBox iconHeight=new(){Minimum=4,Maximum=20,Width=75};
-    private readonly Label info=new(){Left=20,Top=564,Width=615,Height=35,Text="Sol tık: piksel aç  |  Sağ tık: sil  |  Ctrl+Z / Ctrl+Y: geri al / ileri al"};
+    private readonly DarkNumberBox iconWidth=new(){Minimum=4,Maximum=20,Width=100};
+    private readonly DarkNumberBox iconHeight=new(){Minimum=4,Maximum=20,Width=100};
+    private readonly Label info=new(){Left=20,Top=610,Width=615,Height=45,Text="Sol tık: piksel aç  |  Sağ tık: sil  |  Ctrl+Z / Ctrl+Y: geri al / ileri al"};
     private readonly Stack<string[]> undo=new();
     private readonly Stack<string[]> redo=new();
     private bool[,] pixels=new bool[20,20];
@@ -26,8 +26,8 @@ internal sealed class IconEditorDialog : Form
     public IconEditorDialog(Action update)
     {
         onSaved=update;
-        Text="İkon Düzenleyici — Steelseries Dock Customiser v0.9";
-        ClientSize=new Size(664,615);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;
+        Text="İkon Atölyesi — Steelseries Dock Customiser Beta 5";
+        ClientSize=new Size(664,682);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;
         StartPosition=FormStartPosition.CenterParent;KeyPreview=true;
         Font=new Font("Segoe UI",10);
         Controls.Add(new Label{Left=20,Top=12,Width=600,Height=28,Font=new Font("Segoe UI",13,FontStyle.Bold),
@@ -37,11 +37,12 @@ internal sealed class IconEditorDialog : Form
         iconNames.Format+=(_,e)=>
         {
             if(e.ListItem is not string name)return;
-            e.Value=UiLanguage.English?name:name switch
+            e.Value=name switch
             {
-                "Game"=>"Oyun",
-                "Chat"=>"Sohbet",
-                "Charging"=>"Şarj oluyor",
+                "DualSense"=>UiLanguage.English?"Controller":"Kontrolcü",
+                "Game"=>UiLanguage.English?"Game":"Oyun",
+                "Chat"=>UiLanguage.English?"Chat":"Sohbet",
+                "Charging"=>UiLanguage.English?"Charging":"Şarj oluyor",
                 _=>name
             };
         };
@@ -56,18 +57,18 @@ internal sealed class IconEditorDialog : Form
         pixelGrid.MouseLeave+=(_,_)=>draw=false;
         var note=new Label{Left=488,Top=88,Width=160,Text="1× / 8× önizleme"};
         Controls.Add(note);
-        var sizeRow=new FlowLayoutPanel{Left=485,Top=278,Width=168,Height=84,WrapContents=true};
+        var sizeRow=new FlowLayoutPanel{Left=485,Top=278,Width=168,Height=108,WrapContents=true};
         sizeRow.Controls.AddRange([new Label{AutoSize=true,Text="Genişlik:"},iconWidth,
             new Label{AutoSize=true,Text="Yükseklik:"},iconHeight]);
         iconWidth.ValueChanged+=(_,_)=>ResizeIcon();
         iconHeight.ValueChanged+=(_,_)=>ResizeIcon();
         Controls.Add(sizeRow);
-        var hint=new Label{Left=488,Top=383,Width=163,Height=112,
+        var hint=new Label{Left=488,Top=403,Width=163,Height=121,
             Text="Kaydettiğinde ikonu hem editör hem de Dock Preview kullanır.\n\nDeğişiklikler yalnızca bilgisayarında tutulur.",
             ForeColor=Color.DarkSlateGray};
         Controls.Add(hint);
 
-        var buttons=new FlowLayoutPanel{Left=20,Top=533,Width=615,Height=42,WrapContents=false};
+        var buttons=new FlowLayoutPanel{Left=20,Top=557,Width=615,Height=42,WrapContents=false};
         Button save=ButtonOf("Kaydet",78),reset=ButtonOf("Orijinal",80),clear=ButtonOf("Temizle",72);
         Button copy=ButtonOf("Kopyala",75),paste=ButtonOf("Yapıştır",77);
         Button backwards=ButtonOf("Geri al",76),forwards=ButtonOf("İleri al",72);
@@ -91,6 +92,12 @@ internal sealed class IconEditorDialog : Form
         iconNames.SelectedIndex=0;
         UiSkin.ApplyDark(this);
         UiLanguage.ApplyTree(this);
+    }
+
+    internal void SelectIconForCapture(string name)
+    {
+        if(IconLibrary.Names.Contains(name))
+            iconNames.SelectedItem=name;
     }
 
     private static Button ButtonOf(string label,int width)=>new DarkButton(){Text=label,Width=width,Height=31};

@@ -45,15 +45,19 @@ internal static class BatterySources
         // Phone Link's accessibility status is available while minimized.
         // Do not display old Bluetooth PnP percentages when UIA is unavailable.
         BatteryReading? phone=null;
-        if(enableAdbPhone) phone=await AdbPhoneBatteryProvider.ReadAsync();
-        phone ??= await PhoneLinkBatteryProvider.TryReadAsync(false); // Never focus Phone Link.
+        // Automatically prefer the low-overhead Phone Link source. Only
+        // query an already-installed, previously authorized ADB connection
+        // if the usual source is unavailable. Nothing is installed/prompted.
+        phone=await PhoneLinkBatteryProvider.TryReadAsync(false);
+        if(phone is null && AdbPhoneBatteryProvider.Installed)
+            phone=await AdbPhoneBatteryProvider.ReadAsync();
         if(phone is not null)
             snapshot.Values["Phone"] = phone;
         else
             snapshot.Values["Phone"]=new BatteryReading("Phone",null,
                 "Phone Link (erişilemiyor)",
                 PhoneLinkBatteryProvider.LastDiagnostic,DateTimeOffset.Now);
-        if(readDualSenseHid && !snapshot["DualSense"].Available)
+        if(!snapshot["DualSense"].Available)
         {
             int? estimated=await DualSenseReadOnly.TryBatteryPercentAsync();
             if(estimated is int value)

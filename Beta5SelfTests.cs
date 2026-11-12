@@ -36,9 +36,38 @@ internal static class Beta5SelfTests
            !BatteryPreferences.FilePath.StartsWith(
                 Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
             throw new Exception("Beta 5 accidentally shares Beta 4's settings");
-        if(!Beta5Sandbox.AllowPhysicalDockWrites &&
-           string.IsNullOrWhiteSpace(new DockHardwareTest().Validate()))
-            throw new Exception("Beta 5 physical OLED write guard is not active");
+        // Only validation here: no OLED HID sends during smoke tests.
+        // Live and static Apply require their own visible UI consent dialog.
+        var hardwareStatus=new DockHardwareTest().Validate();
+        if(hardwareStatus is null)
+            throw new Exception("Hardware validation must return a status");
+        var at=DateTimeOffset.UtcNow;
+        var low=new BatteryOledAlert.Alert("Mouse",20,"Mouse",false,false,at);
+        var critical=new BatteryOledAlert.Alert("Mouse",10,"Mouse",true,true,at);
+        if(low.Duration!=TimeSpan.FromSeconds(4)||
+           low.Expired(at.AddMilliseconds(3999))||
+           !low.Expired(at.AddMilliseconds(4000))||
+           critical.Duration!=TimeSpan.FromMilliseconds(5500)||
+           !critical.Lit(at.AddMilliseconds(999))||
+           critical.Lit(at.AddMilliseconds(1000))||
+           critical.Lit(at.AddMilliseconds(1499))||
+           !critical.Lit(at.AddMilliseconds(1500))||
+           !critical.Expired(at.AddMilliseconds(5500)))
+            throw new Exception("Full-screen battery warning timing wrong");
+        using(var light=BatteryOledAlert.Render(low,at))
+        using(var blink=BatteryOledAlert.Render(critical,at.AddMilliseconds(1100)))
+        using(var alarm=BatteryOledAlert.Render(critical,at))
+        {
+            int white=0,off=0,criticalWhite=0;
+            for(int y=0;y<64;y++)for(int x=0;x<128;x++)
+            {
+                if(Lit(light,x,y))white++;
+                if(Lit(blink,x,y))off++;
+                if(Lit(alarm,x,y))criticalWhite++;
+            }
+            if(white<65||criticalWhite<65||off!=0)
+                throw new Exception("Battery OLED alert pixels or blink invalid");
+        }
         using(var neutral=DrawDial("Bar",100,100))
         using(var game=DrawDial("Bar",100,0))
         using(var chat=DrawDial("Bar",0,100))
@@ -165,6 +194,30 @@ internal static class Beta5SelfTests
             }
             if(rotation==0 && dx==0 && count==0)
                 throw new Exception("Large ChatMix icon disappeared");
+        }
+        // Manual Game/Chat offsets must actually move the logo around its
+        // own ring sector; they cannot all collapse to one fixed endpoint.
+        {
+            var track=new bool[8192];
+            var occupied=new bool[8192];
+            WheelArtwork.Draw(track,occupied,50,12,null,50,
+                DialView.ChatMix,showGame:false,showChat:false);
+            foreach(var (name,gameSide,azimuth) in new[]{
+                ("Game",true,WheelArtwork.StartAngle+WheelArtwork.Sweep*.75d),
+                ("Chat",false,WheelArtwork.StartAngle+WheelArtwork.Sweep*.25d)
+            })
+            {
+                var first=WheelArtwork.EndpointIconPosition(
+                    50,12,name,azimuth,occupied,
+                    offsetX:-18,startAngle:WheelArtwork.StartAngle,
+                    gameSide:gameSide);
+                var second=WheelArtwork.EndpointIconPosition(
+                    50,12,name,azimuth,occupied,
+                    offsetX:18,startAngle:WheelArtwork.StartAngle,
+                    gameSide:gameSide);
+                if(first.X<0||second.X<0||first==second)
+                    throw new Exception(name+" manual drag did not change position");
+            }
         }
         string id=BleBatteryProvider.StableKind("test-device-id-1");
         if(!id.StartsWith("Ble:")||id!=BleBatteryProvider.StableKind("test-device-id-1")||

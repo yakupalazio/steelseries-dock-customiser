@@ -32,14 +32,19 @@ internal sealed class WheelArtworkDialog : Form
     private readonly ComboBox dragTarget=new(){
         Width=104,Height=27,DropDownStyle=ComboBoxStyle.DropDownList};
     private bool draggingIcon;
-    private readonly DarkCheckBox showGame=new(){Width=190,Height=26,Checked=true};
-    private readonly DarkCheckBox showChat=new(){Width=190,Height=26,Checked=true};
+    private readonly bool compact;
+    private readonly DarkNumberBox compactSize=new(){
+        Minimum=70,Maximum=100,Width=100
+    };
+    public int CompactSize {get;private set;}=100;
+    private readonly DarkCheckBox showGame=new(){Width=212,Height=26,Checked=true};
+    private readonly DarkCheckBox showChat=new(){Width=212,Height=26,Checked=true};
     private readonly DarkCheckBox closeArcEnds=new(){Width=218,Height=28,Checked=true};
     private readonly DarkNumberBox ringThickness=new(){Minimum=1,Maximum=7,Width=92,Value=3};
-    private readonly DarkNumberBox gameDX=new(){Minimum=-45,Maximum=45,Width=100};
-    private readonly DarkNumberBox gameDY=new(){Minimum=-45,Maximum=45,Width=100};
-    private readonly DarkNumberBox chatDX=new(){Minimum=-45,Maximum=45,Width=100};
-    private readonly DarkNumberBox chatDY=new(){Minimum=-45,Maximum=45,Width=100};
+    private readonly DarkNumberBox gameDX=new(){Minimum=-64,Maximum=64,Width=100};
+    private readonly DarkNumberBox gameDY=new(){Minimum=-64,Maximum=64,Width=100};
+    private readonly DarkNumberBox chatDX=new(){Minimum=-64,Maximum=64,Width=100};
+    private readonly DarkNumberBox chatDY=new(){Minimum=-64,Maximum=64,Width=100};
     private readonly DarkCheckBox automaticLabel=new(){
         Width=218,Height=32,Checked=true,AutoSize=false};
 
@@ -61,33 +66,38 @@ internal sealed class WheelArtworkDialog : Form
 
     public WheelArtworkDialog(string? saved,bool labelEnabled=true,int gapAngle=0,
         bool followModeIcons=true,int gameX=0,int gameY=0,int chatX=0,int chatY=0,
-        bool showGameLogo=true,bool showChatLogo=true,bool closeRingEnds=true,int thickness=3)
+        bool showGameLogo=true,bool showChatLogo=true,bool closeRingEnds=true,int thickness=3,
+        bool compact=false,int sizePercent=100)
     {
+        this.compact=compact;
+        CompactSize=Math.Clamp(sizePercent,70,100);
         pixels=WheelArtwork.Resolve(saved).ToCharArray();
         initialArtwork=WheelArtwork.IsValid(saved)?saved!:"";
         Artwork=initialArtwork;
         AutoLabel=labelEnabled;
         GapAngle=Math.Clamp(gapAngle,-180,180);
-        FollowModeIcons=followModeIcons;
-        GameDX=Math.Clamp(gameX,-45,45);
-        GameDY=Math.Clamp(gameY,-45,45);
-        ChatDX=Math.Clamp(chatX,-45,45);
-        ChatDY=Math.Clamp(chatY,-45,45);
+        FollowModeIcons=true; // Channel positions always follow rotation.
+        GameDX=Math.Clamp(gameX,-64,64);
+        GameDY=Math.Clamp(gameY,-64,64);
+        ChatDX=Math.Clamp(chatX,-64,64);
+        ChatDY=Math.Clamp(chatY,-64,64);
         ShowGameLogo=showGameLogo;
         ShowChatLogo=showChatLogo;
         CloseRingEnds=closeRingEnds;
         RingThickness=Math.Clamp(thickness,1,7);
-        Text=UiLanguage.T("Tekerlek tasarım atölyesi");
+        Text=compact?UiLanguage.T("Mini tekerlek tasarım atölyesi"):
+            UiLanguage.T("Tekerlek tasarım atölyesi");
         StartPosition=FormStartPosition.CenterParent;
         FormBorderStyle=FormBorderStyle.FixedDialog;
         MaximizeBox=false;MinimizeBox=false;
-        ClientSize=new Size(758,818);
+        ClientSize=new Size(758,850);
         BackColor=Color.FromArgb(13,18,26);
         ForeColor=Color.FromArgb(235,242,248);
         Font=new Font("Segoe UI",9.3f);
 
         Controls.Add(new Label{
-            Text=UiLanguage.T("45 × 42 OLED PİKSELİ  •  TEKERLEK TASARIMI"),
+            Text=compact?UiLanguage.T("MİNİ TEKERLEK  •  PİKSEL ATÖLYESİ"):
+                UiLanguage.T("45 × 42 OLED PİKSELİ  •  TEKERLEK TASARIMI"),
             Font=new Font("Segoe UI Semibold",14,FontStyle.Bold),
             ForeColor=Color.FromArgb(72,194,238),
             Left=24,Top=18,Width=700,Height=32});
@@ -96,6 +106,7 @@ internal sealed class WheelArtworkDialog : Form
         overview.Paint+=PaintOverview;
         overview.MouseDown+=(_,e)=>{
             if(e.Button!=MouseButtons.Left || mode.SelectedIndex!=1)return;
+            SelectIconAt(e);
             draggingIcon=true;
             MoveIconOnOverview(e);
         };
@@ -211,9 +222,23 @@ internal sealed class WheelArtworkDialog : Form
         showGame.CheckedChanged+=(_,_)=>{ShowGameLogo=showGame.Checked;canvas.Invalidate();};
         Controls.Add(showGame);
         showChat.Text=UiLanguage.T("Chat logosunu göster");
-        showChat.Left=220;showChat.Top=624;showChat.Checked=ShowChatLogo;
+        showChat.Left=251;showChat.Top=624;showChat.Checked=ShowChatLogo;
         showChat.CheckedChanged+=(_,_)=>{ShowChatLogo=showChat.Checked;canvas.Invalidate();};
         Controls.Add(showChat);
+        if(compact)
+        {
+            Controls.Add(new Label{
+                Text=UiLanguage.T("Mini boyut %"),Left=24,Top=662,
+                Width=124,Height=24,
+                ForeColor=Color.FromArgb(151,169,187)});
+            compactSize.Left=150;compactSize.Top=659;
+            compactSize.Value=CompactSize;
+            compactSize.ValueChanged+=(_,_)=>{
+                CompactSize=(int)compactSize.Value;
+                canvas.Invalidate();overview.Invalidate();
+            };
+            Controls.Add(compactSize);
+        }
 
         var reset=Button(UiLanguage.T("Orijinal tasarıma dön"),right,536,218);
         reset.Click+=(_,_)=>
@@ -244,20 +269,20 @@ internal sealed class WheelArtworkDialog : Form
         overview.Left=500;overview.Top=644;
         Controls.Add(overview);
         Controls.Add(new Label{
-            Text=UiLanguage.T("Sürüklenen logo:"),Left=24,Top=725,
+            Text=UiLanguage.T("Sürüklenen logo:"),Left=24,Top=749,
             Width=173,Height=26,ForeColor=Color.FromArgb(151,169,187)});
         dragTarget.Items.AddRange(["Game","Chat"]);
-        dragTarget.SelectedIndex=0;dragTarget.Left=190;dragTarget.Top=722;
+        dragTarget.SelectedIndex=0;dragTarget.Left=190;dragTarget.Top=745;
         Controls.Add(dragTarget);
 
         Controls.Add(new Label{
             Text=UiLanguage.T("Sol tık: seçilen piksel  •  Sağ tık: sil\nMavi katman, ses/ChatMix ile hareket eder."),
             ForeColor=Color.FromArgb(151,169,187),
-            Left=24,Top=677,Width=452,Height=42});
-        var cancel=Button(UiLanguage.T("Vazgeç"),500,767,100);
+            Left=24,Top=703,Width=452,Height=42});
+        var cancel=Button(UiLanguage.T("Vazgeç"),500,794,100);
         cancel.DialogResult=DialogResult.Cancel;
         Controls.Add(cancel);
-        var save=Button(UiLanguage.T("Kaydet"),610,767,108);
+        var save=Button(UiLanguage.T("Kaydet"),610,794,108);
         save.BackColor=Color.FromArgb(72,194,238);
         save.ForeColor=Color.FromArgb(13,18,26);
         save.Click+=(_,_)=>
@@ -272,6 +297,7 @@ internal sealed class WheelArtworkDialog : Form
             ShowGameLogo=showGame.Checked;ShowChatLogo=showChat.Checked;
             CloseRingEnds=closeArcEnds.Checked;
             RingThickness=(int)ringThickness.Value;
+            CompactSize=(int)compactSize.Value;
             DialogResult=DialogResult.OK;
             Close();
         };
@@ -297,6 +323,36 @@ internal sealed class WheelArtworkDialog : Form
         canvas.Invalidate();
     }
 
+    private void SelectIconAt(MouseEventArgs e)
+    {
+        int x=Math.Clamp((int)Math.Round(e.X*128d/overview.ClientSize.Width),0,127);
+        int y=Math.Clamp((int)Math.Round(e.Y*64d/overview.ClientSize.Height),10,63);
+        int point=y*128+x;
+        bool[] Ring(bool game,bool chat)
+        {
+            var px=new bool[8192];var mask=new bool[8192];
+            if(compact)
+                MiniWheelArtwork.Draw(px,mask,9,15,sample.Value,DialView.ChatMix,
+                    GapAngle,RingThickness,game,chat,GameDX,GameDY,ChatDX,ChatDY,
+                    CompactSize,artworkEdited?new string(pixels):initialArtwork,
+                    automaticLabel.Checked,CloseRingEnds);
+            else
+                WheelArtwork.Draw(px,mask,1,10,
+                    artworkEdited?new string(pixels):initialArtwork,
+                    sample.Value,DialView.ChatMix,automaticLabel.Checked,GapAngle,
+                    null,false,true,GameDX,GameDY,ChatDX,ChatDY,game,chat,
+                    CloseRingEnds,RingThickness);
+            return px;
+        }
+        var baseFrame=Ring(false,false);
+        var gameFrame=Ring(true,false);
+        var chatFrame=Ring(false,true);
+        // Clicking a visible sprite picks the correct channel automatically.
+        // Otherwise retain the user's explicit Game/Chat selector.
+        if(gameFrame[point]&&!baseFrame[point])dragTarget.SelectedIndex=0;
+        else if(chatFrame[point]&&!baseFrame[point])dragTarget.SelectedIndex=1;
+    }
+
     private void MoveIconOnOverview(MouseEventArgs e)
     {
         bool game=dragTarget.SelectedIndex==0;
@@ -305,10 +361,14 @@ internal sealed class WheelArtworkDialog : Form
         var sprite=IconLibrary.GetCurrent(game?"Game":"Chat");
         double angle=(WheelArtwork.StartAngle+GapAngle+
             WheelArtwork.Sweep*(game ? 0.75d : 0.25d))*Math.PI/180d;
-        double baseX=1+WheelArtwork.CenterX+24*Math.Cos(angle)-sprite[0].Length/2d;
-        double baseY=10+WheelArtwork.CenterY+24*Math.Sin(angle)-sprite.Length/2d;
-        int dx=Math.Clamp((int)Math.Round(px-sprite[0].Length/2d-baseX),-45,45);
-        int dy=Math.Clamp((int)Math.Round(py-sprite.Length/2d-baseY),-45,45);
+        double size=compact?CompactSize/100d:1d;
+        double radius=compact?18*size:24d;
+        double baseX=(compact?9+MiniWheelArtwork.CenterX:
+            1+WheelArtwork.CenterX)+radius*Math.Cos(angle)-sprite[0].Length/2d;
+        double baseY=(compact?15+MiniWheelArtwork.CenterY:
+            10+WheelArtwork.CenterY)+radius*Math.Sin(angle)-sprite.Length/2d;
+        int dx=Math.Clamp((int)Math.Round(px-sprite[0].Length/2d-baseX),-64,64);
+        int dy=Math.Clamp((int)Math.Round(py-sprite.Length/2d-baseY),-64,64);
         if(game){gameDX.Value=dx;gameDY.Value=dy;}
         else {chatDX.Value=dx;chatDY.Value=dy;}
         // Renderer performs nearest-valid placement within the own arc,
@@ -342,7 +402,14 @@ internal sealed class WheelArtworkDialog : Form
         using var bitmap=new Bitmap(128,64);
         var pixelsBuffer=new bool[128*64];
         var coverageBuffer=new bool[128*64];
-        WheelArtwork.Draw(pixelsBuffer,coverageBuffer,1,10,
+        if(compact)
+            MiniWheelArtwork.Draw(pixelsBuffer,coverageBuffer,9,15,sample.Value,
+                mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
+                GapAngle,RingThickness,ShowGameLogo,ShowChatLogo,
+                GameDX,GameDY,ChatDX,ChatDY,CompactSize,
+                artworkEdited?new string(pixels):initialArtwork,
+                automaticLabel.Checked,CloseRingEnds);
+        else WheelArtwork.Draw(pixelsBuffer,coverageBuffer,1,10,
             artworkEdited?new string(pixels):initialArtwork,sample.Value,
             mode.SelectedIndex==1?DialView.ChatMix:DialView.Volume,
             automaticLabel.Checked,GapAngle,null,false,

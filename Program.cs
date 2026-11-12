@@ -377,6 +377,155 @@ internal static class Program
             }
             return;
         }
+        if(args.Contains("--oled-alert-ui-smoke"))
+        {
+            // End-to-end WinForms scheduler acceptance: both alert states
+            // must finish, OEM header must be reclaimed once and ordinary
+            // Live must remain active until user explicitly stops it.
+            ApplicationConfiguration.Initialize();
+            Application.SetColorMode(SystemColorMode.Dark);
+            using var host=new Form{
+                Width=600,Height=440,ShowInTaskbar=false,
+                StartPosition=FormStartPosition.Manual,
+                Location=new System.Drawing.Point(-5000,-5000)
+            };
+            using var panel=new DockPreviewPanel(
+                ()=>OledRenderer.Render(
+                    StudioProject.Defaults(ScreenMode.Idle),
+                    false,true,false,protectHeader:true,
+                    layoutMode:ScreenMode.Idle));
+            host.Controls.Add(panel);
+            host.Shown+=async (_,_)=>{
+                try
+                {
+                    await panel.StartLiveOnLaunchAsync();
+                    if(!panel.LiveOutputActive)
+                        throw new InvalidOperationException(
+                            "Cannot start Live: "+panel.HardwareStatus);
+                    panel.QueueBatteryAlert("Mouse",20,"Mouse",false,false);
+                    panel.QueueBatteryAlert("Mouse",10,"Mouse",true,true);
+                    await System.Threading.Tasks.Task.Delay(10800);
+                    if(panel.BatteryAlertActive)
+                        throw new InvalidOperationException(
+                            "Battery alert did not yield to normal OLED");
+                    if(!panel.LiveOutputActive)
+                        throw new InvalidOperationException(
+                            "Live ended unexpectedly during alert");
+                    Console.WriteLine(
+                        "Queued low and critical overlays, blink, and OEM"+
+                        " header reclaim completed through the Live UI timer.");
+                    panel.RestoreOriginalScreen();
+                    if(panel.LiveOutputActive)
+                        throw new InvalidOperationException(
+                            "Live did not restore factory after alerts");
+                }
+                catch(Exception ex)
+                {
+                    Environment.ExitCode=1;
+                    Console.WriteLine("OLED alert UI smoke failed: "+ex);
+                    try{panel.RestoreOriginalScreen();}catch{}
+                }
+                finally{host.Close();}
+            };
+            Application.Run(host);
+            return;
+        }
+        if(args.Contains("--oled-live-ui-smoke"))
+        {
+            // Exercise the actual Live control path with a WinForms message
+            // loop, then restore firmware ownership in every exit path.
+            // No fake UI assertion from a background-only HID call.
+            ApplicationConfiguration.Initialize();
+            Application.SetColorMode(SystemColorMode.Dark);
+            using var host=new Form{
+                Width=600,Height=440,
+                ShowInTaskbar=false,
+                StartPosition=FormStartPosition.Manual,
+                Location=new System.Drawing.Point(-5000,-5000)
+            };
+            using var panel=new DockPreviewPanel(
+                ()=>OledRenderer.Render(
+                    StudioProject.Defaults(ScreenMode.Idle),
+                    false,true,false,protectHeader:true,
+                    layoutMode:ScreenMode.Idle));
+            host.Controls.Add(panel);
+            host.Shown+=async (_,_)=>{
+                try
+                {
+                    await panel.StartLiveOnLaunchAsync();
+                    if(!panel.LiveOutputActive)
+                        throw new InvalidOperationException(
+                            "Live UI did not activate: "+panel.HardwareStatus);
+                    await System.Threading.Tasks.Task.Delay(1200);
+                    if(panel.HardwareStatus.Contains("bekleniyor",
+                        StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(
+                            "OLED live writer waiting: "+panel.HardwareStatus);
+                    Console.WriteLine("Live UI status: "+panel.HardwareStatus);
+                    panel.RestoreOriginalScreen();
+                    if(panel.LiveOutputActive)
+                        throw new InvalidOperationException("Live did not stop");
+                    Console.WriteLine("Live UI button flow activated and restored.");
+                }
+                catch(Exception ex)
+                {
+                    Environment.ExitCode=1;
+                    Console.WriteLine("Live UI smoke failed: "+ex);
+                    try{panel.RestoreOriginalScreen();}catch{}
+                }
+                finally{host.Close();}
+            };
+            Application.Run(host);
+            return;
+        }
+        if(args.Contains("--oled-alert-smoke"))
+        {
+            // Explicit temporary hardware acceptance for the full-screen
+            // warning path. Restores the OEM display unconditionally.
+            var writer=new DockHardwareTest();
+            if(writer.Validate()!="")
+            {
+                Console.WriteLine(writer.Validate());
+                Environment.ExitCode=1;
+                return;
+            }
+            try
+            {
+                using(var transport=new FastOledTransport())
+                {
+                    transport.Open();
+                    var started=DateTimeOffset.UtcNow;
+                    var low=new BatteryOledAlert.Alert("Mouse",20,"Mouse",
+                        false,false,started);
+                    var critical=new BatteryOledAlert.Alert("Mouse",10,"Mouse",
+                        true,true,started);
+                    using(var frame=BatteryOledAlert.Render(low,started))
+                        transport.SendLiveFrame(frame,false);
+                    System.Threading.Thread.Sleep(650);
+                    using(var frame=BatteryOledAlert.Render(critical,started))
+                        transport.SendLiveFrame(frame,false);
+                    System.Threading.Thread.Sleep(1050);
+                    using(var frame=BatteryOledAlert.Render(critical,
+                        started.AddMilliseconds(1100)))
+                        transport.SendLiveFrame(frame,false);
+                    System.Threading.Thread.Sleep(450);
+                }
+                Console.WriteLine("OLED full-screen low/critical/black report writes accepted.");
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("OLED alert smoke failed: "+ex.Message);
+                Environment.ExitCode=1;
+            }
+            finally
+            {
+                string result=writer.RestoreNow();
+                Console.WriteLine(result);
+                if(!result.StartsWith("SteelSeries varsayılan",StringComparison.Ordinal))
+                    Environment.ExitCode=1;
+            }
+            return;
+        }
         if(args.Contains("--oled-hardware-smoke"))
         {
             // Explicit, temporary physical test. It only writes rows 10–63,
@@ -447,10 +596,52 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             Application.SetColorMode(SystemColorMode.Dark);
             if(args.Contains("--capture-english"))UiLanguage.PreviewOnly(true);
+            if(args.Contains("--capture-warning") ||
+               args.Contains("--capture-critical") ||
+               args.Contains("--capture-critical-off"))
+            {
+                var atTime=DateTimeOffset.UtcNow;
+                bool critical=args.Contains("--capture-critical") ||
+                    args.Contains("--capture-critical-off");
+                var info=new BatteryOledAlert.Alert("Mouse",
+                    critical?10:20,"Mouse",critical,
+                    args.Contains("--capture-english"),atTime);
+                using var warning=BatteryOledAlert.Render(info,
+                    args.Contains("--capture-critical-off")
+                        ?atTime.AddMilliseconds(1200):atTime);
+                warning.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                return;
+            }
+            if(args.Contains("--capture-icons") ||
+               args.Contains("--capture-clock") ||
+               args.Contains("--capture-threshold"))
+            {
+                using Form target=args.Contains("--capture-icons")
+                    ?new IconEditorDialog(()=>{})
+                    :args.Contains("--capture-clock")
+                        ?new ClockDateSettingsDialog(
+                            StudioProject.Defaults(ScreenMode.Idle),(_,_,_,_)=>{})
+                        :new BatteryAlertThresholdDialog("Mouse",20);
+                target.StartPosition=FormStartPosition.Manual;
+                target.Location=new System.Drawing.Point(-5000,-5000);
+                target.ShowInTaskbar=false;
+                target.Show();
+                Application.DoEvents();
+                if(target is IconEditorDialog iconEditor &&
+                   args.Contains("--capture-controller"))
+                    iconEditor.SelectIconForCapture("DualSense");
+                Application.DoEvents();
+                using var screenshot=new System.Drawing.Bitmap(target.Width,target.Height);
+                target.DrawToBitmap(screenshot,new System.Drawing.Rectangle(
+                    0,0,screenshot.Width,screenshot.Height));
+                screenshot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                target.Close();
+                return;
+            }
             if(args.Contains("--capture-mini-wheel"))
             {
-                using var editor=new MiniWheelSettingsDialog(new DockWidget{
-                    Kind="VolumeChatMix",DialStyle="MiniWheel"});
+                using var editor=new WheelArtworkDialog(null,compact:true);
+                editor.SelectPreviewMode(DialView.ChatMix);
                 editor.StartPosition=FormStartPosition.Manual;
                 editor.Location=new System.Drawing.Point(-5000,-5000);
                 editor.ShowInTaskbar=false;
@@ -503,6 +694,10 @@ internal static class Program
                 settings.EnableOffscreenCapture();
                 settings.Show();
                 Application.DoEvents();
+                if(args.Contains("--capture-battery"))settings.SelectPageForCapture(1);
+                else if(args.Contains("--capture-about"))settings.SelectPageForCapture(2);
+                else if(args.Contains("--capture-display"))settings.SelectPageForCapture(3);
+                Application.DoEvents();
                 using var image=new System.Drawing.Bitmap(settings.Width,settings.Height);
                 settings.DrawToBitmap(image,new System.Drawing.Rectangle(0,0,
                     image.Width,image.Height));
@@ -511,6 +706,8 @@ internal static class Program
                 return;
             }
             using var studio=new PixelStudioForm();
+            if(args.Contains("--capture-small"))
+                studio.ClientSize=new System.Drawing.Size(1120,730);
             if(args.Contains("--capture-idle"))studio.SelectCaptureMode(ScreenMode.Idle);
             else if(args.Contains("--capture-game"))studio.SelectCaptureMode(ScreenMode.Game);
             studio.EnableOffscreenCapture();
@@ -548,6 +745,8 @@ public sealed class DockWidget
     public int MiniWidth { get; set; } = 88;
     // Independent compact radial gauge scale (70-100%).
     public int MiniWheelSize { get; set; } = 100;
+    // Independent compact wheel custom pixel source; never modifies WheelPixels.
+    public string MiniWheelPixels { get; set; } = "";
     // "Wheel" renders the OEM-inspired 1-bit radial gauge; "Bar" preserves
     // older designs without requiring a layout-file format migration.
     public string DialStyle { get; set; } = "Bar";

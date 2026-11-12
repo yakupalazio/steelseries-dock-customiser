@@ -151,6 +151,23 @@ internal sealed class FastOledTransport : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reclaim the dock's original display without an external ggoled process.
+    /// This is the same transient 0x95 release already used by the tested
+    /// one-shot dial handback. It does not modify persistent configuration.
+    /// </summary>
+    public void ReturnToFactory()
+    {
+        var report=new byte[64];
+        report[0]=ScreenReportId;
+        report[1]=0x95;
+        lock(gate)
+        {
+            if(stream is null)throw new InvalidOperationException("OLED is closed.");
+            stream.Write(report);
+        }
+    }
+
     public void SendLiveFrame(Bitmap image,bool protectHeader)
     {
         byte[][] reports=protectHeader
