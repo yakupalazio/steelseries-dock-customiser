@@ -42,7 +42,13 @@ internal static class IconLibrary
 
     public static void Reset(string name)
     {
-        Custom.Remove(name);Save();
+        // Reset to the user's approved shipped starting icon, preserving
+        // their custom pixel art as the default for new installations.
+        var original=FactoryPresetDefaults.LoadIcons();
+        if(original.TryGetValue(name,out var rows))
+            Custom[name]=rows.ToArray();
+        else Custom.Remove(name);
+        Save();
     }
 
     public static void Load()
@@ -51,8 +57,12 @@ internal static class IconLibrary
         try
         {
             string source=File.Exists(FileName)?FileName:PersonalDefaultsFile;
-            if(!File.Exists(source))return;
-            var icons=JsonSerializer.Deserialize<Dictionary<string,string[]>>(File.ReadAllText(source));
+            var icons=File.Exists(source)
+                ?JsonSerializer.Deserialize<Dictionary<string,string[]>>(
+                    File.ReadAllText(source))
+                :new Dictionary<string,string[]>(
+                    FactoryPresetDefaults.LoadIcons(),
+                    StringComparer.OrdinalIgnoreCase);
             if(icons is null || icons.Count>Names.Length) return;
             foreach(var (name,rows) in icons)
             {

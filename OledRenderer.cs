@@ -364,14 +364,19 @@ internal static class OledRenderer
                     device=currentDevices[slot-1];
                 }
                 var reading=batteries?[device];
-                DrawIcon(px,reading?.IconKind?.Length>0
+                string iconKind=reading?.IconKind?.Length>0
                     ?reading.IconKind
-                    :device.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)
-                        ?BatteryDeviceCatalog.Icon(device):device,x,y);
+                    :device.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase) ||
+                     device.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)
+                        ?BatteryDeviceCatalog.Icon(device):device;
                 string pct=reading?.Display??"--%";
-                int labelX=x+13;
-                DrawText(px,pct,labelX,y+2,1);
-                int boltX=labelX+TextWidth(pct,7)+2;
+                var layout=PlanBatteryRow(x,y,iconKind,pct);
+                DrawBatterySlotIcon(px,iconKind,x,layout.IconY,
+                    layout.IconWidth,layout.IconHeight);
+                if(layout.Compact)
+                    DrawCompactBatteryText(px,pct,layout.TextX,y+3);
+                else DrawText(px,pct,layout.TextX,y+2,1);
+                int boltX=layout.TextX+layout.TextWidth+2;
                 if(reading?.IsCharging==true)
                 {
                     var chargingIcon=IconLibrary.GetCurrent("Charging");
@@ -688,6 +693,103 @@ internal static class OledRenderer
         for(int row=0;row<original.Length;row++)
         for(int col=0;col<original[row].Length;col++)
             if(original[row][col]=='1')Dot(px,x+col,y+row,clipFactory);
+    }
+
+    // A saved icon can be 20px wide. Battery labels used to begin at x+13,
+    // so the user's 16px Controller sprite overlapped their "70%" reading.
+    // Derive label placement from the ACTUAL saved 1-bit icon dimensions.
+    internal readonly record struct BatteryRowLayout(
+        int IconWidth,int IconHeight,int IconY,
+        int TextX,int TextWidth,bool Compact);
+
+    internal static BatteryRowLayout PlanBatteryRow(int x,int y,
+        string iconKind,string pct)
+    {
+        var rows=IconLibrary.GetCurrent(iconKind);
+        int originalWidth=rows.Length>0?rows[0].Length:0;
+        int originalHeight=rows.Length;
+        int slotRight=Math.Min(Width,x+42);
+        int normalTextWidth=TextWidth(pct,7);
+        int compactTextWidth=Math.Max(0,pct.Length*4-1);
+        int iconWidth=originalWidth;
+        int normalX=x+Math.Max(13,iconWidth+3);
+        bool compact=normalX+normalTextWidth>slotRight;
+        int gap=3;
+        int textWidth=compact?compactTextWidth:normalTextWidth;
+        int textX=normalX;
+        if(compact && textX+textWidth>slotRight)
+        {
+            gap=1;
+            textX=x+iconWidth+gap;
+            if(textX+textWidth>slotRight)
+            {
+                // Scale only the on-screen rendering when a large icon
+                // otherwise cannot coexist with four digit characters.
+                // Source art and user widget coordinates remain unchanged.
+                iconWidth=Math.Max(1,slotRight-x-gap-textWidth);
+                textX=x+iconWidth+gap;
+            }
+        }
+        int height=originalHeight;
+        if(originalWidth>0 && iconWidth<originalWidth)
+            height=(int)Math.Round(originalHeight*
+                iconWidth/(double)originalWidth);
+        height=Math.Clamp(height,0,11);
+        int iconY=Math.Min(y,Height-height);
+        return new BatteryRowLayout(iconWidth,height,iconY,
+            textX,textWidth,compact);
+    }
+
+    private static readonly Dictionary<char,string[]> CompactBatteryGlyphs=new()
+    {
+        ['0']=["111","101","101","101","111"],
+        ['1']=["010","110","010","010","111"],
+        ['2']=["111","001","111","100","111"],
+        ['3']=["111","001","111","001","111"],
+        ['4']=["101","101","111","001","001"],
+        ['5']=["111","100","111","001","111"],
+        ['6']=["111","100","111","101","111"],
+        ['7']=["111","001","010","010","010"],
+        ['8']=["111","101","111","101","111"],
+        ['9']=["111","101","111","001","111"],
+        ['%']=["101","001","010","100","101"],
+        ['-']=["000","000","111","000","000"]
+    };
+
+    private static void DrawCompactBatteryText(bool[] frame,string text,int x,int y)
+    {
+        foreach(char c in text)
+        {
+            if(CompactBatteryGlyphs.TryGetValue(c,out var rows))
+                for(int yy=0;yy<rows.Length;yy++)
+                for(int xx=0;xx<3;xx++)
+                    if(rows[yy][xx]=='1')Dot(frame,x+xx,y+yy);
+            x+=4;
+        }
+    }
+
+    private static void DrawBatterySlotIcon(bool[] frame,string kind,int x,int y,
+        int targetWidth,int targetHeight)
+    {
+        if(targetWidth<=0||targetHeight<=0)return;
+        var rows=IconLibrary.GetCurrent(kind);
+        if(rows.Length==0)return;
+        int sourceWidth=rows[0].Length,sourceHeight=rows.Length;
+        if(targetWidth==sourceWidth&&targetHeight==sourceHeight)
+        {
+            DrawIcon(frame,kind,x,y);
+            return;
+        }
+        // Nearest-neighbor 1-bit projection with no modified source pixels.
+        for(int yy=0;yy<targetHeight;yy++)
+        for(int xx=0;xx<targetWidth;xx++)
+        {
+            int sy=Math.Clamp((int)((yy+.5)*sourceHeight/targetHeight),
+                0,sourceHeight-1);
+            int sx=Math.Clamp((int)((xx+.5)*sourceWidth/targetWidth),
+                0,sourceWidth-1);
+            if(rows[sy][sx]=='1')Dot(frame,x+xx,y+yy);
+        }
     }
 
     private static void DrawIcon(bool[] px,string type,int x,int y,bool clipFactory=true)

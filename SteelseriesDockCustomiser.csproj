@@ -16,6 +16,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="FactoryPresets\studio-v100.json" LogicalName="SteelseriesDockCustomiser.FactoryPresets.Studio" />
+    <EmbeddedResource Include="FactoryPresets\icons-v09.json" LogicalName="SteelseriesDockCustomiser.FactoryPresets.Icons" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="HidSharp" Version="2.6.4" />
     <None Update="PixelOperator.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>

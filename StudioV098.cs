@@ -74,6 +74,17 @@ internal sealed class StudioProject
             }
         }
         catch{}
+        // First launch on another PC: use the designer-approved saved
+        // layout embedded in the EXE. Existing profiles always win.
+        var preset=FactoryPresetDefaults.LoadStudio();
+        if(preset is not null)
+        {
+            foreach(var mode in Enum.GetValues<ScreenMode>())
+                Sanitize(preset.For(mode),mode,preset.ProtectHeader);
+            preset.MigrateRadialDefaults();
+            preset.AlignWheelDefaultsOnce();
+            return preset;
+        }
         return new StudioProject { RadialDefaultsMigrated=true, WheelDefaultsAligned=true };
     }
 
@@ -97,6 +108,13 @@ internal sealed class StudioProject
             }
         }
         catch { }
+        var preset=FactoryPresetDefaults.LoadStudio();
+        if(preset is not null)
+        {
+            var layout=preset.For(mode).DeepClone();
+            Sanitize(layout,mode,preset.ProtectHeader);
+            return layout;
+        }
         return Defaults(mode);
     }
 
