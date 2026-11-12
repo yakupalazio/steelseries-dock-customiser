@@ -36,6 +36,57 @@ internal static class Beta5SelfTests
            !BatteryPreferences.FilePath.StartsWith(
                 Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
             throw new Exception("Beta 5 accidentally shares Beta 4's settings");
+        // The owner's personal 2026-11-13 baseline is shipped read-only
+        // inside the single EXE. Existing local saves are not overwritten.
+        var baseline=FactoryPresetDefaults.LoadStudio();
+        var baselineIcons=FactoryPresetDefaults.LoadIcons();
+        if(baseline is null ||
+           !baselineIcons.TryGetValue("DualSense",out var controllerArt) ||
+           controllerArt.Length!=11 || controllerArt[0].Length!=16 ||
+           !baseline.Idle.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
+           !baseline.Game.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
+           !baseline.Media.Widgets.Any(w=>w.Kind=="BatterySlot3"))
+            throw new Exception("Saved personal factory default is missing");
+        foreach(int left in new[]{85,87,92})
+        foreach(string pct in new[]{"70%","100%","--%"})
+        {
+            var layout=OledRenderer.PlanBatteryRow(left,54,"DualSense",pct);
+            if(layout.TextX-left-layout.IconWidth<1 ||
+               layout.TextX+layout.TextWidth>Math.Min(128,left+42) ||
+               layout.IconY+layout.IconHeight>64)
+                throw new Exception("Controller sprite overlaps battery percentage");
+            if(pct=="70%" && left==92 &&
+               (layout.Compact||layout.TextX<left+controllerArt[0].Length+2))
+                throw new Exception("Controller 70% label lacks readable spacing");
+        }
+        // Render the third battery slot with the saved 16x11 controller
+        // sprite. The gap must consist entirely of dark OLED pixels.
+        var nowBattery=DateTimeOffset.Now;
+        var slotBattery=new BatterySnapshot
+        {
+            CheckedAt=nowBattery,
+            Values=new Dictionary<string,BatteryReading>
+            {
+                ["Mouse"]=new("Mouse",82,"test","",nowBattery),
+                ["Phone"]=new("Phone",69,"test","",nowBattery),
+                ["DualSense"]=new("DualSense",70,"test","",nowBattery)
+                    {IconKind="DualSense"}
+            }
+        };
+        using(var rendered=OledRenderer.Render(
+            new LayoutState{Widgets=[new DockWidget{
+                Kind="BatterySlot3",X=92,Y=54}]},
+            false,true,false,batteries:slotBattery,
+            preferences:new BatteryPreferences{
+                PriorityKinds=["Mouse","Phone","DualSense"]
+            },protectHeader:true,layoutMode:ScreenMode.Idle))
+        {
+            var g=OledRenderer.PlanBatteryRow(92,54,"DualSense","70%");
+            for(int gx=92+g.IconWidth;gx<g.TextX;gx++)
+            for(int gy=53;gy<64;gy++)
+                if(Lit(rendered,gx,gy))
+                    throw new Exception("Controller overlaps 70 percent in OLED frame");
+        }
         // Generic discovery never fakes values for unknown manufacturers:
         // two interfaces in one USB container must be a single device.
         var discoveredAt=DateTimeOffset.Now;
