@@ -314,7 +314,10 @@ internal sealed class StudioProject
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
             w.LyricOffsetMs=Math.Clamp(w.LyricOffsetMs,-10000,10000);
-            w.LyricLines=Math.Clamp(w.LyricLines,1,3);
+            w.LyricLines=Math.Clamp(w.LyricLines,1,4);
+            w.LyricTransitionStyle=w.LyricTransitionStyle is
+                "Slide" or "Fade" or "Drop" or "Wipe" or "Instant"
+                ?w.LyricTransitionStyle:"Slide";
             w.TextWidth=Math.Clamp(w.TextWidth,0,128);
             w.VisualizerStyle=w.VisualizerStyle is "Bars" or "Stereo" or "Circular" or "Bubbles" or "Pulse"
                 ?w.VisualizerStyle:"Bars";

@@ -979,8 +979,10 @@ public sealed class DockWidget
     // New media widgets are strictly opt-in; existing saved layouts are
     // unchanged and do not instantiate these by default.
     public int LyricOffsetMs { get; set; } = 0;
-    // 1/2/3 rows, height is calculated without moving legacy widgets.
+    // 1–4 rows. Current saved designs remain unchanged.
     public int LyricLines { get; set; } = 1;
+    // Monochrome timecode-locked transitions; Slide remains the default.
+    public string LyricTransitionStyle { get; set; } = "Slide";
     // Zero means legacy auto-width to screen edge.
     public int TextWidth { get; set; } = 0;
     public string VisualizerStyle { get; set; } = "Bars";

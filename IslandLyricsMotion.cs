@@ -69,7 +69,7 @@ internal static class IslandLyricsMotion
 
     internal static string[] WrapRows(string text,int availablePixels,int rows)
     {
-        rows=Math.Clamp(rows,1,3);
+        rows=Math.Clamp(rows,1,4);
         int limit=Math.Max(1,availablePixels/6);
         var output=new List<string>(rows);
         string remaining=text.Trim();

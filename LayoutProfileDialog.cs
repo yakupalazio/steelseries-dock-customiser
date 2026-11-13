@@ -31,20 +31,28 @@ internal sealed class LayoutProfileDialog : Form
         snapshot=current;
         apply=onApply;
         Text=UiLanguage.T("Profil yöneticisi");
-        ClientSize=new Size(680,555);
-        FormBorderStyle=FormBorderStyle.FixedDialog;
+        ClientSize=new Size(705,628);
+        MinimumSize=new Size(675,530);
+        FormBorderStyle=FormBorderStyle.Sizable;
         StartPosition=FormStartPosition.CenterParent;
-        MaximizeBox=false;MinimizeBox=false;
+        MaximizeBox=true;MinimizeBox=false;
         BackColor=Bg;ForeColor=Fore;
         Font=new Font("Segoe UI",10f);
-        Controls.Add(new Label{Left=23,Top=18,Width=620,Height=37,
+        var body=new Panel{
+            Dock=DockStyle.Fill,AutoScroll=true,
+            AutoScrollMinSize=new Size(662,500),
+            BackColor=Bg};
+        var footer=new Panel{Dock=DockStyle.Bottom,Height=65,BackColor=Bg};
+        Controls.Add(body);
+        Controls.Add(footer);
+        body.Controls.Add(new Label{Left=23,Top=18,Width=620,Height=37,
             Text=UiLanguage.T("OLED tasarım profilleri"),ForeColor=Accent,
             Font=new Font("Segoe UI Semibold",19f,FontStyle.Bold)});
-        Controls.Add(new Label{Left=23,Top=68,Width=630,Height=29,
+        body.Controls.Add(new Label{Left=23,Top=68,Width=630,Height=29,
             Text=UiLanguage.T("Bu ekran moduna ait profilleri yönet."),
             ForeColor=Color.FromArgb(151,169,187)});
-        Controls.Add(list);
-        Controls.Add(hint);
+        body.Controls.Add(list);
+        body.Controls.Add(hint);
         var blank=Button("Boş oluştur",390,111,243);
         var copy=Button("Geçerli tasarımı kaydet",390,156,243);
         var overwrite=Button("↻ Seçili profilin üzerine kaydet",390,201,243);
@@ -54,9 +62,13 @@ internal sealed class LayoutProfileDialog : Form
         var export=Button("Dışa aktar",516,336,117);
         var use=Button("✓ Profili uygula",390,390,243);
         use.BackColor=Accent;use.ForeColor=Bg;
-        Controls.AddRange([blank,copy,overwrite,rename,remove,import,export,use]);
-        var close=Button("Kapat",528,500,105);
-        close.Click+=(_,_)=>Close();Controls.Add(close);
+        body.Controls.AddRange([blank,copy,overwrite,rename,remove,import,export,use]);
+        var close=Button("Kapat",545,12,115);
+        close.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+        close.Click+=(_,_)=>Close();
+        footer.Controls.Add(close);
+        footer.Resize+=(_,_)=>close.Left=Math.Max(12,footer.Width-130);
+        close.Left=Math.Max(12,footer.Width-130);
         blank.Click+=(_,_)=>Create(false);
         copy.Click+=(_,_)=>Create(true);
         overwrite.Click+=(_,_)=>Run(()=>

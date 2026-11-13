@@ -353,7 +353,7 @@ internal static class OledRenderer
             Math.Clamp(w.GameLogoSize,12,54)),
             Math.Min(Height-w.Y,Math.Clamp(w.GameLogoSize,12,54))),
         "Lyrics" => new(w.X,w.Y,Math.Min(Width-w.X,w.WidgetWidth),
-            Math.Min(Height-w.Y,Math.Clamp(w.LyricLines,1,3)*8+8)),
+            Math.Min(Height-w.Y,Math.Clamp(w.LyricLines,1,4)*8+8)),
         "AudioVisualizer" or "AnimatedGif" => new(w.X,w.Y,
             Math.Min(Width-w.X,w.WidgetWidth),
             Math.Min(Height-w.Y,w.VisualizerHeight)),
@@ -574,7 +574,7 @@ internal static class OledRenderer
         int left=Math.Clamp(widget.X,0,127);
         int top=Math.Clamp(widget.Y,0,63);
         int right=Math.Min(Width,left+Math.Clamp(widget.WidgetWidth,16,128));
-        int rows=Math.Clamp(widget.LyricLines,1,3);
+        int rows=Math.Clamp(widget.LyricLines,1,4);
         int bottom=Math.Min(Height,top+rows*8+8);
         int baseline=top+4;
         if(right-left<16||bottom-baseline<7||lyrics.Lines.Count==0)return;
@@ -606,17 +606,40 @@ internal static class OledRenderer
         if(motion.CurrentIndex<0)return;
         int movement=(int)Math.Round(rows*IslandLyricsMotion.LineHeight*
             motion.Progress);
-        if(motion.Transitioning)
+        string transition=widget.LyricTransitionStyle;
+        if(motion.Transitioning&&transition!="Instant")
         {
-            DrawLyricRows(pixels,motion.PreviousText,textLeft,
-                baseline-movement,textLeft,right,top,bottom,
-                1f-motion.Progress,rows,available,motion.PreviousScrollPx,
-                1,1,widget.StrokeWidth);
-            DrawLyricRows(pixels,motion.CurrentText,textLeft,
-                baseline+rows*IslandLyricsMotion.LineHeight-movement,
-                textLeft,right,top,bottom,Math.Max(.3f,motion.Progress),
-                rows,available,motion.CurrentScrollPx,1,1,
-                widget.StrokeWidth);
+            int oldY=baseline-movement;
+            int newY=baseline+rows*IslandLyricsMotion.LineHeight-movement;
+            float oldAlpha=1f-motion.Progress;
+            float newAlpha=Math.Max(.3f,motion.Progress);
+            int clipRight=right;
+            switch(transition)
+            {
+                case "Fade":
+                    oldY=baseline;
+                    newY=baseline;
+                    newAlpha=motion.Progress;
+                    break;
+                case "Drop":
+                    oldY=baseline+movement;
+                    newY=baseline-rows*IslandLyricsMotion.LineHeight+movement;
+                    break;
+                case "Wipe":
+                    oldY=baseline;
+                    newY=baseline;
+                    clipRight=Math.Clamp(textLeft+
+                        (int)Math.Round(available*motion.Progress),
+                        textLeft,right);
+                    newAlpha=1f;
+                    break;
+            }
+            DrawLyricRows(pixels,motion.PreviousText,textLeft,oldY,
+                textLeft,right,top,bottom,oldAlpha,rows,available,
+                motion.PreviousScrollPx,1,1,widget.StrokeWidth);
+            DrawLyricRows(pixels,motion.CurrentText,textLeft,newY,
+                textLeft,clipRight,top,bottom,newAlpha,rows,available,
+                motion.CurrentScrollPx,1,1,widget.StrokeWidth);
         }
         else
         {

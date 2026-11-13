@@ -87,13 +87,36 @@ internal sealed class OptionalMediaWidgetDialog:Form
             "10 ms adımlar matematiksel olarak uygulanır; dock'un gerçek "+
             "yenileme hızı bu hassasiyeti garanti etmez.");
         offset.ValueChanged+=(_,_)=>Updated.LyricOffsetMs=(int)offset.Value;
-        var rowCount=Combo("1 satır","2 satır","3 satır");
-        rowCount.SelectedIndex=Math.Clamp(Updated.LyricLines,1,3)-1;
+        var rowCount=Combo("1 satır","2 satır","3 satır","4 satır");
+        rowCount.SelectedIndex=Math.Clamp(Updated.LyricLines,1,4)-1;
         Row("Görüntülenecek satır",rowCount);
         rowCount.SelectedIndexChanged+=(_,_)=>Updated.LyricLines=
-            Math.Clamp(rowCount.SelectedIndex+1,1,3);
-        Note("Şarkı sözleri kelime sınırında 2 veya 3 satıra bölünür. "+
-            "Enstrümantal aralıklarda yalnızca nota gösterilir.");
+            Math.Clamp(rowCount.SelectedIndex+1,1,4);
+        Note(UiLanguage.English
+            ?"Lyrics wrap to 1–4 rows; the 128×64 OLED clips overflow. "+
+              "A note appears during instrumental sections."
+            :"Sözler kelime sınırında 1–4 satıra bölünür. "+
+              "Ekrana sığmayan kısım kırpılır; enstrümantal kısımda nota gösterilir.");
+        var transitions=Combo("Slide","Fade","Drop","Wipe","Instant");
+        transitions.FormattingEnabled=true;
+        transitions.Format+=(_,e)=>{
+            if(e.ListItem is not string style)return;
+            e.Value=style switch{
+                "Slide"=>UiLanguage.English?"Slide up":"Yukarı kaydır",
+                "Fade"=>UiLanguage.English?"Fade":"Yumuşak belirme",
+                "Drop"=>UiLanguage.English?"Slide down":"Aşağı kaydır",
+                "Wipe"=>UiLanguage.English?"Reveal":"Açılarak göster",
+                "Instant"=>UiLanguage.English?"Instant":"Animasyonsuz",
+                _=>style};
+        };
+        transitions.SelectedItem=Updated.LyricTransitionStyle;
+        if(transitions.SelectedIndex<0)transitions.SelectedIndex=0;
+        Row(UiLanguage.English?"Lyric transition":"Söz geçiş animasyonu",
+            transitions);
+        transitions.SelectedIndexChanged+=(_,_)=>{
+            if(transitions.SelectedItem is string style)
+                Updated.LyricTransitionStyle=style;
+        };
         var width=Number(16,128,1,Updated.WidgetWidth);
         Row("Yazı alanı genişliği",width);
         width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
