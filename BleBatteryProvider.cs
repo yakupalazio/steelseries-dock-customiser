@@ -20,11 +20,13 @@ namespace SteelseriesDockCustomiser;
 /// </summary>
 internal static class BleBatteryProvider
 {
-    private static readonly Guid BatteryService=BluetoothUuidHelper.FromShortId(0x180F);
-    private static readonly Guid BatteryLevel=BluetoothUuidHelper.FromShortId(0x2A19);
+    private static readonly Guid BatteryService=
+        BluetoothUuidHelper.FromShortId(0x180F);
+    private static readonly Guid BatteryLevel=
+        BluetoothUuidHelper.FromShortId(0x2A19);
     private static readonly SemaphoreSlim Gate=new(1,1);
     private static readonly object WatchLock=new();
-    private static DeviceWatcher? watcher;
+    private static readonly List<DeviceWatcher> Watchers=[];
     public static event Action? DevicesChanged;
 
     public static string StableKind(string id)
@@ -37,28 +39,83 @@ internal static class BleBatteryProvider
     {
         lock(WatchLock)
         {
-            if(watcher!=null)return;
-            try
+            if(Watchers.Count>0)return;
+            // Observe both exposed GATT Battery services and connected LE
+            // devices. Windows may not cache the BAS service until connection.
+            string[] selectors=[
+                GattDeviceService.GetDeviceSelectorFromUuid(BatteryService),
+                BluetoothLEDevice.GetDeviceSelectorFromConnectionStatus(
+                    BluetoothConnectionStatus.Connected)
+            ];
+            foreach(string selector in selectors)
             {
-                var created=DeviceInformation.CreateWatcher(
-                    GattDeviceService.GetDeviceSelectorFromUuid(BatteryService));
-                created.Added+=(_,_)=>DevicesChanged?.Invoke();
-                created.Updated+=(_,_)=>DevicesChanged?.Invoke();
-                created.Removed+=(_,_)=>DevicesChanged?.Invoke();
-                created.Start();
-                watcher=created;
+                try
+                {
+                    var watcher=DeviceInformation.CreateWatcher(selector);
+                    watcher.Added+=(_,_)=>DevicesChanged?.Invoke();
+                    watcher.Updated+=(_,_)=>DevicesChanged?.Invoke();
+                    watcher.Removed+=(_,_)=>DevicesChanged?.Invoke();
+                    watcher.Start();
+                    Watchers.Add(watcher);
+                }
+                catch {/* Optional second watcher may be unavailable. */}
             }
-            catch { watcher?.Stop();watcher=null; }
         }
     }
+
     public static void StopWatching()
     {
         lock(WatchLock)
         {
-            if(watcher is null)return;
-            try{watcher.Stop();}catch{}
-            watcher=null;
+            foreach(var watcher in Watchers)
+                try{watcher.Stop();}catch{}
+            Watchers.Clear();
         }
+    }
+
+    private static BatteryReading? ParseLiveLevel(string id,string? name,
+        byte[] data)
+    {
+        if(data.Length!=1||data[0]>100||id.Length==0)return null;
+        string title=string.IsNullOrWhiteSpace(name)
+            ?"Bluetooth device":name.Trim();
+        string kind=StableKind(id);
+        string icon=BatteryDeviceClassifier.IconFor(title,"Bluetooth");
+        BatteryDeviceCatalog.Register(kind,title,icon);
+        return new BatteryReading(kind,data[0],
+            "Bluetooth LE GATT BAS (uncached 0x180F/0x2A19)",
+            "Live read, confirmed paired device",DateTimeOffset.Now)
+        {
+            FriendlyName=title,IconKind=icon
+        };
+    }
+
+    internal static bool IsValidBatteryByte(byte[]? data)=>
+        data is {Length:1}&&data[0]<=100;
+
+    private static async Task<BatteryReading?> ReadCharacteristic(
+        GattDeviceService service,string identity,string? deviceName)
+    {
+        try
+        {
+            var chars=await service.GetCharacteristicsForUuidAsync(
+                BatteryLevel,BluetoothCacheMode.Uncached);
+            if(chars.Status!=GattCommunicationStatus.Success)return null;
+            foreach(var ch in chars.Characteristics.Take(1))
+            {
+                if(!ch.CharacteristicProperties.HasFlag(
+                    GattCharacteristicProperties.Read))continue;
+                var value=await ch.ReadValueAsync(BluetoothCacheMode.Uncached);
+                if(value.Status!=GattCommunicationStatus.Success||
+                   value.Value is null||value.Value.Length!=1)
+                    return null;
+                var reader=DataReader.FromBuffer(value.Value);
+                byte percent=reader.ReadByte();
+                return ParseLiveLevel(identity,deviceName,[percent]);
+            }
+        }
+        catch{/* Pairing/connection failure: never use old cached percent. */}
+        return null;
     }
 
     public static async Task<IReadOnlyList<BatteryReading>> ReadAsync()
@@ -68,58 +125,86 @@ internal static class BleBatteryProvider
         try
         {
             var list=new List<BatteryReading>();
-            var infos=await DeviceInformation.FindAllAsync(
-                GattDeviceService.GetDeviceSelectorFromUuid(BatteryService));
-            foreach(var info in infos.Take(12))
+
+            // First pass: recognized, already-registered Battery Service(s).
+            // Supports a device publishing multiple BAS instances.
+            try
             {
-                if(!info.IsEnabled || !info.Pairing.IsPaired)continue;
-                try
+                var registered=await DeviceInformation.FindAllAsync(
+                    GattDeviceService.GetDeviceSelectorFromUuid(BatteryService));
+                foreach(var info in registered.Take(32))
                 {
-                    // An OS-managed GATT read is initiated only after pairing
-                    // and a prior device-service discovery result.
-                    using var service=await GattDeviceService.FromIdAsync(info.Id);
-                    if(service is null)continue;
-                    var chars=await service.GetCharacteristicsForUuidAsync(
-                        BatteryLevel,BluetoothCacheMode.Uncached);
-                    if(chars.Status!=GattCommunicationStatus.Success)continue;
-                    foreach(var ch in chars.Characteristics.Take(1))
+                    if(!info.IsEnabled||!info.Pairing.IsPaired)continue;
+                    try
                     {
-                        if(!ch.CharacteristicProperties.HasFlag(
-                            GattCharacteristicProperties.Read))continue;
-                        var value=await ch.ReadValueAsync(BluetoothCacheMode.Uncached);
-                        if(value.Status!=GattCommunicationStatus.Success ||
-                           value.Value is null || value.Value.Length!=1)continue;
-                        var reader=DataReader.FromBuffer(value.Value);
-                        byte percentage=reader.ReadByte();
-                        if(percentage>100)continue;
+                        using var service=await GattDeviceService.FromIdAsync(
+                            info.Id);
+                        if(service is null)continue;
                         string name=info.Name;
                         try
                         {
-                            // Preferred display name is the device, not the
-                            // generic "Battery Service" service instance.
-                            string? parent=service.Device?.Name;
-                            if(!string.IsNullOrWhiteSpace(parent))name=parent;
+                            if(!string.IsNullOrWhiteSpace(service.Device?.Name))
+                                name=service.Device.Name;
                         }
-                        catch { }
-                        if(string.IsNullOrWhiteSpace(name))name="Bluetooth device";
-                        string kind=StableKind(info.Id);
-                        string icon=BatteryDeviceClassifier.IconFor(name,"Bluetooth");
-                        BatteryDeviceCatalog.Register(kind,name,icon);
-                        list.Add(new BatteryReading(kind,percentage,
-                            "Bluetooth LE GATT (uncached; 0x180F/0x2A19)",
-                            name,DateTimeOffset.Now)
-                        {
-                            FriendlyName=name,
-                            IconKind=icon
-                        });
+                        catch{}
+                        var reading=await ReadCharacteristic(service,info.Id,name);
+                        if(reading is not null)list.Add(reading);
                     }
+                    catch{/* Some services are inaccessible without user consent. */}
                 }
-                catch { /* No stale/derived reading is eligible. */ }
             }
+            catch{/* Service selector may be missing on this Windows build. */}
+
+            // Second pass: already-connected, already-paired LE device.
+            // On some Windows versions the OS does not expose BAS as a
+            // service DeviceInformation node until the paired peripheral
+            // is connected; ask that LE device directly for 0x180F.
+            try
+            {
+                var connected=await DeviceInformation.FindAllAsync(
+                    BluetoothLEDevice.GetDeviceSelectorFromConnectionStatus(
+                        BluetoothConnectionStatus.Connected));
+                foreach(var info in connected.Take(32))
+                {
+                    if(!info.IsEnabled||!info.Pairing.IsPaired)continue;
+                    try
+                    {
+                        using var device=await BluetoothLEDevice.FromIdAsync(info.Id);
+                        if(device is null ||
+                           device.ConnectionStatus!=BluetoothConnectionStatus.Connected)
+                            continue;
+                        var services=await device.GetGattServicesForUuidAsync(
+                            BatteryService,BluetoothCacheMode.Uncached);
+                        if(services.Status!=GattCommunicationStatus.Success)
+                            continue;
+                        int index=0;
+                        foreach(var service in services.Services.Take(5))
+                        {
+                            using(service)
+                            {
+                                string serviceKey=info.Id+
+                                    "/battery/"+index;
+                                var reading=await ReadCharacteristic(service,
+                                    serviceKey,device.Name);
+                                if(reading is not null &&
+                                   !list.Any(existing=>
+                                       existing.Percent==reading.Percent&&
+                                       string.Equals(existing.FriendlyName,
+                                           reading.FriendlyName,
+                                           StringComparison.OrdinalIgnoreCase)))
+                                    list.Add(reading);
+                            }
+                            index++;
+                        }
+                    }
+                    catch{/* No paired or untrusted device is ever written to. */}
+                }
+            }
+            catch{/* BLE adapter does not support this selector. */}
             return list;
         }
-        catch { return Array.Empty<BatteryReading>(); }
-        finally { Gate.Release(); }
+        catch{return Array.Empty<BatteryReading>();}
+        finally{Gate.Release();}
     }
 }
 

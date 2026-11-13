@@ -38,7 +38,7 @@ internal static class ConnectedPeripheralInventory
     ];
 
     private sealed record Candidate(string Identity,string Name,
-        string Connection,string Manufacturer);
+        string Connection,string Manufacturer,string HardwareId="");
 
     public static async Task<IReadOnlyList<ConnectedPeripheral>> DiscoverAsync(
         BatterySnapshot battery)
@@ -110,7 +110,8 @@ internal static class ConnectedPeripheralInventory
                 }
                 string manufacturer=Property(device,"System.Devices.DeviceManufacturer");
                 string identity=ContainerKey(device,"System.Devices.ContainerId");
-                candidates.Add(new Candidate(identity,name,"USB / Dock",manufacturer));
+                candidates.Add(new Candidate(identity,name,"USB / Dock",
+                    manufacturer,device.Id));
             }
         }
         catch{/* The OS may restrict device-node enumeration. */}
@@ -135,7 +136,8 @@ internal static class ConnectedPeripheralInventory
                     candidates.Add(new Candidate("usb-hid:"+
                         hid.VendorID.ToString("X4")+":"+
                         hid.ProductID.ToString("X4")+":"+
-                        Hash(hid.DevicePath),name,"USB / Dock",maker));
+                        Hash(hid.DevicePath),name,"USB / Dock",maker,
+                        hid.DevicePath));
                 }
             }
             catch{/* Not all USB devices are HID devices. */}
@@ -155,7 +157,7 @@ internal static class ConnectedPeripheralInventory
             output.Add(new Candidate(ContainerKey(device,
                     "System.Devices.Aep.ContainerId"),
                 device.Name,connection,
-                Property(device,"System.Devices.Aep.Manufacturer")));
+                Property(device,"System.Devices.Aep.Manufacturer"),device.Id));
         }
     }
 
@@ -231,6 +233,17 @@ internal static class ConnectedPeripheralInventory
                 .Distinct(StringComparer.OrdinalIgnoreCase));
             string maker=group.Select(x=>x.Manufacturer).FirstOrDefault(
                 x=>!string.IsNullOrWhiteSpace(x))??"";
+            var recognized=WirelessCompatibilityCatalog.Recognize(
+                name,maker,connection);
+            if(recognized is null)
+            {
+                var identity=group.Select(x=>
+                    WirelessCompatibilityCatalog.ReadHardwareId(x.HardwareId))
+                    .FirstOrDefault(x=>x.HasValue);
+                if(identity.HasValue)
+                    recognized=WirelessCompatibilityCatalog.RecognizeUsbIdentity(
+                        identity.Value.Vid,identity.Value.Pid);
+            }
             string? kind=RecognizedKind(name);
             if(LocalBatteryDeviceNames.ClassifyConnectedBluetooth(name)=="Phone")
                 kind=phoneCount==1?"Phone":null;
@@ -251,11 +264,27 @@ internal static class ConnectedPeripheralInventory
             string icon=BatteryDeviceClassifier.IconFor(name,
                 connection.Contains("USB",StringComparison.OrdinalIgnoreCase)
                     ?"USB":"Bluetooth");
+            if(recognized is not null&&recognized.Category is
+                "Mouse" or "Keyboard" or "Headset" or "Controller")
+                icon=recognized.Category=="Controller"
+                    ?"DualSense":recognized.Category;
+            if(recognized is {ExactModel:true} &&
+               NameScore(name)<0 &&
+               recognized.Confidence=="documented-receiver")
+                name=recognized.Name+" (receiver)";
             rows.Add(new ConnectedPeripheral(group.Key,name,connection,maker,
                 reading?.IconKind?.Length>0?reading.IconKind:icon,
-                reading?.Percent,reading?.Source??"Pil bilgisi okunamadı",
-                reading?.Detail??"Bağlı; güncel pil yüzdesi sağlanmıyor. "+
-                    "Cihaz pilli olmayabilir veya üreticiye özel protokol gerektirebilir.",
+                reading?.Percent,
+                reading?.Source??(recognized is null
+                    ?"Pil bilgisi okunamadı":"Kablosuz cihaz kütüphanesi"),
+                reading?.Detail??(recognized is null
+                    ?"Bağlı; güncel pil yüzdesi sağlanmıyor. "+
+                     "Cihaz pilli olmayabilir veya üreticiye özel protokol gerektirebilir."
+                    :recognized.ExactModel
+                        ?"Tanınan model: "+recognized.Name+
+                         ". Canlı pil okuyucusu doğrulanmadı; yüzde gösterilmiyor."
+                        :"Tanınan marka: "+recognized.Brand+
+                         ". Model ve pil protokolü henüz doğrulanmadı."),
                 kind));
         }
         return rows.OrderByDescending(r=>r.Percent.HasValue)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace SteelseriesDockCustomiser;
@@ -37,19 +38,34 @@ internal static class PeripheralBatteryProviderRegistry
         new BleGatt(),new StandardHid(),new CorsairIcueBatteryProvider()
     ];
 
+    private static async Task<IReadOnlyList<BatteryReading>> ReadBounded(
+        IPeripheralBatteryProvider provider)
+    {
+        try
+        {
+            // WinRT BLE discovery can stall on a sleeping paired device.
+            // Do not let that block independent USB HID and vendor SDK reads.
+            var operation=provider.ReadAsync();
+            if(await Task.WhenAny(operation,Task.Delay(5000))!=operation)
+            {
+                _=operation.ContinueWith(t=>{_ =t.Exception;},
+                    TaskContinuationOptions.OnlyOnFaulted);
+                return Array.Empty<BatteryReading>();
+            }
+            return await operation;
+        }
+        catch{return Array.Empty<BatteryReading>();}
+    }
+
     public static async Task<IReadOnlyList<BatteryReading>> ReadAsync()
     {
-        var combined=new List<BatteryReading>();
-        foreach(var reader in Providers)
-        {
-            try
-            {
-                // A failure in one Windows device API must not hide an
-                // already-verified reading from another independent API.
-                combined.AddRange(await reader.ReadAsync());
-            }
-            catch{/* Other providers are still eligible. */}
-        }
-        return combined;
+        // Providers operate read-only and are isolated. BLE has its own
+        // exclusive gate, so timeout does not create overlapping GATT scans.
+        var tasks=Providers.Select(ReadBounded).ToArray();
+        var batches=await Task.WhenAll(tasks);
+        return batches.SelectMany(batch=>batch)
+            .Where(reading=>reading.Available)
+            .DistinctBy(reading=>reading.Kind,StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 }

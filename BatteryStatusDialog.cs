@@ -150,10 +150,10 @@ internal sealed class BatteryStatusDialog : Form
         Controls.Add(deviceSetup);
         var brandSources=new DarkButton{
             Left=151,Top=232,Width=300,Height=32,
-            Text=UiLanguage.English?"Brand battery sources":
-                "Markalara göre pil kaynakları"};
+            Text=UiLanguage.English?"Wireless device library":
+                "Kablosuz cihaz kütüphanesi"};
         brandSources.Click+=(_,_)=>{
-            using var info=new VendorBatterySourcesDialog();
+            using var info=new WirelessCompatibilityDialog();
             info.ShowDialog(this);
         };
         Controls.Add(brandSources);

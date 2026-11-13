@@ -732,6 +732,20 @@ internal static class Program
                 shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
                 setup.Close();return;
             }
+            if(args.Contains("--capture-wireless-library"))
+            {
+                using var library=new WirelessCompatibilityDialog();
+                library.StartPosition=FormStartPosition.Manual;
+                library.Location=new System.Drawing.Point(-5000,-5000);
+                library.ShowInTaskbar=false;
+                library.Show();Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(
+                    library.Width,library.Height);
+                library.DrawToBitmap(shot,
+                    new System.Drawing.Rectangle(0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                library.Close();return;
+            }
             if(args.Contains("--capture-vendor-sources"))
             {
                 using var diag=new VendorBatterySourcesDialog();
