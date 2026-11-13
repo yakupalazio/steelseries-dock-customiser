@@ -39,6 +39,8 @@ internal static class LocalBatteryDeviceNames
 
     internal static string DisplayName(string kind,BatterySnapshot? snapshot=null)
     {
+        var localAlias=BatteryDeviceAliases.Name(kind);
+        if(localAlias is not null)return localAlias;
         if(snapshot is not null && snapshot.Values.TryGetValue(kind,out var reading) &&
            BatteryPriority.IsCurrent(reading,DateTimeOffset.Now) &&
            IsUsableName(reading.FriendlyName))

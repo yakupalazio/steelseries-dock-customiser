@@ -297,10 +297,12 @@ internal static class Beta5SelfTests
         if(baseline is null ||
            !baselineIcons.TryGetValue("DualSense",out var controllerArt) ||
            controllerArt.Length!=11 || controllerArt[0].Length!=16 ||
-           !baseline.Idle.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
-           !baseline.Game.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
-           !baseline.Media.Widgets.Any(w=>w.Kind=="BatterySlot3"))
-            throw new Exception("Saved personal factory default is missing");
+           baseline.Idle.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
+           baseline.Game.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
+           baseline.Media.Widgets.Any(w=>w.Kind=="BatterySlot3") ||
+           !baseline.Media.Widgets.Any(w=>w.Kind=="BatterySlot1") ||
+           !baseline.Media.Widgets.Any(w=>w.Kind=="BatterySlot2"))
+            throw new Exception("Portable neutral two-battery factory default is missing");
         foreach(int left in new[]{85,87,92})
         foreach(string pct in new[]{"70%","100%","--%"})
         {

@@ -90,48 +90,169 @@ internal static class SyncedLyricsProvider
     {
         try
         {
-            var query="track_name="+Uri.EscapeDataString(track.Title)+
+            string query="track_name="+Uri.EscapeDataString(track.Title)+
                 "&artist_name="+Uri.EscapeDataString(track.Artist);
             if(track.Duration.TotalSeconds is >1 and <3600)
                 query+="&duration="+
                     Math.Round(track.Duration.TotalSeconds).ToString(
                         CultureInfo.InvariantCulture);
-            using var response=await Client.GetAsync(
+            using(var response=await Client.GetAsync(
                 new Uri("https://lrclib.net/api/get?"+query),
-                HttpCompletionOption.ResponseHeadersRead);
-            if(response.StatusCode==(HttpStatusCode)429)
+                HttpCompletionOption.ResponseHeadersRead))
             {
-                TimeSpan delay=response.Headers.RetryAfter?.Delta??
-                    TimeSpan.FromMinutes(2);
-                retryAfter=DateTimeOffset.UtcNow+TimeSpan.FromSeconds(
-                    Math.Clamp(delay.TotalSeconds,10,3600));
-                return new(key,Array.Empty<SyncedLyricLine>(),"rate-limited");
+                if(ApplyRetryAfter(response))
+                    return new(key,Array.Empty<SyncedLyricLine>(),"rate-limited");
+                if(response.IsSuccessStatusCode)
+                {
+                    using var doc=await ReadBoundedJson(response);
+                    if(doc is not null &&
+                       TrySelectTrack(doc.RootElement,track,out var lines))
+                        return new(key,lines,"LRCLIB / exact");
+                }
             }
-            if(!response.IsSuccessStatusCode)return new(
-                key,Array.Empty<SyncedLyricLine>(),"not-found");
-            if(response.Content.Headers.ContentLength is long size&&size>256000)
-                return new(key,Array.Empty<SyncedLyricLine>(),"too-large");
-            using var stream=await response.Content.ReadAsStreamAsync();
-            using var doc=await JsonDocument.ParseAsync(stream,
-                new JsonDocumentOptions{MaxDepth=12});
-            var root=doc.RootElement;
-            string foundTitle=GetText(root,"trackName");
-            string foundArtist=GetText(root,"artistName");
-            if(!string.Equals(foundTitle.Trim(),track.Title.Trim(),
-                   StringComparison.OrdinalIgnoreCase) ||
-               !string.Equals(foundArtist.Trim(),track.Artist.Trim(),
-                   StringComparison.OrdinalIgnoreCase))
-                return new(key,Array.Empty<SyncedLyricLine>(),"mismatch");
-            double remoteDuration=GetDouble(root,"duration");
-            if(remoteDuration>0&&track.Duration.TotalSeconds>0&&
-               Math.Abs(remoteDuration-track.Duration.TotalSeconds)>3)
-                return new(key,Array.Empty<SyncedLyricLine>(),"duration-mismatch");
-            string lyrics=GetText(root,"syncedLyrics");
-            return new(key,Parse(lyrics),"LRCLIB");
+            // LRCLIB /api/get requires a near-exact signature. On another PC
+            // Windows/Spotify may publish "Remastered" suffixes, multiple
+            // featured artists or duration rounded differently. Search for
+            // timed records and check identity and duration locally.
+            return await SearchFallbackAsync(track,key);
         }
         catch(HttpRequestException){return new(key,Array.Empty<SyncedLyricLine>(),"network");}
         catch(TaskCanceledException){return new(key,Array.Empty<SyncedLyricLine>(),"timeout");}
         catch(JsonException){return new(key,Array.Empty<SyncedLyricLine>(),"invalid-json");}
+        catch(InvalidOperationException){return new(key,Array.Empty<SyncedLyricLine>(),"invalid-result");}
+    }
+
+    private static bool ApplyRetryAfter(HttpResponseMessage response)
+    {
+        if(response.StatusCode!=(HttpStatusCode)429)return false;
+        TimeSpan delay=response.Headers.RetryAfter?.Delta??
+            TimeSpan.FromMinutes(2);
+        retryAfter=DateTimeOffset.UtcNow+TimeSpan.FromSeconds(
+            Math.Clamp(delay.TotalSeconds,10,3600));
+        return true;
+    }
+
+    private static async Task<JsonDocument?> ReadBoundedJson(
+        HttpResponseMessage response)
+    {
+        if(response.Content.Headers.ContentLength is long size&&size>256000)
+            return null;
+        using var stream=await response.Content.ReadAsStreamAsync();
+        using var memory=new System.IO.MemoryStream();
+        byte[] buffer=new byte[8192];
+        int read;
+        while((read=await stream.ReadAsync(buffer))>0)
+        {
+            if(memory.Length+read>256000)return null;
+            memory.Write(buffer,0,read);
+        }
+        memory.Position=0;
+        return await JsonDocument.ParseAsync(memory,
+            new JsonDocumentOptions{MaxDepth=12});
+    }
+
+    /// <summary>Only synced lyrics from a verified song may be displayed.</summary>
+    internal static bool TrySelectTrack(JsonElement root,MediaSnapshot track,
+        out IReadOnlyList<SyncedLyricLine> lines)
+    {
+        lines=Array.Empty<SyncedLyricLine>();
+        if(root.ValueKind!=JsonValueKind.Object)return false;
+        string title=GetText(root,"trackName"),artist=GetText(root,"artistName");
+        if(!TitlesMatch(title,track.Title) ||
+           !ArtistsMatch(artist,track.Artist))return false;
+        double duration=GetDouble(root,"duration");
+        if(duration>0&&track.Duration.TotalSeconds>0&&
+           Math.Abs(duration-track.Duration.TotalSeconds)>7)return false;
+        var parsed=Parse(GetText(root,"syncedLyrics"));
+        if(parsed.Count==0)return false;
+        lines=parsed;
+        return true;
+    }
+
+    internal static bool TitlesMatch(string left,string right)
+    {
+        static string Normalize(string raw)
+        {
+            // Soundtrack/remaster display suffixes may differ between the
+            // Windows media session and LRCLIB. Keep actual song names intact.
+            raw=Regex.Replace(raw,
+                @"\s*[-–]\s*(?:\d{4}\s*)?remaster(?:ed)?(?:\s+\d{4})?\s*$",
+                "",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant);
+            raw=Regex.Replace(raw,
+                @"\s*[\[(]\s*(?:\d{4}\s*)?remaster(?:ed)?(?:\s+\d{4})?\s*[\])]",
+                "",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant);
+            return new string(raw.ToLowerInvariant()
+                .Where(char.IsLetterOrDigit).ToArray());
+        }
+        string a=Normalize(left),b=Normalize(right);
+        return a.Length>=2&&a==b;
+    }
+
+    internal static bool ArtistsMatch(string left,string right)
+    {
+        static string Primary(string name)
+        {
+            // Multi-artist metadata often includes comma-separated guests.
+            name=Regex.Split(name,@"(?:,|;|/|&|\bfeat\.?\b|\bft\.?\b)",
+                RegexOptions.IgnoreCase|RegexOptions.CultureInvariant)[0];
+            return new string(name.ToLowerInvariant()
+                .Where(char.IsLetterOrDigit).ToArray());
+        }
+        var a=Primary(left);var b=Primary(right);
+        return a.Length>=2&&a==b;
+    }
+
+    private static async Task<SyncedLyricsSnapshot> SearchFallbackAsync(
+        MediaSnapshot track,string key)
+    {
+        string title=track.Title.Trim();
+        string artist=track.Artist.Trim();
+        // Some SMTC clients append edition labels not present in LRCLIB.
+        // Strip only non-semantic "remaster" suffixes for the query;
+        // verified title/artist/duration checks still guard every result.
+        string shortTitle=Regex.Replace(title,
+            @"\s*[-–]\s*(?:\d{4}\s*)?remaster(?:ed)?(?:\s+\d{4})?\s*$",
+            "",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant);
+        shortTitle=Regex.Replace(shortTitle,
+            @"\s*[\[(]\s*(?:\d{4}\s*)?remaster(?:ed)?(?:\s+\d{4})?\s*[\])]",
+            "",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant).Trim();
+        var queries=new List<string>{
+            "track_name="+Uri.EscapeDataString(title)+
+                "&artist_name="+Uri.EscapeDataString(artist)
+        };
+        if(shortTitle.Length>1 && shortTitle!=title)
+            queries.Add("track_name="+Uri.EscapeDataString(shortTitle)+
+                "&artist_name="+Uri.EscapeDataString(artist));
+        queries.Add("track_name="+Uri.EscapeDataString(
+            shortTitle.Length>1?shortTitle:title));
+        var tries=queries.Distinct(StringComparer.Ordinal).Take(3);
+        foreach(string query in tries)
+        {
+            // LRCLIB asks clients not to flood search endpoints.
+            await Task.Delay(250);
+            using var response=await Client.GetAsync(
+                new Uri("https://lrclib.net/api/search?"+query),
+                HttpCompletionOption.ResponseHeadersRead);
+            if(ApplyRetryAfter(response))
+                return new(key,Array.Empty<SyncedLyricLine>(),"rate-limited");
+            if(!response.IsSuccessStatusCode)continue;
+            using var doc=await ReadBoundedJson(response);
+            if(doc is null||doc.RootElement.ValueKind!=JsonValueKind.Array)
+                continue;
+            IReadOnlyList<SyncedLyricLine>? best=null;
+            double lowestDifference=double.MaxValue;
+            foreach(var result in doc.RootElement.EnumerateArray().Take(20))
+            {
+                if(!TrySelectTrack(result,track,out var parsed))continue;
+                double duration=GetDouble(result,"duration");
+                double diff=duration>0&&track.Duration.TotalSeconds>0
+                    ?Math.Abs(duration-track.Duration.TotalSeconds):0;
+                if(diff<lowestDifference){best=parsed;lowestDifference=diff;}
+            }
+            if(best is {Count:>0})
+                return new(key,best,"LRCLIB / verified search");
+        }
+        return new(key,Array.Empty<SyncedLyricLine>(),"not-found");
     }
 
     private static string GetText(JsonElement root,string key)=>

@@ -205,7 +205,7 @@ internal sealed partial class PixelStudioForm : Form
     public PixelStudioForm()
     {
         UiPolish.Register(this);
-        Text = "Steelseries Dock Customiser 1.1.1 RC4.1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 RC5 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -771,7 +771,14 @@ internal sealed partial class PixelStudioForm : Form
             await SyncedLyricsProvider.EnsureAsync(track);
             if(!IsDisposed && mediaSnapshot.IsPlaying &&
                SyncedLyricsProvider.Key(mediaSnapshot)==SyncedLyricsProvider.Key(track))
+            {
+                var result=SyncedLyricsProvider.Current(track);
+                if(result.Lines.Count==0&&result.Source.Length>0)
+                    SetStatus((UiLanguage.English
+                        ?"No synchronized lyrics for this track: "
+                        :"Bu parça için senkronize söz yok: ")+result.Source);
                 Redraw();
+            }
         }
         catch{/* Lyrics are optional; media and OLED never depend on network. */}
     }
@@ -881,7 +888,9 @@ internal sealed partial class PixelStudioForm : Form
         batteryPolling=true;
         try
         {
-            var newest=await BatterySources.PollAsync();
+            var newest=await BatterySources.PollAsync(
+                enableAdbPhone:batteryPreferences.UseAdbPhoneBattery,
+                autoMinimizePhoneLink:batteryPreferences.AutoMinimizePhoneLink);
             if(IsDisposed)return;
             batterySnapshot=newest;
             foreach(var (kind,pct) in chargingMonitor.Evaluate(

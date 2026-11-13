@@ -18,6 +18,9 @@ namespace SteelseriesDockCustomiser;
 internal static class GgBatteryProvider
 {
     private static readonly Uri Core = new("https://127.0.0.1:6327/");
+    // Only a status hint; never includes the GG configuration JSON or user IDs.
+    internal static string LastDiagnostic {get;private set;}=
+        "SteelSeries GG henüz sorgulanmadı.";
     private static readonly HashSet<string> ExpectedNames = new(StringComparer.Ordinal)
     {
         "aerox_3_wireless_gen2",
@@ -27,6 +30,9 @@ internal static class GgBatteryProvider
     public static async Task<Dictionary<string,BatteryReading>> ReadAsync()
     {
         var found=new Dictionary<string,BatteryReading>(StringComparer.OrdinalIgnoreCase);
+        LastDiagnostic=UiLanguage.English
+            ?"Connecting to GG Engine's local API."
+            :"GG yerel Engine API'sine bağlanılıyor.";
         using var handler = new HttpClientHandler
         {
             AllowAutoRedirect=false,
@@ -43,60 +49,137 @@ internal static class GgBatteryProvider
                !subs.TryGetProperty("engine",out var engine) ||
                !engine.TryGetProperty("metadata",out var metadata) ||
                !metadata.TryGetProperty("encryptedWebServerAddress",out var address))
+            {
+                LastDiagnostic=UiLanguage.English
+                    ?"GG subApps did not expose an Engine endpoint."
+                    :"GG subApps yanıtında Engine bağlantısı bulunamadı.";
                 return found;
+            }
             string? rawAddress=address.GetString();
-            if(!TryEngineUri(rawAddress,out Uri? baseUri) || baseUri is null)return found;
-
-            using var active=await ReadJson(client,new Uri(Core,"v1/loadouts/active"));
-            if(!active.RootElement.TryGetProperty("activeLoadout",out var loadout) ||
-               !loadout.TryGetProperty("id",out var idProp))
+            if(!TryEngineUri(rawAddress,out Uri? baseUri) || baseUri is null)
+            {
+                LastDiagnostic=UiLanguage.English
+                    ?"GG Engine loopback address is missing or unsupported."
+                    :"GG Engine yerel bağlantı adresi bulunamadı veya değişmiş.";
                 return found;
-            string id=idProp.GetString()??"";
-            if(!Guid.TryParse(id,out _))return found;
+            }
 
+            // Different GG builds may provide battery states in /devices
+            // even when the active loadout metadata is unavailable.
+            string? loadoutId=null;
+            try
+            {
+                using var active=await ReadJson(client,
+                    new Uri(Core,"v1/loadouts/active"));
+                if(active.RootElement.TryGetProperty("activeLoadout",
+                    out var loadout)&&
+                   loadout.TryGetProperty("id",out var idProp))
+                {
+                    var id=idProp.GetString();
+                    if(Guid.TryParse(id,out _))loadoutId=id;
+                }
+            }
+            catch(HttpRequestException){}
+            catch(JsonException){}
+            catch(TaskCanceledException){}
             using var devices=await ReadJson(client,new Uri(baseUri,"devices"));
             if(!devices.RootElement.TryGetProperty("devices",out var deviceArr) ||
-               deviceArr.ValueKind!=JsonValueKind.Array)return found;
+               deviceArr.ValueKind!=JsonValueKind.Array)
+            {
+                LastDiagnostic="GG Engine cihaz listesi boş veya biçimi değişmiş.";
+                return found;
+            }
+            int supported=0,states=0;
             foreach(var device in deviceArr.EnumerateArray())
             {
-                if(!device.TryGetProperty("name",out var nameProp))continue;
+                if(!device.TryGetProperty("name",out var nameProp) ||
+                   nameProp.ValueKind!=JsonValueKind.String)continue;
                 string name=nameProp.GetString()??"";
-                if(!ExpectedNames.Contains(name) ||
-                   !device.TryGetProperty("connected",out var connected))continue;
-                bool headsetConnected=IsConnected(connected);
-                // The base station's spare battery is physically available
-                // even while the headset itself is powered off. Check the
-                // verified base HID collection separately in that case.
-                bool dockPresent=name=="arctis_nova_pro_wireless_tx" &&
-                    (headsetConnected || IsDockPresent());
-                if(!headsetConnected && !dockPresent)continue;
-
-                string relative="v2/device/config/loadout?device="+
-                    Uri.EscapeDataString(name)+"&loadoutId="+Uri.EscapeDataString(id);
-                try
+                if(!IsSupported(name))continue;
+                supported++;
+                bool headsetConnected=device.TryGetProperty("connected",
+                    out var connected)&&IsConnected(connected);
+                bool dockPresent=IsNovaPro(name) &&
+                    (headsetConnected||IsDockPresent());
+                if(!headsetConnected&&!dockPresent)continue;
+                JsonElement battery=default;
+                if(TryExtractBattery(device,out var direct))battery=direct;
+                if(loadoutId is not null)
                 {
-                    using var state=await ReadJson(client,new Uri(baseUri,relative));
-                    if(!state.RootElement.TryGetProperty("loadoutConfiguration",out var config) ||
-                       !config.TryGetProperty("statuses",out var statuses) ||
-                       !statuses.TryGetProperty("batteryLevels",out var battery))
-                        continue;
-                    if(headsetConnected &&
-                       TryParseBattery(name,battery,DateTimeOffset.Now,out var reading))
-                        found[reading.Kind]=reading;
-                    if(dockPresent &&
-                       TryParseSpareBattery(name,battery,DateTimeOffset.Now,out var spare))
-                        found["SpareBattery"]=spare;
+                    string relative="v2/device/config/loadout?device="+
+                        Uri.EscapeDataString(name)+"&loadoutId="+
+                        Uri.EscapeDataString(loadoutId);
+                    try
+                    {
+                        using var response=await ReadJson(client,
+                            new Uri(baseUri,relative));
+                        if(TryExtractBattery(response.RootElement,
+                            out var configured))
+                            battery=configured.Clone();
+                    }
+                    catch(HttpRequestException){}
+                    catch(TaskCanceledException){}
+                    catch(JsonException){}
                 }
-                catch(HttpRequestException){}
-                catch(TaskCanceledException){}
-                catch(JsonException){}
+                if(battery.ValueKind!=JsonValueKind.Object)continue;
+                states++;
+                if(headsetConnected&&TryParseBattery(name,battery,
+                    DateTimeOffset.Now,out var reading))
+                    found[reading.Kind]=reading;
+                if(dockPresent&&TryParseSpareBattery(name,battery,
+                    DateTimeOffset.Now,out var spare))
+                    found["SpareBattery"]=spare;
             }
+            LastDiagnostic=found.Count>0
+                ?"GG doğrulanmış canlı pil verileri okundu."
+                :supported==0
+                    ?"GG Engine cihaz listesinde desteklenen Nova Pro bulunamadı."
+                    :states==0
+                        ?"GG cihazı görüyor fakat pil alanlarını sağlamıyor. "+
+                            "Engine bağlantısını ve GG sürümünü kontrol edin."
+                        :"GG pil durumunu doğrulamadı; tahmini yüzde kullanılmadı.";
         }
         catch(HttpRequestException){}
         catch(TaskCanceledException){}
         catch(JsonException){}
         catch(InvalidOperationException){}
+        if(found.Count==0&&
+           (LastDiagnostic=="GG yerel Engine API'sine bağlanılıyor."||
+            LastDiagnostic=="Connecting to GG Engine's local API."))
+            LastDiagnostic=UiLanguage.English
+                ?"GG Engine's local API is not reachable. Is GG running?"
+                :"GG yerel Engine API'sine erişilemiyor. "+
+                    "SteelSeries GG / Engine çalışıyor mu?";
         return found;
+    }
+
+    private static bool IsNovaPro(string name)=>
+        name.StartsWith("arctis_nova_pro_wireless_tx",
+            StringComparison.OrdinalIgnoreCase);
+    private static bool IsSupported(string name)=>
+        ExpectedNames.Contains(name)||IsNovaPro(name);
+
+    /// <summary>
+    /// GG battery objects can be nested in current loadouts or directly in
+    /// live /devices responses. Accept only a real batteryLevels object;
+    /// never infer percentages from arbitrary JSON fields.
+    /// </summary>
+    internal static bool TryExtractBattery(JsonElement payload,
+        out JsonElement battery)
+    {
+        battery=default;
+        if(payload.ValueKind!=JsonValueKind.Object)return false;
+        JsonElement root=payload;
+        if(root.TryGetProperty("loadoutConfiguration",out var loadout)&&
+           loadout.ValueKind==JsonValueKind.Object)
+            root=loadout;
+        if(root.TryGetProperty("statuses",out var statuses)&&
+           statuses.ValueKind==JsonValueKind.Object)
+            root=statuses;
+        if(root.TryGetProperty("batteryLevels",out var candidate)&&
+           candidate.ValueKind==JsonValueKind.Object)
+        {battery=candidate;return true;}
+        return false;
     }
 
     private static readonly object presenceLock=new();
@@ -137,19 +220,24 @@ internal static class GgBatteryProvider
         string kind=device switch
         {
             "aerox_3_wireless_gen2"=>"Mouse",
-            "arctis_nova_pro_wireless_tx"=>"Headset",
+            _ when IsNovaPro(device)=> "Headset",
             _=>""
         };
-        if(string.IsNullOrEmpty(kind) ||
-           !b.TryGetProperty("type",out var typeElement) ||
-           typeElement.ValueKind!=JsonValueKind.String)
-            return false;
-
-        var type=typeElement.GetString();
+        if(string.IsNullOrEmpty(kind))return false;
+        string? type=null;
+        if(b.TryGetProperty("type",out var typeElement))
+        {
+            if(typeElement.ValueKind!=JsonValueKind.String)return false;
+            type=typeElement.GetString();
+        }
         bool known=type switch
         {
             "single_battery"=>GetBool(b,"statusKnown"),
             "primary_and_backup_battery"=>GetBool(b,"primaryStatusKnown"),
+            // Some GG Engine revisions omit the type but retain explicit
+            // statusKnown fields. Never read a number without that proof.
+            null=>GetBool(b,"primaryStatusKnown")||
+                GetBool(b,"statusKnown"),
             _=>false
         };
         if(!known || !TryPercent(b,"percent",out int pct))return false;
@@ -179,13 +267,16 @@ internal static class GgBatteryProvider
         DateTimeOffset at,out BatteryReading reading)
     {
         reading=new BatteryReading("SpareBattery",null,"SteelSeries GG","Yedek pil bilgisi yok",at);
-        if(device!="arctis_nova_pro_wireless_tx" ||
-           !b.TryGetProperty("type",out var type) ||
-           type.GetString()!="primary_and_backup_battery" ||
+        if(!IsNovaPro(device) ||
+           (b.TryGetProperty("type",out var type)&&
+            type.ValueKind==JsonValueKind.String&&
+            type.GetString()!="primary_and_backup_battery") ||
            !TryPercent(b,"backupPercent",out var percent))
             return false;
         if(b.TryGetProperty("backupStatusKnown",out var known) &&
            known.ValueKind==JsonValueKind.False)return false;
+        if(!b.TryGetProperty("type",out _) &&
+           !GetBool(b,"backupStatusKnown"))return false;
         reading=new BatteryReading("SpareBattery",percent,
             "SteelSeries GG Engine (canlı)",
             GetBool(b,"backupCharging")?"Dock'ta şarj oluyor":"Yedek pil takılı",at,GetBool(b,"backupCharging"))

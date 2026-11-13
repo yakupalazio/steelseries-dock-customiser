@@ -553,7 +553,29 @@ internal sealed partial class PixelStudioForm
             new("Ayarlar ve destek","Geçiş animasyonları, dil, pil ayarları, "+
                 "Hata Bildir ve bu rehberi yeniden başlatma burada.",
                 guideSettings)
-        ],()=>{});
+        ],()=>{
+            if(!force&&!captureMode&&!traySmokeMode&&
+               !DeviceSetupState.Completed()&&IsHandleCreated)
+            {
+                // The guide has been removed before this runs. The scan
+                // starts asynchronously and can be skipped by the user.
+                BeginInvoke((Action)(()=>{
+                    if(IsDisposed||DeviceSetupState.Completed())return;
+                    try
+                    {
+                        using var setup=new DeviceSetupDialog(
+                            ()=>batterySnapshot,batteryPreferences,
+                            RefreshBatteriesAsync);
+                        setup.ShowDialog(this);
+                    }
+                    finally
+                    {
+                        try{DeviceSetupState.MarkCompleted();}catch{}
+                        _=RefreshBatteriesAsync();
+                    }
+                }));
+            }
+        });
         Controls.Add(tour);tour.BringToFront();
     }
 

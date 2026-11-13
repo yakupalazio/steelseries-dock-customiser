@@ -121,7 +121,18 @@ internal sealed class OptionalMediaWidgetDialog:Form
         output.SelectedIndexChanged+=(_,_)=>
             Updated.AudioEndpointId=(output.SelectedItem as AudioOutputOption)?.Id??"";
         Row("Ses çıkışı",output);
-        var mode=Combo("Bars","Stereo","Circular");
+        var mode=Combo("Bars","Stereo","Circular","Bubbles","Pulse");
+        mode.FormattingEnabled=true;
+        mode.Format+=(_,e)=>{
+            if(e.ListItem is not string key)return;
+            e.Value=key switch{
+                "Bars"=>UiLanguage.English?"Bars":"Çubuklar",
+                "Stereo"=>UiLanguage.English?"Stereo":"Stereo",
+                "Circular"=>UiLanguage.English?"Circular":"Dairesel",
+                "Bubbles"=>UiLanguage.English?"Bubbles":"Baloncuklar",
+                "Pulse"=>UiLanguage.English?"Pulse":"Nabız",
+                _=>key};
+        };
         mode.SelectedItem=Updated.VisualizerStyle;
         Row("Görünüm",mode);
         mode.SelectedIndexChanged+=(_,_)=>Updated.VisualizerStyle=
@@ -135,8 +146,12 @@ internal sealed class OptionalMediaWidgetDialog:Form
         width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
         height.ValueChanged+=(_,_)=>Updated.VisualizerHeight=(int)height.Value;
         gain.ValueChanged+=(_,_)=>Updated.VisualizerGain=(int)gain.Value;
-        Note("Bars: frekans çubukları. Stereo: sol kanal solda, "+
-            "sağ kanal sağda. Circular: dairesel ses tepkisi.");
+        Note(UiLanguage.English
+            ?"Bars: frequency columns; Stereo: two channels; Circular: radial; "+
+              "Bubbles: rising bubbles accelerate with the beat; Pulse: bass rings."
+            :"Bars: frekans çubukları; Stereo: iki kanal; Circular: "+
+              "dairesel tepkiler; Bubbles: ritimle hızlanan baloncuklar; "+
+              "Pulse: bas ritmine tepki veren piksel halkaları.");
     }
 
     private void BuildGif()

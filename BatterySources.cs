@@ -53,8 +53,9 @@ internal static class BatterySources
         // if the usual source is unavailable. Nothing is installed/prompted.
         // One bounded background recovery for Windows' built-in Phone Link
         // is attempted when the COM server has no accessible battery window.
-        phone=await PhoneLinkBatteryProvider.TryReadAsync(true);
-        if(phone is null && AdbPhoneBatteryProvider.Installed)
+        phone=await PhoneLinkBatteryProvider.TryReadAsync(
+            autoMinimizePhoneLink);
+        if(phone is null && enableAdbPhone && AdbPhoneBatteryProvider.Installed)
             phone=await AdbPhoneBatteryProvider.ReadAsync();
         if(phone is not null)
             snapshot.Values["Phone"] = phone;
@@ -224,6 +225,17 @@ internal static class BatterySources
                     (now-old.CheckedAt).TotalSeconds>10)
                 values[kind]=new BatteryReading(kind,null,
                     "SteelSeries GG (bağlantı yok)","Son onaylı veri 10 saniyeyi aştı.",now);
+        }
+        foreach(string role in new[]{"Headset","SpareBattery"})
+        {
+            if(gg.ContainsKey(role))continue;
+            // A brief GG dropout keeps the last fresh reading, but a
+            // disconnected device never retains an obsolete percentage.
+            if(values.TryGetValue(role,out var old)&&
+               old.Available&&(now-old.CheckedAt).TotalSeconds<=10)continue;
+            values[role]=new BatteryReading(role,null,
+                "SteelSeries GG Engine",
+                GgBatteryProvider.LastDiagnostic,now);
         }
         return new BatterySnapshot{
             CheckedAt=now,Values=values,DualSenseConnected=previous.DualSenseConnected

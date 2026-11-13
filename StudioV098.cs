@@ -171,8 +171,7 @@ internal sealed class StudioProject
     {
         List<DockWidget> common=[
             new(){Kind="BatterySlot1",X=1,Y=53},
-            new(){Kind="BatterySlot2",X=43,Y=53},
-            new(){Kind="BatterySlot3",X=85,Y=53}
+            new(){Kind="BatterySlot2",X=85,Y=53}
         ];
         List<DockWidget> primary=mode switch
         {
@@ -317,7 +316,7 @@ internal sealed class StudioProject
             w.LyricOffsetMs=Math.Clamp(w.LyricOffsetMs,-10000,10000);
             w.LyricLines=Math.Clamp(w.LyricLines,1,3);
             w.TextWidth=Math.Clamp(w.TextWidth,0,128);
-            w.VisualizerStyle=w.VisualizerStyle is "Bars" or "Stereo" or "Circular"
+            w.VisualizerStyle=w.VisualizerStyle is "Bars" or "Stereo" or "Circular" or "Bubbles" or "Pulse"
                 ?w.VisualizerStyle:"Bars";
             w.AudioEndpointId=(w.AudioEndpointId??"")[..
                 Math.Min(w.AudioEndpointId?.Length??0,512)];

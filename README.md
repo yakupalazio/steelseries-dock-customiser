@@ -1,3 +1,7 @@
+# SteelSeries Dock Customiser — RC5 Cross-Machine Reliability (PRIVATE TEST)
+
+> **RC5 cross-machine private preview:** New-install OLED defaults show only Nova Pro headset and spare battery slots; first-run device discovery can recognize and assign verified USB/Bluetooth battery sources; safe per-device nicknames; SteelSeries GG Nova Pro primary/spare battery reader supports alternative status layouts and offers visible diagnostics; Phone Link does not self-open unless separately enabled; LRCLIB timed lyrics get a validated metadata-search fallback; optional Bubbles and Pulse music visualizers. This build **does not claim to support every vendor-specific battery protocol**. Existing user's saved designs and workshop contract remain unchanged. See [RC5 Notes](RELEASE_NOTES_RC5_CROSS_MACHINE.md).
+
 # Steelseries Dock Customiser — RC4.1 Windows Integration
 
 > **RC4.1 private preview:** Windows oturumu açıldığında uygulamayı başlatma (varsayılan kapalı, yalnızca kullanıcı hesabı); isteğe bağlı High işlem önceliği (varsayılan kapalı, Realtime yok); yalnızca Windows izin vermiyorsa kullanıcı onayıyla UAC yardımcısı. Kaynak kodlar, profiller, OLED ve gelecekteki Workshop etkilenmez. Ayrıntılar: [RC4.1 Windows Integration Notes](RELEASE_NOTES_RC41_WINDOWS_INTEGRATION.md).

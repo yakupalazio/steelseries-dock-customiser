@@ -10,7 +10,7 @@ internal static class BatteryPriority
         ["Mouse","Phone","DualSense","Laptop","Headset","SpareBattery"];
 
     public static readonly string[] DefaultKinds =
-        ["Mouse","Phone","DualSense","Laptop","Headset","SpareBattery"];
+        ["Headset","SpareBattery"];
 
     // Labels come from THIS PC's live sources or connected Bluetooth
     // device inventory. No owner's phone/headset/mouse model is shipped.
@@ -41,6 +41,7 @@ internal static class BatteryPriority
     internal static string[] SelectThreeAt(BatterySnapshot snapshot,
         BatteryPreferences preferences,DateTimeOffset now)
         => Sanitize(preferences.PriorityKinds)
+            .Concat(AllKinds)
             .Concat(snapshot.Values.Keys
                 .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
                     k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase))

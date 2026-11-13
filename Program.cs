@@ -716,6 +716,22 @@ internal static class Program
                 inventory.Close();
                 return;
             }
+            if(args.Contains("--capture-device-setup"))
+            {
+                using var setup=new DeviceSetupDialog(
+                    ()=>new BatterySnapshot(),new BatteryPreferences(),
+                    ()=>System.Threading.Tasks.Task.CompletedTask);
+                setup.EnableOffscreenCapture();
+                setup.StartPosition=FormStartPosition.Manual;
+                setup.Location=new System.Drawing.Point(-5000,-5000);
+                setup.ShowInTaskbar=false;
+                setup.Show();Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(setup.Width,setup.Height);
+                setup.DrawToBitmap(shot,
+                    new System.Drawing.Rectangle(0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                setup.Close();return;
+            }
             if(args.Contains("--capture-bug-report"))
             {
                 using var report=new BugReportDialog();

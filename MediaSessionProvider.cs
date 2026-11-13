@@ -41,9 +41,14 @@ internal static class MediaSessionProvider
             manager ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             var sessions=manager.GetSessions();
             // The system-selected session may be paused even when another session is playing.
-            var playing=sessions.FirstOrDefault(session =>
-                session.GetPlaybackInfo()?.PlaybackStatus ==
-                GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing);
+            var playing=sessions
+                .Where(session=>session.GetPlaybackInfo()?.PlaybackStatus ==
+                    GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                // Spotify metadata must not be silently replaced by an
+                // unrelated browser/player session on another computer.
+                .OrderByDescending(session=>
+                    MediaSnapshot.IsSpotifyApp(session.SourceAppUserModelId))
+                .FirstOrDefault();
             if(playing is null) return MediaSnapshot.Empty;
 
             var props=await playing.TryGetMediaPropertiesAsync();

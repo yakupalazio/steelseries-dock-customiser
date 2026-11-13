@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace SteelseriesDockCustomiser;
 
@@ -698,6 +699,33 @@ internal static class OledRenderer
         }
     }
 
+    private sealed class ParticleMotion
+    {
+        internal long LastTick=Environment.TickCount64;
+        internal double Phase;
+    }
+    private static readonly ConditionalWeakTable<DockWidget,ParticleMotion>
+        ParticleStates=new();
+
+    private static double EasedParticlePhase(DockWidget widget,
+        float[] left,float[] right,float gain)
+    {
+        float bass=0;
+        for(int i=0;i<3;i++)
+            bass+=Math.Clamp((left[i]+right[i])*.5f*gain,0,1)/3f;
+        var motion=ParticleStates.GetValue(widget,_=>new ParticleMotion());
+        lock(motion)
+        {
+            long now=Environment.TickCount64;
+            double elapsed=Math.Clamp((now-motion.LastTick)/1000.0,0,.25);
+            motion.LastTick=now;
+            // Integrate speed, rather than multiply elapsed wall time by
+            // instantaneous bass (which would teleport the bubbles on beats).
+            motion.Phase+=elapsed*(.16+Math.Sqrt(bass)*2.3);
+            return motion.Phase;
+        }
+    }
+
     private static void DrawAudioVisualization(bool[] pixels,DockWidget widget,
         AudioVisualizationSnapshot? audio)
     {
@@ -711,6 +739,13 @@ internal static class OledRenderer
         var left=audio?.Fresh==true?audio.Left:AudioVisualizationSnapshot.Silent.Left;
         var right=audio?.Fresh==true?audio.Right:AudioVisualizationSnapshot.Silent.Right;
         if(left.Length<12||right.Length<12)return;
+        if(widget.VisualizerStyle is "Bubbles" or "Pulse")
+        {
+            DrawReactiveParticles(pixels,widget.VisualizerStyle,x,y,
+                width,height,left,right,gain,
+                EasedParticlePhase(widget,left,right,gain));
+            return;
+        }
         if(widget.VisualizerStyle=="Circular")
         {
             double cx=x+(width-1)/2.0,cy=y+(height-1)/2.0;
@@ -772,6 +807,68 @@ internal static class OledRenderer
             for(int bx=start;bx<=end;bx++)
             for(int by=y+height-barHeight;by<y+height;by++)
                 Dot(pixels,bx,by);
+        }
+    }
+
+    /// <summary>
+    /// No frame accumulation or particle allocations. All positions derive
+    /// from wall-clock phase and verified live WASAPI energy. Slower when
+    /// quiet, faster when bass peaks; no invented activity in silence.
+    /// Draws only within the assigned widget rectangle on the 1-bit OLED.
+    /// </summary>
+    internal static void DrawReactiveParticles(bool[] pixels,string style,
+        int x,int y,int width,int height,float[] left,float[] right,
+        float gain,double motionPhase)
+    {
+        float bass=0,energy=0;
+        for(int i=0;i<12;i++)
+        {
+            float level=Math.Clamp((left[i]+right[i])*.5f*gain,0,1);
+            energy+=level/12f;
+            if(i<3)bass+=level/3f;
+        }
+        if(energy<.025f)return;
+        if(style=="Pulse")
+        {
+            int cx=x+width/2,cy=y+height/2;
+            int radius=Math.Max(1,Math.Min(width,height)/2-2);
+            int ringCount=Math.Clamp(1+(int)(Math.Sqrt(bass)*4),1,5);
+            double beat=Math.Clamp(bass*2,0,1);
+            for(int ring=0;ring<ringCount;ring++)
+            {
+                double r=Math.Max(1,radius*(ring+1.0)/(ringCount+1)*
+                    (0.7+0.3*beat));
+                for(int i=0;i<60;i++)
+                {
+                    double theta=i*Math.PI*2/60;
+                    int px=(int)Math.Round(cx+Math.Cos(theta)*r);
+                    int py=(int)Math.Round(cy+Math.Sin(theta)*r);
+                    if(px>=x&&px<x+width&&py>=y&&py<y+height)
+                        Dot(pixels,px,py);
+                }
+            }
+            return;
+        }
+        // Each bubble has a deterministic speed that rises with the beat.
+        // The song audio is never buffered or retained by the widget.
+        double steps=motionPhase;
+        int count=Math.Clamp(4+(int)(energy*12),4,15);
+        for(int index=0;index<count;index++)
+        {
+            double phase=(steps*(.6+(index%3)*.2)+index*.241)%1;
+            int cx=x+2+(index*37+index*index*11)%
+                Math.Max(1,width-4);
+            int cy=y+height-1-(int)Math.Round(phase*(height-2));
+            int radius=1+(index%3==0&&energy>.12f?1:0)+
+                (bass>.40f&&index%4==0?1:0);
+            for(int angle=0;angle<24;angle++)
+            {
+                double theta=angle*Math.PI*2/24;
+                int px=(int)Math.Round(cx+Math.Cos(theta)*radius);
+                int py=(int)Math.Round(cy+Math.Sin(theta)*radius);
+                if(px>=x&&px<x+width&&py>=y&&py<y+height)
+                    Dot(pixels,px,py);
+            }
         }
     }
 

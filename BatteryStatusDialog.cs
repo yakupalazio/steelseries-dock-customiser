@@ -94,7 +94,10 @@ internal sealed class BatteryStatusDialog : Form
         Left=720,Top=517,Width=100,Minimum=1,Maximum=99};
     private readonly DarkNumberBox warningRepeat=new(){
         Left=500,Top=555,Width=100,Minimum=5,Maximum=240};
-    // The app never opens Phone Link without an explicit user action.
+    private readonly DarkCheckBox phoneLinkRecovery=new(){
+        Left=17,Top=584,Width=790,Height=31,AutoSize=false,
+        Text="Phone Link erişilemiyorsa otomatik açıp küçült (isteğe bağlı)"};
+    // Never launch Phone Link without an explicit enabled preference.
 
     public BatteryStatusDialog(BatteryPreferences preferences,
         Func<BatterySnapshot> getSnapshot,Func<Task> update,Action apply)
@@ -135,6 +138,16 @@ internal sealed class BatteryStatusDialog : Form
             inventory.ShowDialog(this);
         };
         Controls.Add(connectedDevices);
+        var deviceSetup=new DarkButton{
+            Left=459,Top=232,Width=140,Height=32,
+            Text=UiLanguage.English?"Device setup":"Cihaz kurulumu"};
+        deviceSetup.Click+=(_,_)=>{
+            using var wizard=new DeviceSetupDialog(snapshotGetter,prefs,refresh);
+            wizard.ShowDialog(this);
+            onApply();
+            UpdateRows();
+        };
+        Controls.Add(deviceSetup);
         Controls.Add(new Label{
             Left=17,Top=271,Width=360,Height=23,
             Text="Öncelik sırası (yukarıdaki üç uygun cihaz):"
@@ -189,6 +202,8 @@ internal sealed class BatteryStatusDialog : Form
                 "güvenilir olmayan yüzdeler OLED'e çıkmaz.",
             ForeColor=Color.DarkSlateGray
         });
+        phoneLinkRecovery.Checked=prefs.AutoMinimizePhoneLink;
+        Controls.Add(phoneLinkRecovery);
         lowWarning.Checked=prefs.EnableLowBatteryWarnings;
         warningPercent.Value=Math.Clamp(prefs.LowBatteryWarningPercent,1,99);
         criticalPercent.Value=Math.Clamp(prefs.CriticalBatteryWarningPercent,1,99);
@@ -210,7 +225,7 @@ internal sealed class BatteryStatusDialog : Form
             prefs.LowBatteryWarningPercent=(int)warningPercent.Value;
             prefs.CriticalBatteryWarningPercent=(int)criticalPercent.Value;
             prefs.WarningRepeatMinutes=(int)warningRepeat.Value;
-            prefs.AutoMinimizePhoneLink=false;
+            prefs.AutoMinimizePhoneLink=phoneLinkRecovery.Checked;
             prefs.Save();
             onApply();
             if(TopLevel)Close();
@@ -306,9 +321,10 @@ internal sealed class BatteryStatusDialog : Form
     {
         if(IsDisposed)return;
         var snap=snapshotGetter();
-        var kinds=BatteryPriority.AllKinds.Concat(snap.Values.Keys
-            .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase) ||
-                k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)))
+        var kinds=BatteryPriority.DefaultKinds.Concat(snap.Values
+            .Where(pair=>pair.Value.Available &&
+                BatteryPriority.IsCurrent(pair.Value,DateTimeOffset.Now))
+            .Select(pair=>pair.Key))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if(grid.Rows.Count!=kinds.Length ||
            kinds.Where((kind,i)=>i<grid.Rows.Count &&
