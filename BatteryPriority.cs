@@ -23,7 +23,8 @@ internal static class BatteryPriority
             .Where(k=>AllKinds.Contains(k)||
                 k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
                 k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)||
-                k.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase))
+                k.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)||
+                k.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.Ordinal).ToList();
         foreach(var kind in DefaultKinds)
             if(!result.Contains(kind)) result.Add(kind);
@@ -46,7 +47,8 @@ internal static class BatteryPriority
             .Concat(snapshot.Values.Keys
                 .Where(k=>k.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
                     k.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)||
-                k.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase))
+                k.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)||
+                k.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase))
                 .OrderBy(k=>k,StringComparer.Ordinal))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(kind=>IsCurrent(snapshot[kind],now))
@@ -62,7 +64,8 @@ internal static class BatteryPriority
         double ttl=reading.Kind is "Phone" or "DualSense" ? 25 :
             reading.Kind.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)||
             reading.Kind.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)||
-            reading.Kind.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)
+            reading.Kind.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)||
+            reading.Kind.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase)
                 ?25:12;
         return age>=TimeSpan.FromSeconds(-5) &&
             age<=TimeSpan.FromSeconds(ttl);

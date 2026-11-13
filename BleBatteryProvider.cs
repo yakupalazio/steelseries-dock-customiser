@@ -93,6 +93,13 @@ internal static class BleBatteryProvider
     internal static bool IsValidBatteryByte(byte[]? data)=>
         data is {Length:1}&&data[0]<=100;
 
+    // Both WinRT access routes to a BAS instance must produce exactly
+    // the same local key. Distinct identical-named devices (and two BAS
+    // instances on one peripheral) must never be merged merely by name
+    // and coincidentally equal battery percent.
+    private static string ServiceIdentity(GattDeviceService service)=>
+        service.DeviceId+"/battery/"+service.AttributeHandle;
+
     private static async Task<BatteryReading?> ReadCharacteristic(
         GattDeviceService service,string identity,string? deviceName)
     {
@@ -147,7 +154,8 @@ internal static class BleBatteryProvider
                                 name=service.Device.Name;
                         }
                         catch{}
-                        var reading=await ReadCharacteristic(service,info.Id,name);
+                        var reading=await ReadCharacteristic(service,
+                            ServiceIdentity(service),name);
                         if(reading is not null)list.Add(reading);
                     }
                     catch{/* Some services are inaccessible without user consent. */}
@@ -177,24 +185,18 @@ internal static class BleBatteryProvider
                             BatteryService,BluetoothCacheMode.Uncached);
                         if(services.Status!=GattCommunicationStatus.Success)
                             continue;
-                        int index=0;
                         foreach(var service in services.Services.Take(5))
                         {
                             using(service)
                             {
-                                string serviceKey=info.Id+
-                                    "/battery/"+index;
                                 var reading=await ReadCharacteristic(service,
-                                    serviceKey,device.Name);
+                                    ServiceIdentity(service),device.Name);
                                 if(reading is not null &&
                                    !list.Any(existing=>
-                                       existing.Percent==reading.Percent&&
-                                       string.Equals(existing.FriendlyName,
-                                           reading.FriendlyName,
+                                       string.Equals(existing.Kind,reading.Kind,
                                            StringComparison.OrdinalIgnoreCase)))
                                     list.Add(reading);
                             }
-                            index++;
                         }
                     }
                     catch{/* No paired or untrusted device is ever written to. */}

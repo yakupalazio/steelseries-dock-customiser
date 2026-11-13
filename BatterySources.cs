@@ -84,6 +84,7 @@ internal static class BatterySources
         MergeVerifiedBleReadings(snapshot,genericReadings);
         MergeVerifiedHidReadings(snapshot,genericReadings);
         MergeVerifiedVendorReadings(snapshot,genericReadings);
+        MergeVerifiedWindowsBluetoothReadings(snapshot,genericReadings);
         // SetupAPI is useful for unsupported Classic Bluetooth hardware,
         // including checking whether Windows has ever seen a phone battery.
         // Its percentages can be stale while the device is disconnected,
@@ -190,6 +191,44 @@ internal static class BatterySources
                        StringComparison.OrdinalIgnoreCase)))
                 continue;
             snapshot.Values[reading.Kind]=reading;
+        }
+    }
+
+    /// <summary>
+    /// Bluetooth Classic headsets may expose HFP battery to Windows PnP
+    /// without implementing the LE GATT battery service. This source is
+    /// eligible only if the OS independently confirms the exact Bluetooth
+    /// device address is *currently connected*. Never promote a merely
+    /// paired or stale SetupAPI battery value.
+    /// </summary>
+    internal static void MergeVerifiedWindowsBluetoothReadings(
+        BatterySnapshot snapshot,IReadOnlyList<BatteryReading> discovered)
+    {
+        foreach(var reading in discovered)
+        {
+            if(!reading.Available ||
+               !reading.Kind.StartsWith("WinBt:",
+                   StringComparison.OrdinalIgnoreCase))continue;
+            string name=reading.FriendlyName.ToLowerInvariant();
+            string? slot=name.Contains("arctis nova pro")?"Headset":
+                name.Contains("dualsense")?"DualSense":
+                null;
+            if(slot is not null)
+            {
+                if(!snapshot[slot].Available)
+                    snapshot.Values[slot]=reading with{Kind=slot};
+                continue;
+            }
+            // Prefer validated BLE/HID/vendor when the same unique
+            // model has already been read by an independent live source.
+            bool duplicate=reading.FriendlyName.Length>2&&
+                snapshot.Values.Values.Any(existing=>
+                    existing.Available&&
+                    existing.FriendlyName.Length>2&&
+                    string.Equals(existing.FriendlyName,
+                        reading.FriendlyName,
+                        StringComparison.OrdinalIgnoreCase));
+            if(!duplicate)snapshot.Values[reading.Kind]=reading;
         }
     }
 

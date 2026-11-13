@@ -1,3 +1,7 @@
+# SteelSeries Dock Customiser — RC7 Wireless Library (PRIVATE TEST)
+
+> **RC7 private preview:** Independent, compact wireless catalog: **364 model names / 35 brands**, with ATK, WLMOUSE and Wraith priority. **Recognition is not a guarantee of battery reading.** Standard Bluetooth GATT was extended with a connected-device fallback; Windows Classic Bluetooth/HFP battery reports require verified connected status and may lag hardware. The user-visible Battery Settings and profile manager were polished. Lyrics support **1–4 lines** and five transition effects. Connected Devices has a privacy-conscious, opt-in "Copy report" function. No copied OpenMouse AGPL source code, no undocumented HID writes, no public Workshop/telemetry. [RC7 full notes](RELEASE_NOTES_RC7_WIRELESS_LIBRARY.md).
+
 # SteelSeries Dock Customiser — RC6 Optional Vendor SDK (PRIVATE TEST)
 
 > RC6 adds an optional official Corsair iCUE SDK BatteryLevel reader (0–100%, verified read-only property), preserving the existing SteelSeries GG and generic GATT/HID sources. The SDK DLL is not distributed, downloaded or automatically installed because third-party redistribution terms require review. See [RC6 Vendor API Notes](RELEASE_NOTES_RC6_VENDOR_API.md). The new Settings > Battery > Brand battery sources screen explains confirmed APIs vs proprietary protocols. This is **not** general Razer/Logitech/ASUS/HyperX/WLMOUSE app API support: no public battery APIs could be confirmed for those apps. Never invent percentages or run vendor software without consent.

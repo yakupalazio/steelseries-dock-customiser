@@ -216,12 +216,12 @@ internal sealed class BatteryStatusDialog : Form
         Controls.Add(new Label{
             Left=17,Top=456,Width=835,Height=48,
             Text=UiLanguage.English
-                ?"Sources: SteelSeries GG, connected Bluetooth GATT, "+
-                  "standard HID, optional vendor SDKs and Phone Link. "+
-                  "Only verified live values appear on the OLED."
+                ?"Sources: SteelSeries GG, connected Bluetooth, "+
+                  "standard HID, optional SDKs and Phone Link. "+
+                  "Windows-reported Bluetooth levels may lag."
                 :"Veri kaynakları: GG, bağlı Bluetooth, standart HID, "+
-                  "isteğe bağlı üretici SDK'ları ve Phone Link. "+
-                  "OLED'de yalnızca doğrulanmış güncel yüzdeler gösterilir.",
+                  "isteğe bağlı SDK'lar ve Phone Link. "+
+                  "Windows Bluetooth yüzdeleri gecikmeli güncellenebilir.",
             ForeColor=Color.FromArgb(143,171,188),
             Font=new Font("Segoe UI",9.1f)
         });

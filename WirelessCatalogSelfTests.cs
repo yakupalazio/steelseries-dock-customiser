@@ -47,6 +47,14 @@ internal static class WirelessCatalogSelfTests
            WirelessCompatibilityCatalog.RecognizeUsbIdentity(
             0x3057,0x1005)?.Model!="AX Wireless" ||
            WirelessCompatibilityCatalog.RecognizeUsbIdentity(
+            0x36A7,0xA870)?.Model!="Beast X Pro" ||
+           WirelessCompatibilityCatalog.RecognizeUsbIdentity(
+            0x36A7,0xA880)?.Model!="Beast Max" ||
+           WirelessCompatibilityCatalog.RecognizeUsbIdentity(
+            0x046D,0xC094)?.Model!="G Pro X Superlight" ||
+           WirelessCompatibilityCatalog.RecognizeUsbIdentity(
+            0x3057,0x1014)?.Model!="NP-01S V3 Wireless" ||
+           WirelessCompatibilityCatalog.RecognizeUsbIdentity(
             0x373B,0x0101)!=null)
             throw new Exception("VID/PID precise identity failed.");
 

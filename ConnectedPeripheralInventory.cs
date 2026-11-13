@@ -271,10 +271,16 @@ internal static class ConnectedPeripheralInventory
                 "Mouse" or "Keyboard" or "Headset" or "Controller")
                 icon=recognized.Category=="Controller"
                     ?"DualSense":recognized.Category;
-            if(recognized is {ExactModel:true} &&
-               NameScore(name)<0 &&
-               recognized.Confidence=="documented-receiver")
-                name=recognized.Name+" (receiver)";
+            // Only a truly model-specific, documented receiver ID can
+            // upgrade the generic "dongle" device name to a real model.
+            // A shared ATK/VXE/Logitech dongle still stays brand-only.
+            if(recognized is {ExactModel:true,
+                Confidence:"documented-receiver"}&&
+               new[]{"receiver","dongle","nearlink","nano alıcı"}
+                   .Any(word=>name.Contains(word,
+                       StringComparison.OrdinalIgnoreCase)))
+                name=recognized.Name+(UiLanguage.English
+                    ?" (receiver)":" (alıcı)");
             rows.Add(new ConnectedPeripheral(group.Key,name,connection,maker,
                 reading?.IconKind?.Length>0?reading.IconKind:icon,
                 reading?.Percent,

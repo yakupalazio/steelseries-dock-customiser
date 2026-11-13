@@ -46,12 +46,14 @@ internal sealed class WirelessCompatibilityDialog:Form
             ForeColor=Color.FromArgb(157,179,196),
             Text=english
                 ?"The catalog identifies wireless device models, not guaranteed "+
-                 "battery readers.\nOnly verified live percentages from GG, "+
-                 "Bluetooth GATT, standard HID and official SDKs are shown."
+                 "battery readers.\nSources: GG, Windows Bluetooth "+
+                 "(GATT/HFP), HID and optional official SDKs. "+
+                 "Windows-reported levels may lag."
                 :"Kütüphane kablosuz cihaz modellerini tanır; listedeki her "+
                  "cihazın pilini okuyacağımız anlamına gelmez.\n"+
-                 "Yüzdeler yalnızca GG, Bluetooth GATT, standart HID veya "+
-                 "resmî SDK'dan canlı ve doğrulanmışsa gösterilir."};
+                 "Pil kaynakları: GG, Windows Bluetooth (GATT/HFP), "+
+                 "standart HID ve isteğe bağlı resmî SDK. "+
+                 "Windows'un gösterdiği değer gecikebilir."};
         search.SetBounds(23,153,680,31);
         search.Anchor=AnchorStyles.Left|AnchorStyles.Top|AnchorStyles.Right;
         search.BackColor=Color.FromArgb(32,44,60);

@@ -43,7 +43,7 @@ internal static class UiLanguage
         ["Öğe"]="Widget",
         ["▶ Geçişi önizle"]="▶ Preview transition",
         ["Dock Customiser — Hata Bildir"]="Dock Customiser — Report a bug",
-        ["SÜRÜM   1.1.1 RC6\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]="VERSION   1.1.1 RC6\nPLATFORM   Windows 11  ·  .NET 10\nSCREEN   128 × 64  ·  Monochrome OLED",
+        ["SÜRÜM   1.1.1 RC7\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]="VERSION   1.1.1 RC7\nPLATFORM   Windows 11  ·  .NET 10\nSCREEN   128 × 64  ·  Monochrome OLED",
         // RC5: Windows startup and non-Realtime process priority.
         ["Windows ve performans"]="Windows & performance",
         ["WINDOWS ENTEGRASYONU"]="WINDOWS INTEGRATION",

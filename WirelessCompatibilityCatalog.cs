@@ -38,11 +38,22 @@ internal static class WirelessCompatibilityCatalog
             "VXE Mad R Major Plus;VXE Dragonfly R1 Pro;"+
             "ZERO;VXE Zero Normal;G3 Pro;Ghost"),
         ("WLMOUSE","Mouse",
-            "Beast X Pro;Beast X Mini;Beast X Max;Beast X;"+
-            "Sword X;YING 63;YING 65;Huàn;Mini;"+
-            "Beast Miao;Strider;W1"),
+            "Beast X Pro;Beast X Mini;Beast Mini;Beast Mini Pro;"+
+            "Beast X Max;Beast Max;Beast X;Beast X V2;Beast X 4K;"+
+            "Sword X;YING 63;YING 65;Ying;Huàn;Huan M;Mini;"+
+            "Beast Miao;Beast G;Strider;W1"),
         ("Wraith","Mouse",
             "W1"),
+        ("Scyrox","Mouse",
+            "V8S;V8;V6"),
+        ("Kysona","Mouse",
+            "Mercury Pro;Aztec;M600 V2"),
+        ("Yeah Magic","Mouse",
+            "Tyrfig V1"),
+        ("Hitscan","Mouse",
+            "Hyperlight"),
+        ("AJAZZ","Mouse",
+            "AJ179 Pro;AJ139 Pro;AJ159;AJ159 APEX"),
         ("Logitech","Mouse",
             "G Pro X Superlight 2 DEX;G Pro X Superlight 2 SE;"+
             "G Pro X Superlight 2;G Pro X Superlight;"+
@@ -136,6 +147,7 @@ internal static class WirelessCompatibilityCatalog
             "NP-01S Ergo Wireless;NP-01S Wireless;"+
             "NP-01 Ergo Wireless;NP-01 Wireless;"+
             "XE V2 Wireless;XE-S-L Wireless;XE-S Wireless;"+
+            "VAXEE x Ninjutso Sora;"+
             "XE Wireless;AX Wireless;E1 Wireless"),
         ("VGN","Mouse",
             "Dragonfly F2 Master Plus;F2 Pro Max;F1 MOBA;"+
@@ -297,22 +309,47 @@ internal static class WirelessCompatibilityCatalog
     /// </summary>
     internal static Match? RecognizeUsbIdentity(int vendorId,int productId)
     {
+        static Match Exact(string brand,string model)=>new(brand,model,
+            "Mouse",
+            "Alıcı kimliği tanındı; canlı pil okuyucusu henüz doğrulanmadı",
+            "documented-receiver");
+
         if(vendorId==0x373B&&productId==0x10C9)
-            return new("ATK","A9 Plus","Mouse",
-                "Model tespit edildi; pil için doğrulanmış okuyucu gerekli",
-                "documented-receiver");
-        return vendorId==0x3057 ? productId switch{
-            0x1005=>new("VAXEE","AX Wireless","Mouse",
-                "Model tespit edildi; pil için doğrulanmış okuyucu gerekli",
-                "documented-receiver"),
-            0x1003=>new("VAXEE","XE Wireless","Mouse",
-                "Model tespit edildi; pil için doğrulanmış okuyucu gerekli",
-                "documented-receiver"),
-            0x1004=>new("VAXEE","NP-01S Wireless","Mouse",
-                "Model tespit edildi; pil için doğrulanmış okuyucu gerekli",
-                "documented-receiver"),
-            _=>null
-        }:null;
+            return Exact("ATK","A9 Plus");
+        if(vendorId==0x36A7)
+            return productId switch{
+                0xA870 or 0xA871=>Exact("WLMOUSE","Beast X Pro"),
+                0xA880 or 0xA881=>Exact("WLMOUSE","Beast Max"),
+                0xA883 or 0xA884 or 0xA887=>
+                    Exact("WLMOUSE","Beast X"),
+                0xA885 or 0xA886=>Exact("WLMOUSE","Beast Mini"),
+                0xA878 or 0xA879=>Exact("WLMOUSE","Sword X"),
+                _=>null
+            };
+        if(vendorId==0x3057)
+            return productId switch{
+                0x1003=>Exact("VAXEE","XE Wireless"),
+                0x1004=>Exact("VAXEE","NP-01S Wireless"),
+                0x1005=>Exact("VAXEE","AX Wireless"),
+                0x1006=>Exact("VAXEE","NP-01 Wireless"),
+                0x1007=>Exact("VAXEE","XE-S Wireless"),
+                0x1008=>Exact("VAXEE","XE-S-L Wireless"),
+                0x1009=>Exact("VAXEE","VAXEE x Ninjutso Sora"),
+                0x1010=>Exact("VAXEE","E1 Wireless"),
+                0x1011=>Exact("VAXEE","NP-01S V2 Wireless"),
+                0x1012=>Exact("VAXEE","XE V2 Wireless"),
+                0x1013=>Exact("VAXEE","NP-01S Ergo Wireless"),
+                0x1014=>Exact("VAXEE","NP-01S V3 Wireless"),
+                0x1015=>Exact("VAXEE","NP-01 Ergo Wireless"),
+                _=>null
+            };
+        if(vendorId==0x046D)
+            return productId switch{
+                0xC094=>Exact("Logitech","G Pro X Superlight"),
+                0xC095=>Exact("Logitech","G502 X Plus"),
+                _=>null
+            };
+        return null;
     }
 
     internal static (int Vid,int Pid)? ReadHardwareId(string identity)

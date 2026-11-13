@@ -44,6 +44,7 @@ internal static class BatteryDeviceAliases
            (!kind.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase)&&
             !kind.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)&&
             !kind.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)&&
+            !kind.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase)&&
             !BatteryPriority.AllKinds.Contains(kind)))
             throw new ArgumentException("Unsupported battery identity.");
         if(alias.Length>48 || !LocalBatteryDeviceNames.IsUsableName(alias))
