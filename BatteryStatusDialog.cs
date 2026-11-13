@@ -83,6 +83,10 @@ internal sealed class BatteryStatusDialog : Form
     };
     private readonly Label active=new(){Left=402,Top=329,Width=450,Height=73};
     private readonly Label lastUpdated=new(){Left=150,Top=234,Width=700,Height=27};
+    private readonly Label summary=new(){
+        Left=18,Top=48,Width=832,Height=15,
+        ForeColor=Color.FromArgb(143,188,203),
+        Font=new Font("Segoe UI",8.4f)};
     // Sources are selected by verified connections automatically.
     // No redundant HID/ADB/priority-override checkboxes.
     private readonly DarkCheckBox lowWarning=new(){
@@ -104,11 +108,13 @@ internal sealed class BatteryStatusDialog : Form
     {
         UiPolish.Register(this);
         prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
-        Text="Pil cihazları — öncelik sıralaması";
+        Text=UiLanguage.English
+            ?"Battery devices and priority":"Pil cihazları ve öncelik";
         StartPosition=FormStartPosition.CenterParent;
         ClientSize=new Size(900,760);
-        MinimumSize=new Size(900,760);
+        MinimumSize=new Size(760,640);
         AutoScroll=true;
+        AutoScrollMinSize=new Size(875,730);
         Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
         grid.Columns.Add("device","Cihaz");
@@ -158,8 +164,11 @@ internal sealed class BatteryStatusDialog : Form
         };
         Controls.Add(brandSources);
         Controls.Add(new Label{
-            Left=17,Top=271,Width=360,Height=23,
-            Text="Öncelik sırası (yukarıdaki üç uygun cihaz):"
+            Left=17,Top=271,Width=610,Height=23,
+            Text=UiLanguage.English
+                ?"OLED battery order — use Up/Down to arrange":
+                "OLED pil sırası — Yukarı/Aşağı ile sıralayabilirsin",
+            ForeColor=Color.FromArgb(183,207,221)
         });
         Controls.Add(priority);
         priority.DrawItem+=(_,e)=>{
@@ -205,13 +214,29 @@ internal sealed class BatteryStatusDialog : Form
         active.Left=470;active.Top=290;active.Width=384;
         Controls.Add(active);
         Controls.Add(new Label{
-            Left=17,Top=456,Width=834,Height=47,
-            Text="Kaynaklar otomatik seçilir: GG, Windows BLE/GATT, Phone Link, bağlı kontrolcü ve "+
-                "önceden yetkilendirilmiş ADB. Her 10 saniyede güncellenir; "+
-                "güvenilir olmayan yüzdeler OLED'e çıkmaz.",
-            ForeColor=Color.DarkSlateGray
+            Left=17,Top=456,Width=835,Height=48,
+            Text=UiLanguage.English
+                ?"Sources: SteelSeries GG, connected Bluetooth GATT, "+
+                  "standard HID, optional vendor SDKs and Phone Link. "+
+                  "Only verified live values appear on the OLED."
+                :"Veri kaynakları: GG, bağlı Bluetooth, standart HID, "+
+                  "isteğe bağlı üretici SDK'ları ve Phone Link. "+
+                  "OLED'de yalnızca doğrulanmış güncel yüzdeler gösterilir.",
+            ForeColor=Color.FromArgb(143,171,188),
+            Font=new Font("Segoe UI",9.1f)
         });
         phoneLinkRecovery.Checked=prefs.AutoMinimizePhoneLink;
+        phoneLinkRecovery.Text=UiLanguage.English
+            ?"Open Phone Link automatically if unavailable (off by default)"
+            :"Phone Link kapalıysa otomatik aç (varsayılan: kapalı)";
+        var hints=new ToolTip{
+            AutomaticDelay=400,AutoPopDelay=12500,
+            InitialDelay=500,ReshowDelay=150};
+        hints.SetToolTip(phoneLinkRecovery,UiLanguage.English
+            ?"This may open Windows Phone Link for phone battery recovery. "+
+              "Leave off if you do not use phone battery."
+            :"Yalnızca telefon pili için Phone Link kurtarmasına izin verir. "+
+              "Telefon pili kullanmıyorsan kapalı bırak.");
         Controls.Add(phoneLinkRecovery);
         lowWarning.Checked=prefs.EnableLowBatteryWarnings;
         warningPercent.Value=Math.Clamp(prefs.LowBatteryWarningPercent,1,99);
@@ -224,8 +249,8 @@ internal sealed class BatteryStatusDialog : Form
             Text="Uyarı tekrarı (dakika)",Left=265,Top=558,Width=215,Height=24});
         Controls.Add(new Label{Text="Uyarı %",Left=420,Top=520,Width=75,Height=21});
         Controls.Add(new Label{Text="Kritik %",Left=630,Top=520,Width=75,Height=21});
-        var applyButton=new DarkButton{Left=649,Top=627,Width=207,Height=36,
-            Text="Öncelikleri uygula"};
+        var applyButton=new DarkButton{Left=620,Top=627,Width=236,Height=37,
+            Text=UiLanguage.English?"Save battery settings":"Pil ayarlarını kaydet"};
         applyButton.Click+=(_,_)=>{
             prefs.PriorityKinds=priority.Items.Cast<string>().ToArray();
             // Older source toggles are deliberately not exposed: the app
@@ -260,9 +285,10 @@ internal sealed class BatteryStatusDialog : Form
             {
                 button.FlatStyle=FlatStyle.Flat;
                 button.FlatAppearance.BorderSize=0;
-                button.BackColor=button.Text=="Öncelikleri uygula"
+                bool isPrimary=ReferenceEquals(button,applyButton);
+                button.BackColor=isPrimary
                     ?Color.FromArgb(72,194,238):Color.FromArgb(35,47,62);
-                button.ForeColor=button.Text=="Öncelikleri uygula"
+                button.ForeColor=isPrimary
                     ?Color.FromArgb(13,18,26):Color.FromArgb(235,242,248);
                 button.Cursor=Cursors.Hand;
             }
@@ -288,10 +314,18 @@ internal sealed class BatteryStatusDialog : Form
         priority.ForeColor=Color.FromArgb(235,242,248);
         priority.BorderStyle=BorderStyle.None;
         Controls.Add(new Label{
-            Text="PİL VE ÖNCELİK",Left=18,Top=13,Width=850,Height=31,
+            Text=UiLanguage.English?"BATTERY & DEVICES":"PİL VE CİHAZLAR",
+            Left=18,Top=13,Width=850,Height=31,
             Font=new Font("Segoe UI Semibold",18f,FontStyle.Bold),
             ForeColor=Color.FromArgb(235,242,248),BackColor=BackColor
         });
+        Controls.Add(summary);
+        var alertHeading=new Label{
+            Text=UiLanguage.English?"LOW BATTERY ALERTS":"DÜŞÜK PİL UYARILARI",
+            Left=17,Top=537,Width=640,Height=22,
+            ForeColor=Color.FromArgb(138,199,224),
+            Font=new Font("Segoe UI Semibold",9f,FontStyle.Bold)};
+        Controls.Add(alertHeading);
         ApplyLanguage();
     }
 
@@ -364,6 +398,17 @@ internal sealed class BatteryStatusDialog : Form
             ?UiLanguage.T("Tarama bekleniyor"):
             UiLanguage.T("Son okuma: ")+snap.CheckedAt.ToLocalTime().ToString("HH:mm:ss");
         ShowActive();
+        int verified=kinds.Count(k=>BatteryPriority.IsCurrent(snap[k],
+            DateTimeOffset.Now));
+        summary.Text=UiLanguage.English
+            ?$"{verified} verified live battery sources · {kinds.Length} tracked slots"
+            :$"{verified} doğrulanmış canlı pil · {kinds.Length} takip edilen yuva";
+        summary.ForeColor=verified>0
+            ?Color.FromArgb(108,211,197)
+            :Color.FromArgb(152,182,200);
+        foreach(DataGridViewRow row in grid.Rows)
+            foreach(DataGridViewCell cell in row.Cells)
+                cell.ToolTipText=cell.Value?.ToString()??"";
         priority.Invalidate(); // redraw current PC device names after each scan
     }
 }

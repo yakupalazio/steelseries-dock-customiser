@@ -84,6 +84,17 @@ internal static class WirelessCatalogSelfTests
            BleBatteryProvider.IsValidBatteryByte(null))
             throw new Exception("Bluetooth battery range check failed.");
 
+        var privateEntry=new ConnectedPeripheral(
+            "PRIVATE_BLUETOOTH_ADDRESS_NOT_FOR_REPORT",
+            "Tester WLMOUSE Beast X Pro","USB / Dock","WLmouse",
+            "Mouse",null,"Unverified","No private protocol",null){
+                HardwareSummary="VID_373B PID_10C9"};
+        string report=ConnectedDevicesDialog.BuildSafeReport([privateEntry]);
+        if(report.Contains("PRIVATE_BLUETOOTH_ADDRESS_NOT_FOR_REPORT") ||
+           !report.Contains("VID_373B PID_10C9")||
+           !report.Contains("Tester WLMOUSE Beast X Pro"))
+            throw new Exception("Device report leaks hardware instance IDs.");
+
         Console.WriteLine(
             $"PASS: {WirelessCompatibilityCatalog.ModelCount} wireless models / "+
             $"{WirelessCompatibilityCatalog.BrandCount} brands, "+

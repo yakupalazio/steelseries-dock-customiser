@@ -31,7 +31,8 @@ internal sealed class WirelessCompatibilityDialog:Form
         Font=new Font("Segoe UI",9.5f);
 
         var header=new Panel{
-            Dock=DockStyle.Top,Height=158,BackColor=BackColor};
+            Dock=DockStyle.Top,Height=193,Width=ClientSize.Width,
+            BackColor=BackColor};
         var title=new Label{
             Left=22,Top=18,Width=955,Height=43,
             Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top,
@@ -40,19 +41,18 @@ internal sealed class WirelessCompatibilityDialog:Form
             Text=english?"Wireless compatibility library":
                 "Kablosuz cihaz uyumluluk kütüphanesi"};
         var explain=new Label{
-            Left=23,Top=65,Width=955,Height=54,
+            Left=23,Top=64,Width=955,Height=61,
             Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top,
             ForeColor=Color.FromArgb(157,179,196),
             Text=english
-                ?"The catalog identifies known wireless models; it is not a list "+
-                 "of guaranteed battery readers. Current percentage appears "+
-                 "only through verified GG, Bluetooth GATT, standard HID or "+
-                 "official SDK read-only providers."
+                ?"The catalog identifies wireless device models, not guaranteed "+
+                 "battery readers.\nOnly verified live percentages from GG, "+
+                 "Bluetooth GATT, standard HID and official SDKs are shown."
                 :"Kütüphane kablosuz cihaz modellerini tanır; listedeki her "+
-                 "cihazın pilini okuyacağımız anlamına gelmez. Yüzdeler "+
-                 "yalnızca GG, Bluetooth GATT, standart HID veya resmî "+
-                 "SDK'dan canlı ve doğrulanmışsa gösterilir."};
-        search.SetBounds(23,124,680,30);
+                 "cihazın pilini okuyacağımız anlamına gelmez.\n"+
+                 "Yüzdeler yalnızca GG, Bluetooth GATT, standart HID veya "+
+                 "resmî SDK'dan canlı ve doğrulanmışsa gösterilir."};
+        search.SetBounds(23,153,680,31);
         search.Anchor=AnchorStyles.Left|AnchorStyles.Top|AnchorStyles.Right;
         search.BackColor=Color.FromArgb(32,44,60);
         search.ForeColor=ForeColor;
@@ -61,7 +61,7 @@ internal sealed class WirelessCompatibilityDialog:Form
             ?"Search brand or model (ATK, Beast X, Logitech...)":
             "Marka veya model ara (ATK, Beast X, Logitech...)";
         type.DropDownStyle=ComboBoxStyle.DropDownList;
-        type.SetBounds(721,124,260,30);
+        type.SetBounds(721,153,260,31);
         type.Anchor=AnchorStyles.Top|AnchorStyles.Right;
         type.BackColor=Color.FromArgb(32,44,60);
         type.ForeColor=ForeColor;
@@ -69,7 +69,28 @@ internal sealed class WirelessCompatibilityDialog:Form
             ?["All devices","Mouse","Keyboard","Headset","Controller"]
             :["Tüm cihazlar","Fare","Klavye","Kulaklık","Kontrolcü"]);
         type.SelectedIndex=0;
-        header.Controls.AddRange([title,explain,search,type]);
+        var searchLabel=new Label{
+            Text=english?"SEARCH BRAND OR MODEL":"MARKA VEYA MODEL ARA",
+            Left=23,Top=132,Width=620,Height=21,
+            ForeColor=Color.FromArgb(132,186,214),
+            Font=new Font("Segoe UI Semibold",8.8f,FontStyle.Bold)};
+        var typeLabel=new Label{
+            Text=english?"DEVICE TYPE":"CİHAZ TÜRÜ",
+            Left=721,Top=132,Width=240,Height=21,
+            Anchor=AnchorStyles.Top|AnchorStyles.Right,
+            ForeColor=Color.FromArgb(132,186,214),
+            Font=new Font("Segoe UI Semibold",8.8f,FontStyle.Bold)};
+        header.Controls.AddRange([
+            title,explain,searchLabel,typeLabel,search,type]);
+        header.Resize+=(_,_)=>{
+            search.Width=Math.Max(180,header.ClientSize.Width-335);
+            type.Left=Math.Max(220,header.ClientSize.Width-290);
+            typeLabel.Left=type.Left;
+            explain.Width=Math.Max(360,header.ClientSize.Width-45);
+        };
+        search.Width=Math.Max(180,header.Width-335);
+        type.Left=header.Width-290;
+        typeLabel.Left=type.Left;
 
         grid.Dock=DockStyle.Fill;
         grid.ReadOnly=true;

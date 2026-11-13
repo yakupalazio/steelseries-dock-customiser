@@ -19,6 +19,7 @@ internal sealed class ConnectedDevicesDialog:Form
     private readonly TextBox filter=new();
     private readonly Label status=new();
     private readonly Button refreshButton=new();
+    private readonly Button copyReportButton=new();
     private readonly System.Windows.Forms.Timer timer=new(){Interval=20000};
     private IReadOnlyList<ConnectedPeripheral> detected=[];
     private bool busy;
@@ -72,11 +73,31 @@ internal sealed class ConnectedDevicesDialog:Form
         refreshButton.BackColor=Color.FromArgb(49,119,139);
         refreshButton.ForeColor=Color.White;
         refreshButton.Click+=async (_,_)=>await RefreshAsync();
+        copyReportButton.Text=UiLanguage.English
+            ?"Copy report":"Raporu kopyala";
+        copyReportButton.SetBounds(641,7,143,36);
+        copyReportButton.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+        copyReportButton.BackColor=Color.FromArgb(38,69,87);
+        copyReportButton.ForeColor=Color.White;
+        copyReportButton.Click+=(_,_)=>{
+            try
+            {
+                Clipboard.SetText(BuildSafeReport(detected));
+                status.Text=UiLanguage.English
+                    ?"Local device report copied. Review before sharing."
+                    :"Yerel cihaz raporu kopyalandı. Paylaşmadan önce incele.";
+            }
+            catch{status.Text=UiLanguage.English
+                ?"Could not copy report.":"Rapor kopyalanamadı.";}
+        };
         toolbar.Controls.Add(searchLabel);
-        toolbar.Controls.Add(filter);toolbar.Controls.Add(refreshButton);
+        toolbar.Controls.Add(filter);
+        toolbar.Controls.Add(copyReportButton);
+        toolbar.Controls.Add(refreshButton);
         toolbar.Resize+=(_,_)=>{
-            filter.Width=Math.Max(160,toolbar.ClientSize.Width-265);
-            refreshButton.Left=Math.Max(182,toolbar.ClientSize.Width-148);
+            filter.Width=Math.Max(160,toolbar.ClientSize.Width-455);
+            copyReportButton.Left=Math.Max(250,toolbar.ClientSize.Width-304);
+            refreshButton.Left=Math.Max(402,toolbar.ClientSize.Width-148);
         };
 
         table.Dock=DockStyle.Fill;
@@ -155,6 +176,25 @@ internal sealed class ConnectedDevicesDialog:Form
         }
     }
 
+    internal static string BuildSafeReport(
+        IReadOnlyList<ConnectedPeripheral> items)
+    {
+        var result=new System.Text.StringBuilder();
+        result.AppendLine("Dock Customiser - device compatibility diagnostics");
+        result.AppendLine("Review before sharing: includes friendly device names.");
+        result.AppendLine("No Bluetooth address, USB serial, account or HID path.");
+        foreach(var item in items.Take(200))
+        {
+            result.Append(item.Name.Replace('\r',' ').Replace('\n',' '))
+                .Append(" | ").Append(item.Connection)
+                .Append(" | ").Append(item.HardwareSummary)
+                .Append(" | ").Append(item.BatteryDisplay)
+                .Append(" | ").Append(item.BatterySource)
+                .AppendLine();
+        }
+        return result.ToString();
+    }
+
     private void DrawRows()
     {
         if(IsDisposed)return;
@@ -172,8 +212,10 @@ internal sealed class ConnectedDevicesDialog:Form
             var row=table.Rows[idx];
             row.Tag=device.Id;
             foreach(DataGridViewCell cell in row.Cells)
-                cell.ToolTipText=device.Manufacturer.Length>0
-                    ?device.Manufacturer+" | "+device.Detail:device.Detail;
+                cell.ToolTipText=(device.Manufacturer.Length>0
+                    ?device.Manufacturer+" | ":"")+
+                    (device.HardwareSummary.Length>0
+                        ?device.HardwareSummary+" | ":"")+device.Detail;
             if(device.Percent is int)
                 row.Cells[2].Style.ForeColor=Color.FromArgb(90,216,160);
         }

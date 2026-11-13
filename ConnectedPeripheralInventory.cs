@@ -21,6 +21,9 @@ internal sealed record ConnectedPeripheral(
     string? BatteryKind)
 {
     public string BatteryDisplay=>Percent is int n?$"{n}%":"--%";
+    // Optional, public USB vendor/product code only. No USB serial/path,
+    // Bluetooth MAC/address or per-user instance ID is copied into reports.
+    public string HardwareSummary {get;init;}="";
 }
 
 internal static class ConnectedPeripheralInventory
@@ -285,7 +288,15 @@ internal static class ConnectedPeripheralInventory
                          ". Canlı pil okuyucusu doğrulanmadı; yüzde gösterilmiyor."
                         :"Tanınan marka: "+recognized.Brand+
                          ". Model ve pil protokolü henüz doğrulanmadı."),
-                kind));
+                kind)
+            {
+                HardwareSummary=group.Select(item=>
+                        WirelessCompatibilityCatalog.ReadHardwareId(
+                            item.HardwareId))
+                    .Where(pair=>pair.HasValue)
+                    .Select(pair=>$"VID_{pair!.Value.Vid:X4} PID_{pair.Value.Pid:X4}")
+                    .FirstOrDefault()??""
+            });
         }
         return rows.OrderByDescending(r=>r.Percent.HasValue)
             .ThenBy(r=>r.Connection,StringComparer.OrdinalIgnoreCase)
