@@ -732,6 +732,19 @@ internal static class Program
                 shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
                 setup.Close();return;
             }
+            if(args.Contains("--capture-vendor-sources"))
+            {
+                using var diag=new VendorBatterySourcesDialog();
+                diag.StartPosition=FormStartPosition.Manual;
+                diag.Location=new System.Drawing.Point(-5000,-5000);
+                diag.ShowInTaskbar=false;
+                diag.Show();Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(diag.Width,diag.Height);
+                diag.DrawToBitmap(shot,
+                    new System.Drawing.Rectangle(0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                diag.Close();return;
+            }
             if(args.Contains("--capture-bug-report"))
             {
                 using var report=new BugReportDialog();

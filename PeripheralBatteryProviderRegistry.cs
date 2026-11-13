@@ -30,10 +30,11 @@ internal static class PeripheralBatteryProviderRegistry
             =>StandardHidBatteryProvider.ReadAsync();
     }
 
-    // Internal list; no third-party daemon, BQC, vendor program, installer
-    // or downloaded executable is required by the common battery readers.
+    // Standard readers need no vendor app. Official iCUE is optional:
+    // a separately provided Corsair x64 SDK library is used only if present.
+    // Neither a vendor application nor SDK is installed/started by us.
     private static readonly IPeripheralBatteryProvider[] Providers=[
-        new BleGatt(),new StandardHid()
+        new BleGatt(),new StandardHid(),new CorsairIcueBatteryProvider()
     ];
 
     public static async Task<IReadOnlyList<BatteryReading>> ReadAsync()

@@ -83,6 +83,7 @@ internal static class BatterySources
         var genericReadings=await PeripheralBatteryProviderRegistry.ReadAsync();
         MergeVerifiedBleReadings(snapshot,genericReadings);
         MergeVerifiedHidReadings(snapshot,genericReadings);
+        MergeVerifiedVendorReadings(snapshot,genericReadings);
         // SetupAPI is useful for unsupported Classic Bluetooth hardware,
         // including checking whether Windows has ever seen a phone battery.
         // Its percentages can be stale while the device is disconnected,
@@ -164,6 +165,29 @@ internal static class BatterySources
                 old.FriendlyName.Length>2 &&
                 string.Equals(old.FriendlyName,reading.FriendlyName,
                     StringComparison.OrdinalIgnoreCase)))
+                continue;
+            snapshot.Values[reading.Kind]=reading;
+        }
+    }
+
+    /// <summary>
+    /// Only verified, live vendor SDK properties are eligible; preserve
+    /// standard BLE/HID reading if it already matched the same exact model.
+    /// Do not use stale vendor application cache files.
+    /// </summary>
+    internal static void MergeVerifiedVendorReadings(BatterySnapshot snapshot,
+        IReadOnlyList<BatteryReading> discovered)
+    {
+        foreach(var reading in discovered)
+        {
+            if(!reading.Available ||
+               !reading.Kind.StartsWith("Vendor:",
+                   StringComparison.OrdinalIgnoreCase))continue;
+            if(reading.FriendlyName.Length>2&&
+               snapshot.Values.Values.Any(existing=>
+                   existing.Available&&existing.FriendlyName.Length>2&&
+                   string.Equals(existing.FriendlyName,reading.FriendlyName,
+                       StringComparison.OrdinalIgnoreCase)))
                 continue;
             snapshot.Values[reading.Kind]=reading;
         }

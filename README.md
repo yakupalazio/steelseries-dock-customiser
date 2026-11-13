@@ -1,3 +1,7 @@
+# SteelSeries Dock Customiser — RC6 Optional Vendor SDK (PRIVATE TEST)
+
+> RC6 adds an optional official Corsair iCUE SDK BatteryLevel reader (0–100%, verified read-only property), preserving the existing SteelSeries GG and generic GATT/HID sources. The SDK DLL is not distributed, downloaded or automatically installed because third-party redistribution terms require review. See [RC6 Vendor API Notes](RELEASE_NOTES_RC6_VENDOR_API.md). The new Settings > Battery > Brand battery sources screen explains confirmed APIs vs proprietary protocols. This is **not** general Razer/Logitech/ASUS/HyperX/WLMOUSE app API support: no public battery APIs could be confirmed for those apps. Never invent percentages or run vendor software without consent.
+
 # SteelSeries Dock Customiser — RC5 Cross-Machine Reliability (PRIVATE TEST)
 
 > **RC5 cross-machine private preview:** New-install OLED defaults show only Nova Pro headset and spare battery slots; first-run device discovery can recognize and assign verified USB/Bluetooth battery sources; safe per-device nicknames; SteelSeries GG Nova Pro primary/spare battery reader supports alternative status layouts and offers visible diagnostics; Phone Link does not self-open unless separately enabled; LRCLIB timed lyrics get a validated metadata-search fallback; optional Bubbles and Pulse music visualizers. This build **does not claim to support every vendor-specific battery protocol**. Existing user's saved designs and workshop contract remain unchanged. See [RC5 Notes](RELEASE_NOTES_RC5_CROSS_MACHINE.md).

@@ -148,6 +148,15 @@ internal sealed class BatteryStatusDialog : Form
             UpdateRows();
         };
         Controls.Add(deviceSetup);
+        var brandSources=new DarkButton{
+            Left=151,Top=232,Width=300,Height=32,
+            Text=UiLanguage.English?"Brand battery sources":
+                "Markalara göre pil kaynakları"};
+        brandSources.Click+=(_,_)=>{
+            using var info=new VendorBatterySourcesDialog();
+            info.ShowDialog(this);
+        };
+        Controls.Add(brandSources);
         Controls.Add(new Label{
             Left=17,Top=271,Width=360,Height=23,
             Text="Öncelik sırası (yukarıdaki üç uygun cihaz):"

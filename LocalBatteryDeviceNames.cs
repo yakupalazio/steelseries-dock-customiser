@@ -34,7 +34,9 @@ internal static class LocalBatteryDeviceNames
             ?(UiLanguage.English?"Bluetooth device":"Bluetooth cihazı")
             :kind.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)
                 ?(UiLanguage.English?"USB/HID device":"USB/HID cihazı")
-                :BatteryDeviceCatalog.Name(kind)
+                :kind.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)
+                    ?(UiLanguage.English?"Vendor battery":"Üretici pili")
+                    :BatteryDeviceCatalog.Name(kind)
     };
 
     internal static string DisplayName(string kind,BatterySnapshot? snapshot=null)
