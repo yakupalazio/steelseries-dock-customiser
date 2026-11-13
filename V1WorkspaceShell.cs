@@ -352,6 +352,8 @@ internal sealed partial class PixelStudioForm
         modernBarFillRow=PropertyRow("Çubuk dolgusu",barFill);
         inspector.Controls.Add(modernBarFrameRow);
         inspector.Controls.Add(modernBarFillRow);
+        Decorate(mediaWidgetSettingsButton);
+        inspector.Controls.Add(mediaWidgetSettingsButton);
         inspector.Controls.Add(Spacer(12,268));
         inspector.Controls.Add(Section("EKRAN KORUMASI",268));
         headerProtect.Text="Orijinal üst 10 pikseli koru";
@@ -521,6 +523,8 @@ internal sealed partial class PixelStudioForm
             selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
         if(modernBarFillRow!=null)modernBarFillRow.Visible=
             selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
+        mediaWidgetSettingsButton.Visible=selected?.Kind is
+            "Lyrics" or "AudioVisualizer" or "AnimatedGif";
         if(modernDockStatus!=null)
         {
             string message=dockPreview.HardwareStatus;

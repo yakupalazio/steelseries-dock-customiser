@@ -216,7 +216,9 @@ internal static class OledRenderer
         BatterySnapshot? batteries=null,MediaSnapshot? playback=null,
         GameSnapshot? game=null,BatteryPreferences? preferences=null,
         bool protectHeader=true,ScreenMode? layoutMode=null,DialSnapshot? dial=null,
-        SystemTelemetrySnapshot? telemetry=null)
+        SystemTelemetrySnapshot? telemetry=null,
+        SyncedLyricsSnapshot? lyrics=null,
+        AudioVisualizationSnapshot? audio=null)
     {
         bool wasEditable=EditableHeader.Value;
         EditableHeader.Value=!protectHeader;
@@ -242,7 +244,8 @@ internal static class OledRenderer
                 StudioProject.IsAllowed(mode,w.Kind) &&
                     (w.Kind!="Date"||showDate)))
             .OrderBy(w=>w.Kind is "GameMiniPlayer" or "VolumeChatMix"?1:0))
-            DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial,telemetry);
+            DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial,
+                telemetry,lyrics,audio);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
         for(int y=0;y<Height;y++)
@@ -255,7 +258,7 @@ internal static class OledRenderer
     private static bool ShouldShow(DockWidget w,bool media,bool date)=>w.Kind switch
     {
         "Clock" or "Date" => !media && (w.Kind!="Date" || date),
-        "Source" or "Track" or "Artist" or "Progress" => media,
+        "Source" or "Track" or "Artist" or "Progress" or "Lyrics" => media,
         _=>true
     };
 
@@ -274,6 +277,10 @@ internal static class OledRenderer
     public static Rectangle GetBounds(DockWidget w)=>w.Kind switch
     {
         "Progress" => new(w.X,w.Y,98,5),
+        "Lyrics" => new(w.X,w.Y,Math.Min(Width-w.X,w.WidgetWidth),9),
+        "AudioVisualizer" or "AnimatedGif" => new(w.X,w.Y,
+            Math.Min(Width-w.X,w.WidgetWidth),
+            Math.Min(Height-w.Y,w.VisualizerHeight)),
         "Source" => new(w.X,w.Y,14,14),
         "Mouse" or "Phone" or "Headset" or "SpareBattery" or "Laptop" or
         "DualSense" or "BatterySlot1" or "BatterySlot2" or "BatterySlot3" =>
@@ -339,11 +346,34 @@ internal static class OledRenderer
     private static void DrawWidget(bool[] px,DockWidget w,bool spotify,
         BatterySnapshot? batteries,MediaSnapshot? playback,
         GameSnapshot? game,string[] currentDevices,DialSnapshot? dial,
-        SystemTelemetrySnapshot? telemetry)
+        SystemTelemetrySnapshot? telemetry,SyncedLyricsSnapshot? lyrics,
+        AudioVisualizationSnapshot? audio)
     {
         int x=w.X,y=w.Y;
         switch(w.Kind)
         {
+            case "Lyrics":
+                if(playback?.IsPlaying==true && lyrics?.TrackKey==
+                   SyncedLyricsProvider.Key(playback))
+                {
+                    string lyric=SyncedLyricsProvider.AtTime(lyrics.Lines,
+                        SyncedLyricsProvider.PositionNow(playback),
+                        w.LyricOffsetMs);
+                    if(!string.IsNullOrWhiteSpace(lyric))
+                        DrawMarquee(px,lyric,x,y,1,w.WidgetWidth);
+                }
+                break;
+            case "AudioVisualizer":
+                DrawAudioVisualization(px,w,audio);
+                break;
+            case "AnimatedGif":
+                var mono=AnimatedGifWidgetStore.Frame(w,DateTimeOffset.UtcNow);
+                if(mono is not null)
+                    for(int gy=0;gy<mono.Height;gy++)
+                    for(int gx=0;gx<mono.Width;gx++)
+                        if(mono.Pixels[gy*mono.Width+gx])
+                            Dot(px,x+gx,y+gy);
+                break;
             case "Source":
                 DrawIcon(px,(playback?.IsPlaying==true ? playback.IsSpotify : spotify)?"Spotify":"Media",x,y);
                 break;
@@ -438,6 +468,59 @@ internal static class OledRenderer
                 DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
                     Math.Clamp(w.StrokeWidth,1,3));
                 break;
+        }
+    }
+
+    private static void DrawAudioVisualization(bool[] pixels,DockWidget widget,
+        AudioVisualizationSnapshot? audio)
+    {
+        if(audio?.Fresh!=true)return;
+        int x=widget.X,y=widget.Y;
+        int width=Math.Min(Math.Clamp(widget.WidgetWidth,16,128),128-x);
+        int height=Math.Min(Math.Clamp(widget.VisualizerHeight,8,54),64-y);
+        if(width<2||height<2)return;
+        float gain=Math.Clamp(widget.VisualizerGain,10,400)/100f;
+        var left=audio.Left;var right=audio.Right;
+        if(left.Length<12||right.Length<12)return;
+        if(widget.VisualizerStyle=="Circular")
+        {
+            double cx=x+(width-1)/2.0,cy=y+(height-1)/2.0;
+            int radius=Math.Max(2,Math.Min(width,height)/2-2);
+            int inner=Math.Max(2,radius/3);
+            // A quiet circular baseline makes the shape readable even at
+            // low volume; spokes extend outward only for actual energy.
+            for(int step=0;step<96;step++)
+            {
+                double a=step*Math.PI*2/96;
+                Dot(pixels,(int)Math.Round(cx+Math.Cos(a)*inner),
+                    (int)Math.Round(cy+Math.Sin(a)*inner));
+            }
+            for(int index=0;index<24;index++)
+            {
+                double angle=-Math.PI/2+index*Math.PI*2/24;
+                float signal=(index<12?left[index]:right[index-12])*gain;
+                int endpoint=inner+(int)Math.Round(Math.Clamp(signal,0,1)*
+                    (radius-inner));
+                for(int distance=inner;distance<=endpoint;distance++)
+                    Dot(pixels,(int)Math.Round(cx+Math.Cos(angle)*distance),
+                        (int)Math.Round(cy+Math.Sin(angle)*distance));
+            }
+            return;
+        }
+        int count=widget.VisualizerStyle=="Stereo"?24:12;
+        for(int index=0;index<count;index++)
+        {
+            float value=widget.VisualizerStyle=="Stereo"
+                ?index<12?left[11-index]:right[index-12]
+                :(left[index]+right[index])*.5f;
+            int barHeight=(int)Math.Round(
+                Math.Clamp(value*gain,0,1)*height);
+            if(barHeight<=0)continue;
+            int start=x+(int)Math.Floor(index*width/(double)count);
+            int end=x+(int)Math.Floor((index+1)*width/(double)count)-1;
+            for(int bx=start;bx<end;bx++)
+            for(int by=y+height-barHeight;by<y+height;by++)
+                Dot(pixels,bx,by);
         }
     }
 

@@ -1,0 +1,212 @@
+using System;
+using System.Drawing;
+using System.IO;
+using System.Text.Json;
+using System.Windows.Forms;
+
+namespace SteelseriesDockCustomiser;
+
+/// <summary>
+/// Contextual editor for opt-in media widgets. No system audio capture,
+/// network lyrics fetch or GIF decode runs simply by opening this dialog.
+/// </summary>
+internal sealed class OptionalMediaWidgetDialog:Form
+{
+    public DockWidget Updated {get;}
+    private readonly FlowLayoutPanel content=new()
+    {
+        Dock=DockStyle.Fill,FlowDirection=FlowDirection.TopDown,
+        WrapContents=false,AutoScroll=true,
+        Padding=new Padding(16,8,12,8)
+    };
+    private static readonly Color Bg=Color.FromArgb(19,26,37);
+    private static readonly Color TextColor=Color.FromArgb(234,243,250);
+    private static readonly Color Muted=Color.FromArgb(151,169,187);
+
+    public OptionalMediaWidgetDialog(DockWidget source)
+    {
+        Updated=JsonSerializer.Deserialize<DockWidget>(
+            JsonSerializer.Serialize(source))??new DockWidget{Kind=source.Kind};
+        Text=source.Kind switch
+        {
+            "Lyrics"=>"Senkronize şarkı sözü ayarları",
+            "AudioVisualizer"=>"Ses görselleştirici ayarları",
+            _=>"GIF widget ayarları"
+        };
+        StartPosition=FormStartPosition.CenterParent;
+        ClientSize=new Size(475,550);
+        MinimumSize=new Size(475,435);
+        BackColor=Bg;
+        ForeColor=TextColor;
+        Font=new Font("Segoe UI",9.8f);
+        content.Dock=DockStyle.None;
+        content.Bounds=new Rectangle(0,0,ClientSize.Width,ClientSize.Height-64);
+        content.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|
+            AnchorStyles.Left|AnchorStyles.Right;
+        Controls.Add(content);
+        var name=new Label{
+            Text=Text,Width=425,Height=35,
+            Font=new Font("Segoe UI Semibold",15,FontStyle.Bold),
+            ForeColor=TextColor
+        };
+        content.Controls.Add(name);
+        switch(source.Kind)
+        {
+            case "Lyrics":BuildLyrics();break;
+            case "AudioVisualizer":BuildVisualizer();break;
+            case "AnimatedGif":BuildGif();break;
+        }
+        var actions=new Panel{
+            Height=64,BackColor=Bg,
+            Bounds=new Rectangle(0,ClientSize.Height-64,ClientSize.Width,64),
+            Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Bottom
+        };
+        var save=Button("Uygula");
+        var cancel=Button("Vazgeç");
+        save.Left=ClientSize.Width-200;save.Top=10;
+        cancel.Left=ClientSize.Width-387;cancel.Top=10;
+        actions.Controls.Add(save);
+        actions.Controls.Add(cancel);
+        save.Click+=(_,_)=>{DialogResult=DialogResult.OK;Close();};
+        cancel.Click+=(_,_)=>{DialogResult=DialogResult.Cancel;Close();};
+        AcceptButton=save;CancelButton=cancel;
+        Controls.Add(actions);
+        actions.BringToFront();
+    }
+
+    private void BuildLyrics()
+    {
+        Note("Windows medya oturumundaki şarkı ve zaman bilgisi kullanılır. "+
+            "Zamanlı LRC sözleri bağımsız LRCLIB kaynağından alınır. "+
+            "Söz bulunamazsa sahte söz gösterilmez.");
+        var offset=Number(-10000,10000,10,Updated.LyricOffsetMs);
+        Row("Senkron kaydırma (ms)",offset);
+        Note("Negatif değer sözleri erkene alır. Pozitif değer geç gösterir. "+
+            "10 ms adımlarla ayarlanabilir; fiziksel dock'un yenilemesi "+
+            "10 ms hassasiyet garanti etmez.");
+        offset.ValueChanged+=(_,_)=>Updated.LyricOffsetMs=(int)offset.Value;
+        var width=Number(16,128,1,Updated.WidgetWidth);
+        Row("Yazı alanı genişliği",width);
+        width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
+        Note("İsteğe bağlıdır. Medya, Oyun ve Boşta tasarımlarına eklenebilir.");
+    }
+
+    private void BuildVisualizer()
+    {
+        Note("Windows varsayılan ses çıkışının sol/sağ kanalları okunur. "+
+            "Ham ses kaydedilmez; mikrofon veya şarkı içeriği açılmaz.");
+        var mode=Combo("Bars","Stereo","Circular");
+        mode.SelectedItem=Updated.VisualizerStyle;
+        Row("Görünüm",mode);
+        mode.SelectedIndexChanged+=(_,_)=>Updated.VisualizerStyle=
+            mode.SelectedItem?.ToString()??"Bars";
+        var width=Number(16,128,1,Updated.WidgetWidth);
+        var height=Number(8,54,1,Updated.VisualizerHeight);
+        var gain=Number(10,400,10,Updated.VisualizerGain);
+        Row("Genişlik (piksel)",width);
+        Row("Yükseklik (piksel)",height);
+        Row("Hassasiyet (%)",gain);
+        width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
+        height.ValueChanged+=(_,_)=>Updated.VisualizerHeight=(int)height.Value;
+        gain.ValueChanged+=(_,_)=>Updated.VisualizerGain=(int)gain.Value;
+        Note("Bars: frekans çubukları. Stereo: sol kanal solda, "+
+            "sağ kanal sağda. Circular: dairesel ses tepkisi.");
+    }
+
+    private void BuildGif()
+    {
+        Note("GIF dosyası yalnızca bu Windows kullanıcısının yerel "+
+            "uygulama klasörüne kopyalanır; diğer kullanıcılara dağıtılmaz.");
+        var file=new Label{
+            Text=Updated.GifAssetId.Length>0?Updated.GifAssetId:"GIF seçilmedi",
+            Width=414,Height=25,ForeColor=Muted,AutoEllipsis=true
+        };
+        content.Controls.Add(file);
+        var choose=Button("GIF seç / değiştir");
+        content.Controls.Add(choose);
+        choose.Click+=(_,_)=>
+        {
+            using var picker=new OpenFileDialog{
+                Filter="Animasyonlu GIF|*.gif",
+                CheckFileExists=true,
+                Title="128×64 OLED için GIF seç"
+            };
+            if(picker.ShowDialog(this)!=DialogResult.OK)return;
+            try
+            {
+                Updated.GifAssetId=AnimatedGifWidgetStore.Import(picker.FileName);
+                file.Text=Path.GetFileName(picker.FileName);
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show(this,ex.Message,"GIF yüklenemedi",
+                    MessageBoxButtons.OK,MessageBoxIcon.Warning);
+            }
+        };
+        var fit=Combo("Contain","Cover","Stretch");
+        fit.SelectedItem=Updated.GifFit;
+        Row("Ekrana sığdırma",fit);
+        fit.SelectedIndexChanged+=(_,_)=>Updated.GifFit=
+            fit.SelectedItem?.ToString()??"Contain";
+        var dither=Combo("FloydSteinberg","Bayer","Threshold");
+        dither.SelectedItem=Updated.GifDither;
+        Row("Monokrom dönüşüm",dither);
+        dither.SelectedIndexChanged+=(_,_)=>Updated.GifDither=
+            dither.SelectedItem?.ToString()??"FloydSteinberg";
+        var width=Number(16,128,1,Updated.WidgetWidth);
+        var height=Number(8,54,1,Updated.VisualizerHeight);
+        var speed=Number(25,400,25,Updated.GifSpeedPercent);
+        var threshold=Number(20,235,5,Updated.GifThreshold);
+        Row("Genişlik",width);Row("Yükseklik",height);
+        Row("Animasyon hızı (%)",speed);
+        Row("Siyah/beyaz eşiği",threshold);
+        width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
+        height.ValueChanged+=(_,_)=>Updated.VisualizerHeight=(int)height.Value;
+        speed.ValueChanged+=(_,_)=>Updated.GifSpeedPercent=(int)speed.Value;
+        threshold.ValueChanged+=(_,_)=>Updated.GifThreshold=(int)threshold.Value;
+        Note("En fazla 12 MB / 160 kare; OLED animasyonu güvenli "+
+            "kare hızıyla çizilir. Kaynak GIF yeniden kodlanmaz.");
+    }
+
+    private static Button Button(string title)=>new(){
+        Text=title,Width=174,Height=35,BackColor=Color.FromArgb(38,68,82),
+        ForeColor=TextColor,FlatStyle=FlatStyle.Flat,Margin=new Padding(3,6,5,4)
+    };
+    private static ComboBox Combo(params string[] values)
+    {
+        var c=new ComboBox{
+            Width=185,Height=29,DropDownStyle=ComboBoxStyle.DropDownList,
+            BackColor=Color.FromArgb(23,31,43),ForeColor=TextColor,
+            FlatStyle=FlatStyle.Flat
+        };
+        c.Items.AddRange(values);
+        c.SelectedIndex=0;
+        return c;
+    }
+    private static NumericUpDown Number(int min,int max,int increment,int value)=>
+        new(){
+            Minimum=min,Maximum=max,Increment=increment,
+            Value=Math.Clamp(value,min,max),
+            Width=173,Height=30,TextAlign=HorizontalAlignment.Center,
+            BackColor=Color.FromArgb(23,31,43),ForeColor=TextColor
+        };
+    private void Note(string text)
+    {
+        content.Controls.Add(new Label{
+            Text=text,Width=419,Height=62,ForeColor=Muted,
+            Margin=new Padding(2,8,2,5)
+        });
+    }
+    private void Row(string caption,Control editor)
+    {
+        var row=new FlowLayoutPanel{
+            Width=425,Height=38,WrapContents=false
+        };
+        row.Controls.Add(new Label{
+            Text=caption,Width=226,Height=32,ForeColor=TextColor,
+            TextAlign=ContentAlignment.MiddleLeft
+        });
+        row.Controls.Add(editor);
+        content.Controls.Add(row);
+    }
+}

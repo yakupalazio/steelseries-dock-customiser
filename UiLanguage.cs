@@ -57,8 +57,8 @@ internal static class UiLanguage
             "Changes apply immediately and persist across restarts.",
         ["SteelSeries Nova Pro Wireless için kişisel OLED stüdyosu"]=
             "Personal OLED studio for SteelSeries Nova Pro Wireless",
-        ["SÜRÜM   1.1.1 Beta 5 Universal Preview 2\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
-            "VERSION   1.1.1 Beta 5 Universal Preview 2\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
+        ["SÜRÜM   1.1.1 Beta 5 Media Preview 1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
+            "VERSION   1.1.1 Beta 5 Media Preview 1\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
         ["Tasarlayan ve geliştiren"]="Designed and developed by",
         ["© 2026 Yakup Can Palaz. Tüm hakları saklıdır. Ücretsiz kullanım; değiştirme ve yeniden dağıtım izne tabidir. SteelSeries ile bağlantılı değildir."]=
             "© 2026 Yakup Can Palaz. All rights reserved. Free use; modification and redistribution require permission. Not affiliated with SteelSeries.",
@@ -202,6 +202,9 @@ internal static class UiLanguage
         ["Küçük medya saati"]="Small media clock",
         ["Oyun başlığı"]="Game heading",["Oyun adı"]="Game title",
         ["Mini Player (Oyun)"]="Mini player (Game)",
+        ["Canlı şarkı sözleri"]="Synced lyrics",
+        ["Ses görselleştirici"]="Audio visualizer",
+        ["Animasyonlu GIF"]="Animated GIF",
         ["Özel metin"]="Custom text",
         ["Batarya 1 · Otomatik"]="Battery 1 · Auto",
         ["Batarya 2 · Otomatik"]="Battery 2 · Auto",

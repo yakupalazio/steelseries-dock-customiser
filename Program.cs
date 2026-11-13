@@ -12,6 +12,29 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if(args.Contains("--audio-loopback-probe"))
+        {
+            // Diagnostic only. No waveform/audio bytes written anywhere.
+            using var analyzer=new SystemAudioVisualizer();
+            analyzer.SetEnabled(true);
+            System.Threading.Thread.Sleep(2500);
+            var bands=analyzer.Snapshot;
+            Console.WriteLine("WASAPI_LOOPBACK_STARTED="+analyzer.Enabled);
+            Console.WriteLine("WASAPI_SNAPSHOT_FRESH="+bands.Fresh);
+            Console.WriteLine("WASAPI_CHANNEL_BANDS="+
+                bands.Left.Length+","+bands.Right.Length);
+            Console.WriteLine("WASAPI_LEFT_PEAK="+bands.Left.Max().ToString("F3"));
+            Console.WriteLine("WASAPI_RIGHT_PEAK="+bands.Right.Max().ToString("F3"));
+            return;
+        }
+        if(args.Contains("--optional-media-examples"))
+        {
+            int position=Array.IndexOf(args,"--optional-media-examples");
+            if(position+1>=args.Length)
+                throw new ArgumentException("Missing optional preview directory");
+            Beta5SelfTests.RenderOptionalMediaExamples(args[position+1]);
+            return;
+        }
         if(args.Contains("--beta5-preview-output"))
         {
             int pos=Array.IndexOf(args,"--beta5-preview-output");
@@ -737,6 +760,27 @@ internal static class Program
                 profiles.Close();
                 return;
             }
+            if(args.Contains("--capture-widget-lyrics") ||
+               args.Contains("--capture-widget-visualizer") ||
+               args.Contains("--capture-widget-gif"))
+            {
+                string type=args.Contains("--capture-widget-lyrics")?"Lyrics":
+                    args.Contains("--capture-widget-visualizer")
+                        ?"AudioVisualizer":"AnimatedGif";
+                using var target=new OptionalMediaWidgetDialog(
+                    new DockWidget{Kind=type});
+                target.StartPosition=FormStartPosition.Manual;
+                target.Location=new System.Drawing.Point(-5000,-5000);
+                target.ShowInTaskbar=false;
+                target.Show();
+                Application.DoEvents();
+                using var image=new System.Drawing.Bitmap(target.Width,target.Height);
+                target.DrawToBitmap(image,new System.Drawing.Rectangle(
+                    0,0,image.Width,image.Height));
+                image.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                target.Close();
+                return;
+            }
             if(args.Contains("--capture-settings"))
             {
                 using var settings=new SettingsDialog(()=>false,new BatteryPreferences(),
@@ -828,6 +872,18 @@ public sealed class DockWidget
     public int BarFrameThickness { get; set; } = 1;
     public int BarFillThickness { get; set; } = 3;
     public string Format { get; set; } = "";
+    // New media widgets are strictly opt-in; existing saved layouts are
+    // unchanged and do not instantiate these by default.
+    public int LyricOffsetMs { get; set; } = 0;
+    public string VisualizerStyle { get; set; } = "Bars";
+    public int VisualizerGain { get; set; } = 100;
+    public int VisualizerHeight { get; set; } = 24;
+    public int WidgetWidth { get; set; } = 96;
+    public string GifAssetId { get; set; } = "";
+    public string GifFit { get; set; } = "Contain";
+    public string GifDither { get; set; } = "FloydSteinberg";
+    public int GifSpeedPercent { get; set; } = 100;
+    public int GifThreshold { get; set; } = 128;
     public string Text { get; set; } = "HELLO";
     public bool Visible { get; set; } = true;
     public override string ToString() => $"{WidgetLabels.Display(Kind)}  ({X}, {Y})";

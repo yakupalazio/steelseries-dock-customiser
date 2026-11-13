@@ -36,6 +36,124 @@ internal static class Beta5SelfTests
            !BatteryPreferences.FilePath.StartsWith(
                 Beta5Sandbox.SettingsDirectory,StringComparison.OrdinalIgnoreCase))
             throw new Exception("Beta 5 accidentally shares Beta 4's settings");
+        var optionalKinds=new[]{"Lyrics","AudioVisualizer","AnimatedGif"};
+        foreach(var mode in Enum.GetValues<ScreenMode>())
+            if(StudioProject.Defaults(mode).Widgets.Any(
+                w=>optionalKinds.Contains(w.Kind)))
+                throw new Exception(
+                    "An optional media widget was forced into factory defaults");
+        // Optional lyrics: real LRC timecodes, 10ms shifts and seek math,
+        // no copyrighted lyrics, API calls or Spotify login during tests.
+        var syntheticLrc=SyncedLyricsProvider.Parse(
+            "[00:01.00]FIRST LINE\n[00:02.50]NEXT LINE\n[00:04.000]LAST LINE");
+        if(syntheticLrc.Count!=3 ||
+           SyncedLyricsProvider.AtTime(syntheticLrc,
+               TimeSpan.FromMilliseconds(2495),0)!="FIRST LINE" ||
+           SyncedLyricsProvider.AtTime(syntheticLrc,
+               TimeSpan.FromMilliseconds(2495),-10)!="NEXT LINE" ||
+           SyncedLyricsProvider.AtTime(syntheticLrc,
+               TimeSpan.FromMilliseconds(2505),10)!="FIRST LINE" ||
+           !StudioProject.IsAllowed(ScreenMode.Game,"Lyrics") ||
+           !StudioProject.IsAllowed(ScreenMode.Media,"Lyrics"))
+            throw new Exception("10ms LRC sync / optional-only mode failed");
+
+        var pureTone=Enumerable.Range(0,2048)
+            .Select(i=>(float)(.72*Math.Sin(2*Math.PI*i*440/48000)))
+            .ToArray();
+        var toneBands=SystemAudioVisualizer.Analyze(pureTone,0,48000);
+        var silentBands=SystemAudioVisualizer.Analyze(
+            new float[2048],0,48000);
+        if(toneBands.Length!=12||toneBands.Max()<.1f||
+           silentBands.Any(v=>v>0))
+            throw new Exception("WASAPI spectrum PCM analysis regression");
+        // Three independent visualizer styles must produce real black/white
+        // pixels from synthetic separated left and right frequency signals.
+        var fakeAudio=new AudioVisualizationSnapshot(
+            Enumerable.Repeat(.92f,12).ToArray(),
+            Enumerable.Repeat(.38f,12).ToArray(),
+            DateTimeOffset.UtcNow);
+        foreach(string style in new[]{"Bars","Stereo","Circular"})
+        {
+            var widget=new DockWidget{
+                Kind="AudioVisualizer",X=9,Y=17,
+                VisualizerStyle=style,WidgetWidth=102,
+                VisualizerHeight=34
+            };
+            using var rendered=OledRenderer.Render(new LayoutState{
+                Widgets=[widget]},false,true,false,
+                protectHeader:true,layoutMode:ScreenMode.Idle,
+                audio:fakeAudio);
+            var rect=OledRenderer.GetBounds(widget);
+            int lit=0;
+            for(int yy=rect.Y;yy<rect.Bottom;yy++)
+            for(int xx=rect.X;xx<rect.Right;xx++)
+                if(Lit(rendered,xx,yy))lit++;
+            if(lit<20||Lit(rendered,0,0))
+                throw new Exception("Audio style "+style+" failed OLED render");
+        }
+        var frames=new MonoGifAnimation([
+            new MonoGifFrame(16,8,new bool[128],100),
+            new MonoGifFrame(16,8,Enumerable.Repeat(true,128).ToArray(),100)
+        ],200);
+        if(frames.At(50,100)?.Pixels[0]!=false ||
+           frames.At(150,100)?.Pixels[0]!=true ||
+           frames.At(75,200)?.Pixels[0]!=true ||
+           AnimatedGifWidgetStore.IsSafeId("../../some.gif"))
+            throw new Exception("GIF playback timing / private path validation failed");
+        string tempGif=Path.Combine(Path.GetTempPath(),
+            "OLED-OPTIONAL-TEST-"+Guid.NewGuid().ToString("N")+".gif");
+        try
+        {
+            using(var original=new Bitmap(24,16))
+            {
+                using var canvas=Graphics.FromImage(original);
+                canvas.Clear(Color.Black);
+                canvas.FillRectangle(Brushes.White,0,0,12,16);
+                original.Save(tempGif,ImageFormat.Gif);
+            }
+            var decoded=AnimatedGifWidgetStore.Decode(tempGif,32,18,
+                "Contain","FloydSteinberg",128);
+            if(decoded.Frames.Count<1||
+               decoded.Frames[0].Pixels.All(p=>p)||
+               decoded.Frames[0].Pixels.All(p=>!p)||
+               decoded.Frames[0].Width!=32||
+               decoded.Frames[0].Height!=18)
+                throw new Exception("GIF 1-bit raster conversion failed");
+            using var checker=new Bitmap(4,4);
+            checker.SetPixel(0,0,Color.White);
+            checker.SetPixel(1,0,Color.Black);
+            if(!AnimatedGifWidgetStore.ConvertToMono(checker,"Threshold",128)[0])
+                throw new Exception("GIF threshold conversion failed");
+        }
+        finally{try{File.Delete(tempGif);}catch{}}
+        // Decoder must handle a REAL multiframe GIF, not just an in-memory
+        // timing list. Both distinct frames are created in this test.
+        string animatedGif=Path.Combine(Path.GetTempPath(),
+            "OLED-TWO-FRAMES-"+Guid.NewGuid().ToString("N")+".gif");
+        try
+        {
+            // Original two-frame 12x12 GIF fixture: black then white.
+            // A real 89a animation with a NETSCAPE loop extension and
+            // separate 100/150ms graphic control descriptors. Unlike WPF's
+            // GIF encoder, this fixture actually retains both frames.
+            const string twoFrameGif=
+                "R0lGODlhDAAMAIEAAAAAAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh"+
+                "+QQACgAAACwAAAAADAAMAAAIFgABCBxIsKDBgwgTKlzIsKHDhxARBgQA"+
+                "IfkEAA8AAAAsAAAAAAwADACB////AAAAAAAAAAAACBYAAQgcSLCgwYMIEypcyLChw4cQEQYEADs=";
+            File.WriteAllBytes(animatedGif,Convert.FromBase64String(twoFrameGif));
+            var decoded=AnimatedGifWidgetStore.Decode(animatedGif,20,12,
+                "Stretch","Threshold",128);
+            if(decoded.Frames.Count!=2 ||
+               decoded.Frames[0].Pixels[0]==decoded.Frames[1].Pixels[0])
+                throw new Exception("Real multi-frame GIF decode failed: count="+
+                    decoded.Frames.Count+", first="+
+                    (decoded.Frames.Count>0?decoded.Frames[0].Pixels[0]:"missing")+
+                    ", second="+
+                    (decoded.Frames.Count>1?decoded.Frames[1].Pixels[0]:"missing"));
+        }
+        finally{try{File.Delete(animatedGif);}catch{}}
+        Console.WriteLine("PASS: optional LRC sync, 3 stereo-aware audio styles, mono GIF conversion.");
+
         // Release packages must NOT print the developer's own phone/mouse/
         // headset labels. All unidentified roles use generic localized names.
         foreach(var kind in new[]{"Phone","Mouse","Headset","SpareBattery"})
@@ -563,6 +681,59 @@ internal static class Beta5SelfTests
                 throw new Exception("Bold seven-segment clock lost readable counters");
         }
         Console.WriteLine("PASS: mini radial, split ChatMix, bold fonts, BLE priorities and alerts.");
+    }
+
+    public static void RenderOptionalMediaExamples(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var audio=new AudioVisualizationSnapshot(
+            Enumerable.Range(0,12).Select(i=>.2f+i*.06f).ToArray(),
+            Enumerable.Range(0,12).Select(i=>.8f-i*.05f).ToArray(),
+            DateTimeOffset.UtcNow);
+        foreach(var style in new[]{"Bars","Stereo","Circular"})
+        {
+            using var bitmap=OledRenderer.Render(new LayoutState{
+                Widgets=[new DockWidget{
+                    Kind="AudioVisualizer",X=7,Y=12,
+                    WidgetWidth=114,VisualizerHeight=39,
+                    VisualizerStyle=style}]
+            },false,true,false,
+                protectHeader:true,layoutMode:ScreenMode.Idle,audio:audio);
+            bitmap.Save(Path.Combine(folder,"audio-"+style+".png"),
+                ImageFormat.Png);
+        }
+        var track=new MediaSnapshot(true,true,"Synthetic test song",
+            "Synthetic artist","Test App",TimeSpan.FromMilliseconds(2750),
+            TimeSpan.FromSeconds(160),DateTimeOffset.Now);
+        var lyrics=new SyncedLyricsSnapshot(SyncedLyricsProvider.Key(track),
+            SyncedLyricsProvider.Parse(
+                "[00:00.10]FIRST TEST\n[00:02.00]SYNCHRONIZED LINES"),
+            "In-memory test");
+        using(var bitmap=OledRenderer.Render(new LayoutState{
+            Widgets=[new DockWidget{
+                Kind="Lyrics",X=9,Y=30,WidgetWidth=118}]
+        },true,true,true,
+            playback:track,protectHeader:true,layoutMode:ScreenMode.Media,
+            lyrics:lyrics))
+            bitmap.Save(Path.Combine(folder,"lyrics-synthetic.png"),
+                ImageFormat.Png);
+        using var source=new Bitmap(128,54);
+        using(var g=Graphics.FromImage(source))
+        {
+            g.Clear(Color.Black);
+            g.FillEllipse(Brushes.White,20,2,78,49);
+            g.FillRectangle(Brushes.Gray,0,20,45,12);
+        }
+        foreach(string dither in new[]{"Threshold","Bayer","FloydSteinberg"})
+        {
+            bool[] mono=AnimatedGifWidgetStore.ConvertToMono(source,dither,128);
+            using var frame=new Bitmap(128,64);
+            for(int y=0;y<54;y++)
+            for(int x=0;x<128;x++)
+                frame.SetPixel(x,y+10,mono[y*128+x]?Color.White:Color.Black);
+            frame.Save(Path.Combine(folder,"gif-"+dither+".png"),
+                ImageFormat.Png);
+        }
     }
 
     public static void RenderExamples(string folder)

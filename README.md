@@ -1,4 +1,8 @@
-# Steelseries Dock Customiser — Universal Device Discovery Preview
+# Steelseries Dock Customiser — Optional Media Widgets Preview
+
+> **New opt-in widgets:** synced lyrics (Windows media session + LRCLIB, 10 ms timing nudge), stereo audio visualizer (Bars / Stereo / Circular), and local GIF → 1-bit OLED animations (3 dithering modes). See [Optional Media Widgets Preview](OPTIONAL_MEDIA_WIDGETS_PREVIEW.md).
+
+## Earlier Universal Device Discovery Preview
 
 > **Device-name privacy fix:** device names in battery settings and warnings now come from the user's own connected devices. Clean installations show generic role names, never the original developer's phone/mouse/headset models. See [Device Name Privacy Fix](DEVICE_NAME_PRIVACY_FIX.md).
 

@@ -4,6 +4,9 @@ internal static class WidgetLabels
 {
     public static string Display(string kind)=>UiLanguage.T(kind switch
     {
+        "Lyrics"=>"Canlı şarkı sözleri",
+        "AudioVisualizer"=>"Ses görselleştirici",
+        "AnimatedGif"=>"Animasyonlu GIF",
         "Source"=>"Kaynak ikonu",
         "Track"=>"Şarkı adı",
         "Artist"=>"Sanatçı",

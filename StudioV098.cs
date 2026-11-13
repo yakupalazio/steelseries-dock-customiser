@@ -267,6 +267,7 @@ internal sealed class StudioProject
         "GameLabel" or "GameTitle" or "GameMiniPlayer"=>mode==ScreenMode.Game,
         "Clock" or "Date" or "Custom text" or
         "SystemCpu" or "SystemRam" or "NetworkPing" or
+        "AudioVisualizer" or "AnimatedGif" or "Lyrics" or
         "Mouse" or "Phone" or "DualSense" or "Headset" or "SpareBattery" or "Laptop" or
         "BatterySlot1" or "BatterySlot2" or "BatterySlot3" or "VolumeChatMix"=>true,
         _=>false
@@ -304,6 +305,21 @@ internal sealed class StudioProject
             w.BarFillThickness=Math.Clamp(w.BarFillThickness,1,5);
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
+            w.LyricOffsetMs=Math.Clamp(w.LyricOffsetMs,-10000,10000);
+            w.VisualizerStyle=w.VisualizerStyle is "Bars" or "Stereo" or "Circular"
+                ?w.VisualizerStyle:"Bars";
+            w.VisualizerGain=Math.Clamp(w.VisualizerGain,10,400);
+            w.VisualizerHeight=Math.Clamp(w.VisualizerHeight,8,54);
+            w.WidgetWidth=Math.Clamp(w.WidgetWidth,16,128);
+            w.GifFit=w.GifFit is "Contain" or "Cover" or "Stretch"
+                ?w.GifFit:"Contain";
+            w.GifDither=w.GifDither is "FloydSteinberg" or "Bayer" or "Threshold"
+                ?w.GifDither:"FloydSteinberg";
+            w.GifSpeedPercent=Math.Clamp(w.GifSpeedPercent,25,400);
+            w.GifThreshold=Math.Clamp(w.GifThreshold,20,235);
+            if(!System.Text.RegularExpressions.Regex.IsMatch(
+                w.GifAssetId??"",@"\A[a-fA-F0-9]{32}\.gif\z"))
+                w.GifAssetId="";
         }
         // Never silently re-create widgets the user has removed. Defaults()
         // supplies the initial Media/Game/Idle UI instead.

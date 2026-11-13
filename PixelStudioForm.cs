@@ -125,6 +125,12 @@ internal sealed partial class PixelStudioForm : Form
     private readonly ComboBox tool = new() { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox kind = new() { Width = 134, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox dialStyle = new() { Width=153,DropDownStyle=ComboBoxStyle.DropDownList };
+    private readonly Button mediaWidgetSettingsButton=new DarkButton(){
+        Text="Widget ayarları...",Width=264,Height=36,
+        BackColor=Color.FromArgb(38,68,82),
+        ForeColor=Color.FromArgb(134,220,249),
+        Cursor=Cursors.Hand
+    };
     private readonly Button wheelEditorButton=new DarkButton(){
         Text="Tekerleği piksel piksel düzenle",Width=265,Height=34,
         BackColor=Color.FromArgb(34,58,76),
@@ -143,10 +149,13 @@ internal sealed partial class PixelStudioForm : Form
     private readonly Button redoButton = new DarkButton() { Text="↷ İleri al", Width=96,Height=30 };
     private readonly Label status = new() { Width=755,Height=52,ForeColor=Color.FromArgb(44,170,104) };
     private readonly System.Windows.Forms.Timer ticker = new() { Interval=1000 };
+    private readonly System.Windows.Forms.Timer animationTicker = new() { Interval=80 };
+    private readonly SystemAudioVisualizer audioVisualizer=new();
+    private bool mediaVisualsNeeded;
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Universal Preview 2 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Media Preview 1 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -198,6 +207,7 @@ internal sealed partial class PixelStudioForm : Form
         dialStyle.FormattingEnabled=true;
         dialStyle.SelectedIndex=0;
         wheelEditorButton.Click+=(_,_)=>EditWheelArtwork();
+        mediaWidgetSettingsButton.Click+=(_,_)=>OpenOptionalMediaSettings();
         dialMonitor.Updated+=() =>
         {
             if(IsDisposed||!IsHandleCreated)return;
@@ -358,8 +368,17 @@ internal sealed partial class PixelStudioForm : Form
         editor.MouseUp += EndGesture;
         editor.MouseLeave += (_,_) => EndGesture(null,null);
         KeyDown += HandleKeys;
+        animationTicker.Tick+=(_,_)=>
+        {
+            if(mediaVisualsNeeded && !IsDisposed)
+            {
+                editor.Invalidate();
+                dockPreview?.InvalidateFrame();
+            }
+        };
         ticker.Tick += (_,_) =>
         {
+            RefreshOptionalMediaServices();
             bool dialNeeded=Enum.GetValues<ScreenMode>().Any(m=>
                 project.For(m).Widgets.Any(w=>w.Kind=="VolumeChatMix"&&w.Visible));
             if(dialNeeded!=dialMonitorStarted)
@@ -409,7 +428,10 @@ internal sealed partial class PixelStudioForm : Form
         }
         ticker.Start();
         FormClosing += HandleTrayClosing;
-        FormClosed += (_,_) => {ticker.Stop();EndBatteryDeviceWatching();dialMonitor.Dispose();DisposeTray();};
+        FormClosed += (_,_) => {
+            ticker.Stop();animationTicker.Stop();animationTicker.Dispose();
+            audioVisualizer.Dispose();EndBatteryDeviceWatching();
+            dialMonitor.Dispose();DisposeTray();};
         Shown += async (_,_) =>
         {
             if(!captureMode){InitializeTray();LoadMediaPreference();}
@@ -432,7 +454,8 @@ internal sealed partial class PixelStudioForm : Form
     private static readonly string[] AllWidgetKinds=[
         "BatterySlot1","BatterySlot2","BatterySlot3","Mouse","Phone",
         "DualSense","Laptop","Headset","SpareBattery","Source","Track",
-        "Artist","Progress","MediaClock","GameLabel","GameTitle","GameMiniPlayer",
+        "Artist","Progress","MediaClock","Lyrics","AudioVisualizer","AnimatedGif",
+        "GameLabel","GameTitle","GameMiniPlayer",
         "Clock","Date","VolumeChatMix","SystemCpu","SystemRam",
         "NetworkPing","Custom text"
     ];
@@ -447,7 +470,8 @@ internal sealed partial class PixelStudioForm : Form
             mode==ScreenMode.Game ? (mediaSnapshot.IsPlaying ? mediaSnapshot : null) : LiveMedia,
             gameSnapshot,
             batteryPreferences,project.ProtectHeader&&!liveFull,mode,dialMonitor.Snapshot,
-            telemetry);
+            telemetry,SyncedLyricsProvider.Current(mediaSnapshot),
+            audioVisualizer.Snapshot);
         if(liveFull&&project.ProtectHeader)
         {
             // Full ownership cannot retain the firmware's status strip.
@@ -548,9 +572,42 @@ internal sealed partial class PixelStudioForm : Form
             if(IsDisposed)return;
             mediaSnapshot=newest;
             Redraw();
+            if(newest.IsPlaying && Enum.GetValues<ScreenMode>().Any(mode=>
+                project.For(mode).Widgets.Any(w=>w.Kind=="Lyrics"&&w.Visible)))
+                _=LoadSyncedLyricsAsync(newest);
         }
         catch {mediaSnapshot=MediaSnapshot.Empty;}
         finally {mediaPolling=false;}
+    }
+
+    private async System.Threading.Tasks.Task LoadSyncedLyricsAsync(
+        MediaSnapshot track)
+    {
+        try
+        {
+            await SyncedLyricsProvider.EnsureAsync(track);
+            if(!IsDisposed && mediaSnapshot.IsPlaying &&
+               SyncedLyricsProvider.Key(mediaSnapshot)==SyncedLyricsProvider.Key(track))
+                Redraw();
+        }
+        catch{/* Lyrics are optional; media and OLED never depend on network. */}
+    }
+
+    private void RefreshOptionalMediaServices()
+    {
+        // Listen only if the live mode or the currently edited preview
+        // uses a visible visualizer; inactive saved modes must cost nothing.
+        bool audioNeeded=!captureMode&&!traySmokeMode &&
+            new[]{ActiveMode,editingMode}.Distinct().Any(mode=>
+                project.For(mode).Widgets.Any(w=>
+                    w.Visible&&w.Kind=="AudioVisualizer"));
+        audioVisualizer.SetEnabled(audioNeeded);
+        bool any=Enum.GetValues<ScreenMode>().Any(mode=>
+            project.For(mode).Widgets.Any(w=>w.Visible&&
+                w.Kind is "Lyrics" or "AudioVisualizer" or "AnimatedGif"));
+        mediaVisualsNeeded=any;
+        if(any&&!animationTicker.Enabled)animationTicker.Start();
+        else if(!any&&animationTicker.Enabled)animationTicker.Stop();
     }
 
     private void OpenClockDateSettings()
@@ -820,9 +877,34 @@ internal sealed partial class PixelStudioForm : Form
             selected=state.Widgets.First(w=>w.Kind==type);RefreshWidgetList();return;
         }
         if(state.Widgets.Count>=70){SetStatus("En fazla 70 widget.");return;}
+        string gifId="";
+        if(type=="AnimatedGif")
+        {
+            using var picker=new OpenFileDialog{
+                Filter="Animasyonlu GIF|*.gif",
+                Title="OLED için GIF seç",
+                CheckFileExists=true};
+            if(picker.ShowDialog(this)!=DialogResult.OK)return;
+            try{gifId=AnimatedGifWidgetStore.Import(picker.FileName);}
+            catch(Exception ex)
+            {
+                MessageBox.Show(this,ex.Message,"GIF eklenemedi",
+                    MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
+        }
         Record();
         var w=new DockWidget{Kind=type,X=5,Y=19};
         if(type=="MediaClock")w.FontSize=7;
+        if(type=="Lyrics"){w.X=8;w.Y=34;w.WidgetWidth=114;w.FontSize=7;}
+        if(type=="AudioVisualizer")
+        {w.X=8;w.Y=18;w.WidgetWidth=112;w.VisualizerHeight=26;}
+        if(type=="AnimatedGif")
+        {
+            w.X=16;w.Y=15;w.WidgetWidth=96;w.VisualizerHeight=34;
+            w.GifAssetId=gifId;
+            AnimatedGifWidgetStore.EnsureBackground(w);
+        }
         if(type=="GameMiniPlayer")
         {
             w.X=4;w.Y=38;w.FontSize=7;w.MiniWidth=88;
@@ -833,7 +915,34 @@ internal sealed partial class PixelStudioForm : Form
         }
         if(type=="GameLabel")w.Text="NOW PLAYING:";
         state.Widgets.Add(w);selected=w;RefreshWidgetList();Redraw();tool.SelectedIndex=2;
+        if(type is "Lyrics" or "AudioVisualizer" or "AnimatedGif")
+            OpenOptionalMediaSettings();
     }
+    private void OpenOptionalMediaSettings()
+    {
+        if(selected?.Kind is not ("Lyrics" or "AudioVisualizer" or
+            "AnimatedGif"))return;
+        using var dialog=new OptionalMediaWidgetDialog(selected);
+        if(dialog.ShowDialog(this)!=DialogResult.OK)return;
+        var updated=dialog.Updated;
+        Record();
+        selected.LyricOffsetMs=updated.LyricOffsetMs;
+        selected.VisualizerStyle=updated.VisualizerStyle;
+        selected.VisualizerGain=updated.VisualizerGain;
+        selected.VisualizerHeight=updated.VisualizerHeight;
+        selected.WidgetWidth=updated.WidgetWidth;
+        selected.GifAssetId=updated.GifAssetId;
+        selected.GifFit=updated.GifFit;
+        selected.GifDither=updated.GifDither;
+        selected.GifSpeedPercent=updated.GifSpeedPercent;
+        selected.GifThreshold=updated.GifThreshold;
+        if(selected.Kind=="AnimatedGif")
+            AnimatedGifWidgetStore.EnsureBackground(selected);
+        RefreshWidgetList();
+        Redraw();
+        SetStatus("Widget ayarları güncellendi. Kaydet ile sakla.");
+    }
+
     private void RemoveWidget()
     {
         if(selected==null)return;

@@ -1,5 +1,10 @@
 # Third-party notices
 
+- **NAudio.Wasapi / NAudio.Core 3.3.0**, <https://github.com/naudio/NAudio>: MIT licensed libraries for optional, read-only Windows system output loopback. Audio sample bytes are processed only in memory for the active visualizer widget; no audio file is recorded. Complete MIT license copied from the upstream NAudio repository in `THIRD_PARTY_LICENSES/NAudio-MIT-LICENSE.txt`.
+- **GGIF Studio** <https://github.com/D4rkTT/GGIF-Studio>: MIT project consulted as an architecture and dithering **reference only**. Its Electron/TypeScript source code was not copied or included. The app has its own standalone C# implementation.
+- **LRCLIB** <https://lrclib.net/docs>: voluntary external lyrics service called only when a user enables the optional lyrics widget; no lyrics corpus or track-specific data is bundled. Users should respect applicable lyrics rights.
+
+
 - **HidSharp 2.6.4**, <https://github.com/IntergatedCircuits/HidSharp>: Apache License 2.0 NuGet dependency used for the optional, user-confirmed experimental OLED transport and optional **read-only** volume/ChatMix dial telemetry. License and copyright notice are provided in `THIRD_PARTY_LICENSES/HidSharp-LICENSE.txt` and `THIRD_PARTY_LICENSES/HidSharp-NOTICE.txt`. No firmware flashing or brightness changes are implemented.
 - **ggoled v0.3.0**, <https://github.com/JerwuQu/ggoled>: external, independently downloaded command-line utility for the experimental OLED physical display test. It is **not bundled**, copied into Git, or statically linked. A known SHA-256 protects against accidental substitution of the tested release binary.
 - **BQC / SteelClock**, <https://github.com/pozitronik/bqc> and <https://github.com/pozitronik/steelclock-go>: GPL-3.0 projects reviewed only as public technical references. Their code is not bundled, copied, or imported; the Bluetooth readers in this project are independent Windows API implementations.
