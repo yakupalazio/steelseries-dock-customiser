@@ -8,6 +8,10 @@ namespace SteelseriesDockCustomiser;
 internal sealed class DisplayPreferences
 {
     public bool BurnInDrift { get; set; }
+    public bool ModeTransitionEnabled { get; set; } = true;
+    public string ModeTransitionEffect { get; set; } = "Slide";
+    // 100 means normal: approx 350ms slide. Valid range 25..200%.
+    public int ModeTransitionSpeed { get; set; } = 100;
     public static string FilePath => Path.Combine(
         Beta5Sandbox.SettingsDirectory,"display-v1.json");
     public static DisplayPreferences Load()
@@ -20,7 +24,9 @@ internal sealed class DisplayPreferences
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath,JsonSerializer.Serialize(this));
+        string temporary=FilePath+".tmp";
+        File.WriteAllText(temporary,JsonSerializer.Serialize(this));
+        File.Move(temporary,FilePath,true);
     }
 }
 

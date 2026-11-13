@@ -31,7 +31,7 @@ internal sealed class LayoutProfileDialog : Form
         snapshot=current;
         apply=onApply;
         Text=UiLanguage.T("Profil yöneticisi");
-        ClientSize=new Size(680,525);
+        ClientSize=new Size(680,555);
         FormBorderStyle=FormBorderStyle.FixedDialog;
         StartPosition=FormStartPosition.CenterParent;
         MaximizeBox=false;MinimizeBox=false;
@@ -47,17 +47,29 @@ internal sealed class LayoutProfileDialog : Form
         Controls.Add(hint);
         var blank=Button("Boş oluştur",390,111,243);
         var copy=Button("Geçerli tasarımı kaydet",390,156,243);
-        var rename=Button("Yeniden adlandır",390,201,243);
-        var remove=Button("Profili sil",390,246,243);
-        var import=Button("İçe aktar",390,291,117);
-        var export=Button("Dışa aktar",516,291,117);
-        var use=Button("✓ Profili uygula",390,349,243);
+        var overwrite=Button("↻ Seçili profilin üzerine kaydet",390,201,243);
+        var rename=Button("Yeniden adlandır",390,246,243);
+        var remove=Button("Profili sil",390,291,243);
+        var import=Button("İçe aktar",390,336,117);
+        var export=Button("Dışa aktar",516,336,117);
+        var use=Button("✓ Profili uygula",390,390,243);
         use.BackColor=Accent;use.ForeColor=Bg;
-        Controls.AddRange([blank,copy,rename,remove,import,export,use]);
-        var close=Button("Kapat",528,470,105);
+        Controls.AddRange([blank,copy,overwrite,rename,remove,import,export,use]);
+        var close=Button("Kapat",528,500,105);
         close.Click+=(_,_)=>Close();Controls.Add(close);
         blank.Click+=(_,_)=>Create(false);
         copy.Click+=(_,_)=>Create(true);
+        overwrite.Click+=(_,_)=>Run(()=>
+        {
+            var selected=Selected();
+            if(MessageBox.Show(this,
+                $"'{selected.Name}' profilinin kayıtlı tasarımı şu anki ekranla değiştirilsin?\n\nEski kopya .bak dosyasında korunacak.",
+                "Profilin üzerine kaydet",MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,MessageBoxDefaultButton.Button2)!=DialogResult.Yes)
+                return;
+            library.Overwrite(selected.Id,mode,snapshot());
+            SaveAndRefresh(selected.Id);
+        });
         rename.Click+=(_,_)=>Run(() => {
             var selected=Selected();
             string? name=Prompt(UiLanguage.T("Yeni profil adı"),selected.Name);

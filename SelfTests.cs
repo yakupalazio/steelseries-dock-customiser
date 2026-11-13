@@ -1181,6 +1181,7 @@ internal static class SelfTests
             Beta5SelfTests.Run();
             ReleaseTextMotionSelfTests.Run();
             ReleaseThreeSelfTests.Run();
+            ReleaseFourSelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

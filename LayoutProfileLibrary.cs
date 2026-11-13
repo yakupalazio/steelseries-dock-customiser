@@ -52,7 +52,23 @@ internal sealed class LayoutProfileLibrary
         string temporary=FilePath+".tmp";
         File.WriteAllText(temporary,JsonSerializer.Serialize(this,
             new JsonSerializerOptions{WriteIndented=true}));
+        // Best-effort rollback copy before replacing the live library.
+        if(File.Exists(FilePath))
+        {
+            try {File.Copy(FilePath,FilePath+".bak",true);} catch(IOException) {}
+        }
         File.Move(temporary,FilePath,true);
+    }
+
+    // Replace only the selected stable profile ID; never overwrite another
+    // mode or mutate the editor's active layout by reference.
+    public void Overwrite(Guid id,ScreenMode mode,LayoutState layout)
+    {
+        var profile=Profiles.SingleOrDefault(p=>p.Id==id && p.Mode==mode)
+            ??throw new InvalidOperationException("Profile not found in this screen mode.");
+        var safe=layout.DeepClone();
+        StudioProject.Sanitize(safe,mode,true);
+        profile.Layout=safe;
     }
 
     public SavedLayoutProfile Add(string name,ScreenMode mode,LayoutState layout)

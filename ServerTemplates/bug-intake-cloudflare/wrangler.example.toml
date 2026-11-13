@@ -1,0 +1,17 @@
+# Copy to wrangler.toml, fill account-specific IDs and keep it private.
+name = "dock-customiser-bug-intake"
+main = "worker.mjs"
+compatibility_date = "2026-11-01"
+
+[vars]
+GH_OWNER = "YOUR_GITHUB_ORGANIZATION_OR_USERNAME"
+GH_REPO = "YOUR_PRIVATE_BUG_ISSUES_REPOSITORY"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dock-bug-intake"
+database_id = "YOUR_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "dock-bug-report-attachments-private"

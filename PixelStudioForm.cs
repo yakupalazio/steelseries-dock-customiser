@@ -205,7 +205,7 @@ internal sealed partial class PixelStudioForm : Form
     public PixelStudioForm()
     {
         UiPolish.Register(this);
-        Text = "Steelseries Dock Customiser 1.1.1 RC3 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 RC4 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -230,6 +230,7 @@ internal sealed partial class PixelStudioForm : Form
                 displayPreferences.BurnInDrift,DateTimeOffset.UtcNow),
             ()=>project.LiveOwnsDisplay);
         dockTab.Controls.Add(dockPreview);
+        dockPreview.ConfigureModeTransitions(()=>ActiveMode,()=>displayPreferences);
         editor.Paint += (_,e) => PaintFrame(e.Graphics,true,Zoom);
 
         var subtitle = new Label { Left=18,Top=405,Width=780,Height=39,
@@ -504,17 +505,48 @@ internal sealed partial class PixelStudioForm : Form
             dialMonitor.Dispose();DisposeTray();};
         Shown += async (_,_) =>
         {
-            if(!captureMode){InitializeTray();LoadMediaPreference();}
-            if(!captureMode&&!traySmokeMode)BeginBatteryDeviceWatching();
-            // Start the explicitly requested Live mode immediately on launch,
-            // before slower optional phone/media polling can delay the OLED.
-            if(!captureMode && !traySmokeMode && !IsDisposed && dockPreview is not null)
-                await dockPreview.StartLiveOnLaunchAsync();
-            if(!traySmokeMode)
+            bool actualStartup=!captureMode&&!traySmokeMode;
+            BootOverlay? loading=null;
+            ticker.Stop();
+            if(actualStartup)
             {
-                await RefreshGameAsync();
-                await RefreshMediaAsync();
-                await RefreshBatteriesAsync();
+                loading=new BootOverlay();
+                Controls.Add(loading);loading.BringToFront();
+                await System.Threading.Tasks.Task.Yield();
+            }
+            try
+            {
+                if(!captureMode){InitializeTray();LoadMediaPreference();}
+                if(actualStartup)BeginBatteryDeviceWatching();
+                // Live startup and slow optional providers run concurrently.
+                // A disconnected phone must never keep the UI locked.
+                var live=actualStartup&&dockPreview is not null
+                    ?dockPreview.StartLiveOnLaunchAsync()
+                    :System.Threading.Tasks.Task.CompletedTask;
+                if(!traySmokeMode)
+                {
+                    var initial=System.Threading.Tasks.Task.WhenAll(
+                        live,RefreshGameAsync(),RefreshMediaAsync(),
+                        RefreshBatteriesAsync());
+                    var complete=await System.Threading.Tasks.Task.WhenAny(
+                        initial,System.Threading.Tasks.Task.Delay(4400));
+                    if(complete==initial)
+                    {
+                        try{await initial;}catch{
+                            // Optional device errors keep unknown readings.
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                if(!IsDisposed)
+                {
+                    loading?.Dispose();
+                    ticker.Start();
+                    if(actualStartup&&!FirstRunGuideState.Completed())
+                        BeginInvoke((Action)(()=>ShowFirstRunGuide()));
+                }
             }
         };
         RefreshWidgetList();UpdateHistoryButtons();Redraw();

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Globalization;
 using System.Text;
 using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace SteelseriesDockCustomiser;
 
@@ -248,12 +249,38 @@ internal static class OledRenderer
             DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial,
                 telemetry,lyrics,audio,gameLogo);
 
-        var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
-        for(int y=0;y<Height;y++)
-        for(int x=0;x<Width;x++)
-            bmp.SetPixel(x,y,frame[y*Width+x]?Color.White:Color.Black);
-        return bmp;
+        // The finished frame is already a 1-bit array. Bulk rasterization
+        // avoids 8,192 GDI+ SetPixel calls on every live OLED frame.
+        return Rasterize(frame);
         } finally { EditableHeader.Value=wasEditable; }
+    }
+
+    private static Bitmap Rasterize(bool[] mono)
+    {
+        var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
+        var rect=new Rectangle(0,0,Width,Height);
+        var data=bmp.LockBits(rect,ImageLockMode.WriteOnly,PixelFormat.Format24bppRgb);
+        try
+        {
+            int pitch=Math.Abs(data.Stride);
+            var bytes=new byte[pitch*Height];
+            for(int y=0;y<Height;y++)
+            for(int x=0;x<Width;x++)
+            {
+                byte color=mono[y*Width+x]?(byte)255:(byte)0;
+                int offset=y*pitch+x*3;
+                bytes[offset]=color;
+                bytes[offset+1]=color;
+                bytes[offset+2]=color;
+            }
+            if(data.Stride>0)
+                Marshal.Copy(bytes,0,data.Scan0,bytes.Length);
+            else for(int y=0;y<Height;y++)
+                Marshal.Copy(bytes,y*pitch,
+                    IntPtr.Add(data.Scan0,y*data.Stride),pitch);
+        }
+        finally {bmp.UnlockBits(data);}
+        return bmp;
     }
 
     private static bool ShouldShow(DockWidget w,bool media,bool date)=>w.Kind switch

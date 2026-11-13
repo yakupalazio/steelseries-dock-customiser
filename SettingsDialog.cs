@@ -46,7 +46,8 @@ internal sealed class SettingsDialog : Form
         Func<Task<bool>>? suspendLive = null,
         Func<bool,Task>? resumeLive = null,
         Action? onLanguageChanged = null,
-        DisplayPreferences? displayPreferences = null)
+        DisplayPreferences? displayPreferences = null,
+        Action? onGuideRequested = null)
     {
         UiPolish.Register(this);
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
@@ -105,10 +106,29 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO • RC3", Left = 18, Top = 704,
+            Text = "OLED STUDIO • RC4", Left = 18, Top = 704,
             Width = 180, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 7.6f)
         });
+
+        var bugButton=new DarkButton{
+            Text="◈   Hata Bildir",Left=13,Top=262,Width=178,Height=49,
+            TextAlign=ContentAlignment.MiddleLeft,Padding=new Padding(12,0,0,0),
+            BackColor=Surface,ForeColor=Muted,Cursor=Cursors.Hand};
+        bugButton.Click+=(_,_)=>{
+            using var report=new BugReportDialog();
+            report.ShowDialog(this);
+        };
+        menu.Controls.Add(bugButton);
+        var guideButton=new DarkButton{
+            Text="ⓘ   Kullanım rehberi",Left=13,Top=323,Width=178,Height=49,
+            TextAlign=ContentAlignment.MiddleLeft,Padding=new Padding(12,0,0,0),
+            BackColor=Surface,ForeColor=Muted,Cursor=Cursors.Hand};
+        guideButton.Click+=(_,_)=>{
+            Close();
+            onGuideRequested?.Invoke();
+        };
+        menu.Controls.Add(guideButton);
 
         var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Background };
         root.Controls.Add(contentHost, 1, 0);
@@ -139,7 +159,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.1.1 RC3\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.1.1 RC4\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });
@@ -283,6 +303,67 @@ internal sealed class SettingsDialog : Form
                 displayPreferences.BurnInDrift=drift.Checked;
                 displayPreferences.Save();
             };
+            // Independent saved transition preference; no hardware write
+            // happens when simply previewing effects in Settings.
+            displayPage.Controls.Add(new Label{
+                Text="MOD GEÇİŞLERİ · MEDIA / GAME / IDLE",
+                Left=32,Top=350,Width=650,Height=26,ForeColor=Accent,
+                Font=new Font("Segoe UI Semibold",10,FontStyle.Bold)});
+            var effectEnabled=new DarkCheckBox{
+                Text="OLED mod geçiş animasyonlarını kullan",
+                Left=32,Top=379,Width=580,Height=35,
+                Checked=displayPreferences.ModeTransitionEnabled,
+                ForeColor=Primary};
+            var transitionEffect=new ComboBox{
+                Left=33,Top=424,Width=242,Height=34,
+                BackColor=Surface,ForeColor=Primary,
+                DropDownStyle=ComboBoxStyle.DropDownList};
+            transitionEffect.Items.AddRange(
+                OledModeTransition.Effects.Cast<object>().ToArray());
+            transitionEffect.SelectedItem=OledModeTransition.Normalize(
+                displayPreferences.ModeTransitionEffect);
+            var transitionSpeed=new TrackBar{
+                Left=293,Top=419,Width=282,Height=53,
+                Minimum=25,Maximum=200,TickFrequency=25,
+                Value=Math.Clamp(displayPreferences.ModeTransitionSpeed,25,200),
+                BackColor=Background};
+            var transitionInfo=new Label{
+                Left=585,Top=431,Width=195,Height=32,
+                ForeColor=Muted,Font=new Font("Segoe UI",9f)};
+            var transitionHint=new Label{
+                Left=32,Top=483,Width=700,Height=55,
+                Text="Animasyon yalnızca mod değiştiğinde oynar; üstte korunan 10 pil satırı değişmez. "+
+                    "Bağlantı koparsa veya donanım orijinal kontrol ekranını açarsa güvenli aktarım önceliklidir.",
+                ForeColor=Muted,Font=new Font("Segoe UI",9f)};
+            var preview=new OledTransitionPreview{
+                Left=33,Top=546,Width=372,Height=112,
+                BackColor=Color.Black};
+            var play=new DarkButton{
+                Text="▶ Geçişi önizle",Left=427,Top=563,
+                Width=170,Height=38,BackColor=Surface,ForeColor=Primary};
+            void SaveTransitionPreference(bool persist=true)
+            {
+                displayPreferences.ModeTransitionEnabled=effectEnabled.Checked;
+                displayPreferences.ModeTransitionEffect=OledModeTransition.Normalize(
+                    transitionEffect.SelectedItem?.ToString());
+                displayPreferences.ModeTransitionSpeed=transitionSpeed.Value;
+                if(persist)displayPreferences.Save();
+                transitionInfo.Text=
+                    $"{transitionSpeed.Value}% · "+
+                    $"{OledModeTransition.DurationMs(displayPreferences.ModeTransitionEffect,
+                        displayPreferences.ModeTransitionSpeed)} ms";
+                play.Enabled=effectEnabled.Checked &&
+                    displayPreferences.ModeTransitionEffect!="Instant";
+            }
+            effectEnabled.CheckedChanged+=(_,_)=>SaveTransitionPreference();
+            transitionEffect.SelectedIndexChanged+=(_,_)=>SaveTransitionPreference();
+            transitionSpeed.ValueChanged+=(_,_)=>SaveTransitionPreference();
+            play.Click+=(_,_)=>preview.Play(
+                displayPreferences.ModeTransitionEffect,
+                displayPreferences.ModeTransitionSpeed);
+            displayPage.Controls.AddRange([effectEnabled,transitionEffect,
+                transitionSpeed,transitionInfo,transitionHint,preview,play]);
+            SaveTransitionPreference(false);
             contentHost.Controls.Add(displayPage);
         }
 

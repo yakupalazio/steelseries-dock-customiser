@@ -35,6 +35,7 @@ internal sealed partial class PixelStudioForm
     private Control? modernProgressWidthRow,modernProgressThicknessRow;
     private Control? modernGameLogoSizeRow;
     private bool modernShellInitialized;
+    private Control? guideProfiles,guideSettings;
 
     private void BuildModernShell(TabPage legacyEditTab,
         Button add,Button remove,Button save,Button load,Button reset,
@@ -69,20 +70,22 @@ internal sealed partial class PixelStudioForm
         var top=new Panel{Dock=DockStyle.Fill,BackColor=UiSidebar,Padding=new Padding(21,8,18,7)};
         root.Controls.Add(top,0,0);
         root.SetColumnSpan(top,3);
-        var accentStripe=new Panel{Dock=DockStyle.Left,Width=4,BackColor=UiAccent};
-        top.Controls.Add(accentStripe);
-        var brand=new Label
-        {
-            Text="DOCK  /  CUSTOMISER",
-            ForeColor=UiText,Font=new Font("Segoe UI Semibold",17f,FontStyle.Bold),
-            AutoSize=true,Left=19,Top=11
-        };
-        top.Controls.Add(brand);
+        var logo=new Panel{
+            Left=13,Top=10,Width=49,Height=49,BackColor=UiSidebar};
+        logo.Paint+=(_,e)=>BrandMark.Draw(e.Graphics,
+            new Rectangle(0,0,logo.Width,logo.Height));
+        top.Controls.Add(logo);
         top.Controls.Add(new Label
         {
-            Text="OLED STUDIO    •    RC 3",
-            ForeColor=UiMuted,Font=new Font("Segoe UI",8.1f,FontStyle.Bold),
-            AutoSize=true,Left=21,Top=44
+            Text="Dock Customiser",Left=76,Top=11,AutoSize=true,
+            ForeColor=UiText,Font=new Font("Segoe UI Semibold",16.4f,
+                FontStyle.Bold)
+        });
+        top.Controls.Add(new Label
+        {
+            Text="PERSONAL OLED STUDIO",
+            ForeColor=UiMuted,Font=new Font("Segoe UI",8.2f,FontStyle.Bold),
+            AutoSize=true,Left=78,Top=44
         });
         var headerButtons=new FlowLayoutPanel
         {
@@ -130,6 +133,7 @@ internal sealed partial class PixelStudioForm
         var profileButton=ModeButton("▤   Profiller");
         profileButton.Height=44;
         left.Controls.Add(profileButton);
+        guideProfiles=profileButton;
         profileButton.Click+=(_,_)=>
         {
             using var dialog=new LayoutProfileDialog(editingMode,
@@ -467,6 +471,7 @@ internal sealed partial class PixelStudioForm
         left.Controls.Add(Spacer(18,190));
         left.Controls.Add(Section("AYARLAR",190));
         var settingsButton=ModeButton("⚙   Ayarlar");
+        guideSettings=settingsButton;
         settingsButton.Height=44;
         left.Controls.Add(settingsButton);
         settingsButton.Click+=(_,_)=>{
@@ -476,7 +481,8 @@ internal sealed partial class PixelStudioForm
                 ()=>{Redraw();_ = RefreshBatteriesAsync();},
                 ()=>dockPreview!.SuspendLiveForGameAsync(),
                 wasLive=>dockPreview!.ResumeLiveAfterGameAsync(wasLive),
-                ApplyLanguage,displayPreferences);
+                ApplyLanguage,displayPreferences,
+                ()=>BeginInvoke((Action)(()=>ShowFirstRunGuide())));
             settingsDialog=dialog;
             try{dialog.ShowDialog(this);}finally{settingsDialog=null;}
         };
@@ -511,6 +517,44 @@ internal sealed partial class PixelStudioForm
             SwitchEditingMode(screen);
             UpdateModernUi();
         },!captureMode && !traySmokeMode && modernShellInitialized);
+    }
+
+    internal void ShowFirstRunGuideForCapture()=>ShowFirstRunGuide(true);
+    internal Bitmap CaptureFirstRunGuideForTest()
+    {
+        var guide=Controls.OfType<FirstRunGuide>().FirstOrDefault()
+            ??throw new InvalidOperationException("Onboarding overlay missing");
+        var frame=new Bitmap(guide.Width,guide.Height);
+        guide.DrawToBitmap(frame,new Rectangle(Point.Empty,frame.Size));
+        return frame;
+    }
+    private void ShowFirstRunGuide(bool force=false)
+    {
+        if(IsDisposed||(!force&&(captureMode||traySmokeMode||!Visible))||
+           Controls.OfType<FirstRunGuide>().Any())return;
+        var tour=new FirstRunGuide(this,[
+            new("Hoş geldin!","Bu kısa rehber OLED'ini özelleştirmek için "+
+                "kullanacağın ana bölümleri gösterir. İstediğin an Atla'ya basabilirsin.",
+                null),
+            new("Üç farklı ekran","Medya, oyun ve boşta modlarının her birinin "+
+                "ayrı bir düzeni var. Soldan düzenlemek istediğin modu seç.",
+                modernModes?[0]),
+            new("Widget ekle","Sağdaki kategoriden widget türünü seç, "+
+                "ardından Ekrana ekle düğmesini kullan.",catalogAddButton),
+            new("Yerini ve ölçülerini ayarla","Piksel editöründeki widget'ı "+
+                "sürükle. Sağdaki öğe özelliklerinden boyut ve görünümünü özelleştir.",
+                editor),
+            new("Profillerini sakla","Farklı tasarımlar oluştur, geçerli "+
+                "tasarımı bir profile kaydet veya seçili profilin üzerine yaz.",
+                guideProfiles),
+            new("OLED'e uygula","Önizlemede kontrol ettikten sonra Uygula "+
+                "veya Canlı'yı seç. Orijinal OLED'e istediğin an dönebilirsin.",
+                modernLive),
+            new("Ayarlar ve destek","Geçiş animasyonları, dil, pil ayarları, "+
+                "Hata Bildir ve bu rehberi yeniden başlatma burada.",
+                guideSettings)
+        ],()=>{});
+        Controls.Add(tour);tour.BringToFront();
     }
 
     private void ApplyLanguage()

@@ -1,3 +1,7 @@
+# Steelseries Dock Customiser — RC4 Release Preparation
+
+> **RC4 private preview (13 November 2026):** New original app logo and icons; bounded startup splash; first-run Next/Skip guide and replay menu; clearer Windows animations; selectable physical OLED mode transitions (Slide/Fade/Wipe/Pixel/Zoom/Instant) with 25–200% speed and protected OEM battery rows; overwrite existing saved profile with backup; private, opt-in bug-report screen (local unsent queue until HTTPS backend is deployed); share-safe future Workshop draft schema (Workshop itself is **not** implemented). See [RC4 Release Notes](RELEASE_NOTES_RC4_PRE_RELEASE.md).
+
 # Steelseries Dock Customiser — RC3 Game Logo & UI Polish
 
 > **RC3 private preview (13 November 2026):** Daha yumuşak düğmeler, açılır seçimler ve ayar kutuları; mouse tekerleğinde hızlanmadan kısa, doğal atalet; Medya ekranında ayarlanabilir ilerleme çubuğu eni/kalınlığı; yalnızca Game ekranında GG tarafından tanınan aktif oyunun yerel EXE simgesi veya kullanıcının seçtiği özel logosunu gösteren widget. Geliştirme ayrıntıları: [RC3 Release Notes](RELEASE_NOTES_RC3_GAME_LOGO_UI_POLISH.md).

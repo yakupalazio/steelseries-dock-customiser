@@ -189,6 +189,7 @@ internal sealed class DockPreviewPanel : UserControl
         Disposed += (_,_) =>
         {
             InvalidateProtectedHeaderReference();
+            ClearModeTransition();
             _liveTimer.Stop();
             _dialRefreshTimer.Stop();
             _dialReclaimTimer.Stop();
@@ -218,6 +219,66 @@ internal sealed class DockPreviewPanel : UserControl
 
     public void InvalidateFrame() => _photoBox.Invalidate();
 
+    private Func<ScreenMode>? activeModeProvider;
+    private Func<DisplayPreferences>? modeTransitionSettings;
+    private ScreenMode? lastRenderedMode;
+    private Bitmap? lastModeOutput,transitionSource;
+    private DateTimeOffset transitionStarted;
+    internal void ConfigureModeTransitions(Func<ScreenMode> modeGetter,
+        Func<DisplayPreferences> preferencesGetter)
+    {
+        activeModeProvider=modeGetter;
+        modeTransitionSettings=preferencesGetter;
+    }
+    private Bitmap RenderLiveWithModeTransition(bool protectHeader,
+        DateTimeOffset now)
+    {
+        Bitmap next=_liveFrameFactory();
+        if(activeModeProvider is null||modeTransitionSettings is null)return next;
+        var mode=activeModeProvider();
+        var prefs=modeTransitionSettings();
+        bool enabled=prefs.ModeTransitionEnabled &&
+            OledModeTransition.Normalize(prefs.ModeTransitionEffect)!="Instant";
+        if(lastRenderedMode is not null&&mode!=lastRenderedMode)
+        {
+            transitionSource?.Dispose();
+            transitionSource=lastModeOutput is null?null:
+                (Bitmap)lastModeOutput.Clone();
+            transitionStarted=now;
+        }
+        lastRenderedMode=mode;
+        var duration=OledModeTransition.DurationMs(
+            prefs.ModeTransitionEffect,prefs.ModeTransitionSpeed);
+        Bitmap final=next;
+        if(enabled&&transitionSource is not null&&duration>0)
+        {
+            double phase=(now-transitionStarted).TotalMilliseconds/duration;
+            if(phase<1)
+            {
+                final=OledModeTransition.Compose(transitionSource,next,
+                    phase,prefs.ModeTransitionEffect,protectHeader);
+                next.Dispose();
+            }
+            else
+            {
+                transitionSource.Dispose();
+                transitionSource=null;
+            }
+        }
+        else if(!enabled)
+        {
+            transitionSource?.Dispose();transitionSource=null;
+        }
+        lastModeOutput?.Dispose();
+        lastModeOutput=(Bitmap)final.Clone();
+        return final;
+    }
+    private void ClearModeTransition()
+    {
+        transitionSource?.Dispose();transitionSource=null;
+        lastModeOutput?.Dispose();lastModeOutput=null;
+        lastRenderedMode=null;
+    }
     public bool LiveOutputActive => _liveEnabled;
     internal bool BatteryAlertActive=>_batteryAlert is not null ||
         _pendingBatteryAlerts.Count>0 || _batteryAlertNeedsRestore;
@@ -486,6 +547,7 @@ internal sealed class DockPreviewPanel : UserControl
             !=DialogResult.Yes) return;
 
         _liveEnabled=true;
+        ClearModeTransition();
         _lastLiveFrame=null;
         _lastLiveWrite=DateTimeOffset.MinValue;
         _forceNextLiveFrame=false;
@@ -503,6 +565,7 @@ internal sealed class DockPreviewPanel : UserControl
     private void StopLiveMode()
     {
         if(!_liveEnabled)return;
+        ClearModeTransition();
         _liveEnabled=false;
         _liveTimer.Stop();
         _dialRefreshTimer.Stop();
@@ -560,7 +623,7 @@ internal sealed class DockPreviewPanel : UserControl
             bool protectHeader=warningActive?false:LiveHeaderProtected;
             using var bitmap=warningActive
                 ?BatteryOledAlert.Render(_batteryAlert!,now)
-                :_liveFrameFactory();
+                :RenderLiveWithModeTransition(protectHeader,now);
             var pixels=new byte[128*64];
             int ptr=0;
             for(int y=protectHeader?10:0;y<64;y++)
@@ -597,6 +660,8 @@ internal sealed class DockPreviewPanel : UserControl
         }
         catch(Exception ex)
         {
+            // Never continue a half-sent mode animation across reconnect.
+            ClearModeTransition();
             // Keep the user's authorized live session armed on unplug. The
             // transport is rebuilt by DockHardwareTest at the next attempt.
             _reconnectFailures++;

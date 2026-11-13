@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace SteelseriesDockCustomiser;
@@ -24,6 +25,13 @@ internal static class UiPageTransition
             return;
         }
 
+        // Cancel previous visual overlay when the user quickly switches
+        // sections. Real controls have already been updated underneath.
+        foreach(var existing in host.Controls.OfType<FadeOverlay>().ToArray())
+        {
+            host.Controls.Remove(existing);
+            existing.Dispose();
+        }
         Bitmap? before=null,after=null;
         try
         {
@@ -58,6 +66,7 @@ internal static class UiPageTransition
         }
     }
 
+    internal const int AnimationDurationMs=235;
     private sealed class FadeOverlay:Control
     {
         private readonly Bitmap oldFrame,newFrame;
@@ -70,7 +79,7 @@ internal static class UiPageTransition
                 ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);
             timer.Tick+=(_,_)=>
             {
-                if(clock.ElapsedMilliseconds>=145)
+                if(clock.ElapsedMilliseconds>=AnimationDurationMs)
                 {
                     timer.Stop();
                     Parent?.Controls.Remove(this);
@@ -82,7 +91,7 @@ internal static class UiPageTransition
         internal void Begin(){clock.Start();timer.Start();}
         protected override void OnPaint(PaintEventArgs e)
         {
-            float phase=Math.Clamp(clock.ElapsedMilliseconds/145f,0,1);
+            float phase=Math.Clamp(clock.ElapsedMilliseconds/(float)AnimationDurationMs,0,1);
             // Smoothstep: immediate feel without harsh beginning/end.
             phase=phase*phase*(3-2*phase);
             e.Graphics.InterpolationMode=InterpolationMode.NearestNeighbor;
@@ -90,7 +99,7 @@ internal static class UiPageTransition
             using var attr=new ImageAttributes();
             var matrix=new ColorMatrix{Matrix33=phase};
             attr.SetColorMatrix(matrix,ColorMatrixFlag.Default,ColorAdjustType.Bitmap);
-            int offset=(int)Math.Round((1-phase)*5);
+            int offset=(int)Math.Round((1-phase)*11);
             var target=new Rectangle(0,offset,Width,Height);
             e.Graphics.DrawImage(newFrame,target,0,0,newFrame.Width,newFrame.Height,
                 GraphicsUnit.Pixel,attr);

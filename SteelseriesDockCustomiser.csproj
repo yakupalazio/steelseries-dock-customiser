@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>1.1.1-rc.3</Version>
-    <ApplicationIcon>dock-customiser.ico</ApplicationIcon>
+    <Version>1.1.1-rc.4</Version>
+    <ApplicationIcon>dock-customiser-rc4.ico</ApplicationIcon>
     <Product>Steelseries Dock Customiser</Product>
     <Authors>Yakup Can Palaz</Authors>
     <Copyright>Copyright © 2026 Yakup Can Palaz. All rights reserved.</Copyright>

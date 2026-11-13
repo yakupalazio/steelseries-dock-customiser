@@ -638,6 +638,12 @@ internal static class Program
                 sample.Memory is >=0 and <=100 ?0:1;
             return;
         }
+        if(args.Contains("--perf-smoke"))
+        {
+            ApplicationConfiguration.Initialize();
+            Environment.ExitCode=PerformanceSmoke.Run();
+            return;
+        }
         if(args.Contains("--self-test"))
         {
             ApplicationConfiguration.Initialize();
@@ -701,6 +707,36 @@ internal static class Program
                 screenshot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
                 inventory.Close();
                 return;
+            }
+            if(args.Contains("--capture-bug-report"))
+            {
+                using var report=new BugReportDialog();
+                report.StartPosition=FormStartPosition.Manual;
+                report.Location=new System.Drawing.Point(-5000,-5000);
+                report.ShowInTaskbar=false;
+                report.Show();
+                Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(report.Width,report.Height);
+                report.DrawToBitmap(shot,
+                    new System.Drawing.Rectangle(0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                report.Close();
+                return;
+            }
+            if(args.Contains("--capture-boot"))
+            {
+                using var host=new Form{
+                    Width=1000,Height=620,ShowInTaskbar=false,
+                    StartPosition=FormStartPosition.Manual,
+                    Location=new System.Drawing.Point(-5000,-5000)};
+                using var splash=new BootOverlay();
+                host.Controls.Add(splash);
+                host.Show();Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(host.Width,host.Height);
+                host.DrawToBitmap(shot,
+                    new System.Drawing.Rectangle(0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                host.Close();return;
             }
             if(args.Contains("--capture-icons") ||
                args.Contains("--capture-clock") ||
@@ -801,7 +837,8 @@ internal static class Program
             {
                 using var settings=new SettingsDialog(()=>false,new BatteryPreferences(),
                     ()=>new BatterySnapshot(),
-                    ()=>System.Threading.Tasks.Task.CompletedTask,()=>{});
+                    ()=>System.Threading.Tasks.Task.CompletedTask,()=>{},
+                    displayPreferences:new DisplayPreferences());
                 settings.EnableOffscreenCapture();
                 settings.Show();
                 Application.DoEvents();
@@ -831,12 +868,17 @@ internal static class Program
             studio.EnableOffscreenCapture();
             studio.Show();
             Application.DoEvents();
+            if(args.Contains("--capture-guide"))
+                studio.ShowFirstRunGuideForCapture();
             studio.PerformLayout();
             Application.DoEvents();
             using var preview=args.Contains("--capture-editor-only")
                 ?studio.CaptureEditorCanvasForTest()
-                :new System.Drawing.Bitmap(studio.Width,studio.Height);
-            if(!args.Contains("--capture-editor-only"))
+                :args.Contains("--capture-guide")
+                    ?studio.CaptureFirstRunGuideForTest()
+                    :new System.Drawing.Bitmap(studio.Width,studio.Height);
+            if(!args.Contains("--capture-editor-only") &&
+               !args.Contains("--capture-guide"))
                 studio.DrawToBitmap(preview,new System.Drawing.Rectangle(0,0,
                     preview.Width,preview.Height));
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(
