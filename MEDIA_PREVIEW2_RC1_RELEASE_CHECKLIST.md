@@ -13,12 +13,13 @@ The upper Dynamic Island has three stable / animated regions:
    and dims, and the NEXT line rises from BELOW into the same viewport,
    briefly creating a two-tier vertical crossfade.
 
-Our 128x64 one-bit OLED implementation has a 16-pixel height lyric
-region with a fixed left-side duration plus 7x7 original media glyph
-instead of a full-color actual album image; the lyric strip uses a
-340ms vertical transition with ordered monochrome pixel dimming, 1-pixel
-horizontal movement interpolated from LRC line timestamps, 60ms
-preview timer and the existing hardware's independent OLED limit.
+Our 128x64 one-bit OLED implementation has a 16-pixel lyric
+region. In RC1 Hotfix 1, the visible duration prefix was removed at
+the user's request, retaining the compact 7x7 media glyph and giving
+lyrics more horizontal space. The lyric strip uses a 340ms vertical
+transition with ordered monochrome pixel dimming, 1-pixel horizontal
+movement interpolated from LRC line timestamps, a 60ms preview timer
+and the existing hardware's independent OLED limit.
 Video screenshots/lyrics/album artwork are **not bundled or copied**.
 
 ## Widget-library decisions

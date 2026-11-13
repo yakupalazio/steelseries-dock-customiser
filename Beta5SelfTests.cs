@@ -126,6 +126,28 @@ internal static class Beta5SelfTests
             if(lit<20||Lit(rendered,0,0))
                 throw new Exception("Audio style "+style+" failed OLED render");
         }
+        // Circular must be visibly louder as REAL PCM bands increase, while
+        // a muted output shows only the stable centre ring.
+        var circle=new DockWidget{Kind="AudioVisualizer",X=9,Y=17,
+            VisualizerStyle="Circular",WidgetWidth=102,VisualizerHeight=34};
+        int LitCircle(AudioVisualizationSnapshot? signal)
+        {
+            using var result=OledRenderer.Render(new LayoutState{
+                Widgets=[circle]},false,true,false,protectHeader:true,
+                layoutMode:ScreenMode.Media,audio:signal);
+            int count=0;
+            for(int yy=circle.Y;yy<circle.Y+circle.VisualizerHeight;yy++)
+            for(int xx=circle.X;xx<circle.X+circle.WidgetWidth;xx++)
+                if(Lit(result,xx,yy))count++;
+            return count;
+        }
+        int silentCircle=LitCircle(null);
+        int quietCircle=LitCircle(new AudioVisualizationSnapshot(
+            Enumerable.Repeat(.06f,12).ToArray(),
+            Enumerable.Repeat(.04f,12).ToArray(),DateTimeOffset.UtcNow));
+        int loudCircle=LitCircle(fakeAudio);
+        if(!(silentCircle<quietCircle && quietCircle<loudCircle))
+            throw new Exception("Circular audio lacks responsive energy range");
         var frames=new MonoGifAnimation([
             new MonoGifFrame(16,8,new bool[128],100),
             new MonoGifFrame(16,8,Enumerable.Repeat(true,128).ToArray(),100)

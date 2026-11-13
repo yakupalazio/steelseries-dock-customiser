@@ -468,8 +468,8 @@ internal static class OledRenderer
 
     /// <summary>
     /// OLED interpretation of the uploaded Dynamic Island example:
-    /// stationary duration/mini-cover at the LEFT; current lyric glides
-    /// LEFT through a clipped single-line viewport. On a new timecoded LRC
+    /// a compact media glyph at the LEFT; current lyric glides
+    /// LEFT through a wide, clipped single-line viewport. On a timecoded LRC
     /// line the old sentence rises/dims while the next rises from BELOW.
     /// All phase values depend on real song position, never wall-clock
     /// counters; a seek immediately picks the corresponding line.
@@ -484,30 +484,22 @@ internal static class OledRenderer
         int baseline=top+4;
         if(right-left<16||bottom-baseline<7||lyrics.Lines.Count==0)return;
 
-        // On a full-width 128px widget the compact left header costs 42px.
-        // In narrow custom widgets we use the entire area for lyrics.
-        bool hasHeader=right-left>=74;
-        int textLeft=left+(hasHeader?43:0);
+        // No track-duration prefix: keep the original tiny media glyph,
+        // then use the reclaimed OLED width for the actual lyrics.
+        // Extremely narrow widgets reserve their full width for text.
+        bool hasIcon=right-left>=25;
+        int textLeft=left+(hasIcon?12:0);
         int available=right-textLeft;
         if(available<10)return;
 
-        if(hasHeader)
+        if(hasIcon)
         {
-            var duration=playback.Duration;
-            int minutes=Math.Clamp((int)duration.TotalMinutes,0,99);
-            int seconds=Math.Clamp(duration.Seconds,0,59);
-            string clock=minutes.ToString("D2",CultureInfo.InvariantCulture)+":"+
-                seconds.ToString("D2",CultureInfo.InvariantCulture);
-            DrawIslandGlyphs(pixels,clock,left,baseline,left,
-                Math.Min(right,left+29),top,bottom,1f);
-            int coverX=left+32,coverY=baseline;
-            // 7x7 one-bit media-art placeholder. It is deliberately small:
-            // the lyrics, not artwork, are the focus of the OLED widget.
+            int iconX=left+1,iconY=baseline;
             for(int dy=0;dy<7;dy++)
             for(int dx=0;dx<7;dx++)
                 if(dx==0||dx==6||dy==0||dy==6||
                    (dx==3&&(dy==2||dy==4))|| (dx==4&&dy==3))
-                    Dot(pixels,coverX+dx,coverY+dy);
+                    Dot(pixels,iconX+dx,iconY+dy);
         }
 
         // Negative user offset means earlier words; positive means later.
@@ -582,24 +574,46 @@ internal static class OledRenderer
         {
             double cx=x+(width-1)/2.0,cy=y+(height-1)/2.0;
             int radius=Math.Max(2,Math.Min(width,height)/2-2);
-            int inner=Math.Max(2,radius/3);
-            // A quiet circular baseline makes the shape readable even at
-            // low volume; spokes extend outward only for actual energy.
+            // Music-responsive centre ring: only the actual low-frequency
+            // energy changes its radius, so silence stays completely still.
+            float bass=0;
+            for(int band=0;band<3;band++)
+                bass+=(left[band]+right[band])/6f;
+            double beat=Math.Sqrt(Math.Clamp(bass*gain,0f,1f));
+            int inner=Math.Clamp(Math.Max(2,radius/4)+
+                (int)Math.Round(beat*Math.Max(1,radius/7.0)),
+                2,Math.Max(2,radius-3));
             for(int step=0;step<96;step++)
             {
-                double a=step*Math.PI*2/96;
-                Dot(pixels,(int)Math.Round(cx+Math.Cos(a)*inner),
-                    (int)Math.Round(cy+Math.Sin(a)*inner));
+                double angle=step*Math.PI*2/96;
+                Dot(pixels,(int)Math.Round(cx+Math.Cos(angle)*inner),
+                    (int)Math.Round(cy+Math.Sin(angle)*inner));
             }
+
+            // Wide, two-pixel stereo rays communicate the beat much more
+            // clearly on a 1-bit OLED than the old thin/short spokes.
+            // Square-root compression emphasizes quiet REAL PCM energy
+            // without generating fictional animation when the audio is off.
+            int travel=Math.Max(0,radius-inner-2);
             for(int index=0;index<24;index++)
             {
                 double angle=-Math.PI/2+index*Math.PI*2/24;
-                float signal=(index<12?left[index]:right[index-12])*gain;
-                int endpoint=inner+(int)Math.Round(Math.Clamp(signal,0,1)*
-                    (radius-inner));
-                for(int distance=inner;distance<=endpoint;distance++)
-                    Dot(pixels,(int)Math.Round(cx+Math.Cos(angle)*distance),
-                        (int)Math.Round(cy+Math.Sin(angle)*distance));
+                float level=index<12?left[index]:right[index-12];
+                double reactive=Math.Sqrt(Math.Clamp(level*gain*2.2f,0f,1f));
+                if(reactive<.055||travel==0)continue;
+                int length=Math.Max(1,(int)Math.Round(reactive*travel));
+                double outwardX=Math.Cos(angle),outwardY=Math.Sin(angle);
+                double tangentX=-outwardY,tangentY=outwardX;
+                for(int distance=inner+2;distance<=Math.Min(radius,inner+2+length);
+                    distance++)
+                {
+                    double centerX=cx+outwardX*distance;
+                    double centerY=cy+outwardY*distance;
+                    Dot(pixels,(int)Math.Round(centerX+tangentX*.65),
+                        (int)Math.Round(centerY+tangentY*.65));
+                    Dot(pixels,(int)Math.Round(centerX-tangentX*.65),
+                        (int)Math.Round(centerY-tangentY*.65));
+                }
             }
             return;
         }

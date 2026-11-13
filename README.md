@@ -1,4 +1,6 @@
-# Steelseries Dock Customiser — Media Preview 2 RC1
+# Steelseries Dock Customiser — Media Preview 2 RC1 Hotfix 1
+
+> **RC1 Hotfix 1 (13 November 2026):** Removed the song-duration prefix from synchronized lyrics, reclaimed the width for words, and made Circular audio visualization more responsive with a bass-reactive centre and thicker stereo rays. Bars, Stereo, GIF and existing user settings are unchanged.
 
 > **Release candidate:** Dynamic Island benzeri senkron söz animasyonu (yatay akış ve alttan yukarı geçiş), kategorilere ayrılmış öğe kütüphanesi, ekran başına tekil widget kuralları ve dört çoklu widget istisnası, sadeleştirilmiş çift dilli düzenleme arayüzü. Önceki Media Preview 2 Sonar ve senkronizasyon düzeltmeleri korunmuştur. Ayrıntılar: [RC1 Release Checklist](MEDIA_PREVIEW2_RC1_RELEASE_CHECKLIST.md).
 

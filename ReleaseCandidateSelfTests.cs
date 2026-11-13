@@ -150,12 +150,15 @@ internal static class ReleaseCandidateSelfTests
                 .Any(y=>Enumerable.Range(0,128).Any(x=>pixels[y*128+x])))
                 throw new Exception("Lyric animation entered protected OEM rows");
         }
-        // Static duration + mini-cover region is frozen like Island.
+        // The compact media icon remains pinned; the old duration prefix
+        // is gone and the lyric viewport now starts 12px from the left.
         for(int i=1;i<samples.Count;i++)
         for(int y=28;y<35;y++)
-        for(int x=4;x<47;x++)
+        for(int x=4;x<16;x++)
             if(samples[0][y*128+x]!=samples[i][y*128+x])
-                throw new Exception("Duration/art region moved with lyrics");
+                throw new Exception("Media icon moved with lyrics");
+        if(!Enumerable.Range(30,16).Any(x=>samples[0][32*128+x]))
+            throw new Exception("Lyrics did not reclaim the duration area");
         if(samples[0].SequenceEqual(samples[1]) ||
            samples[2].SequenceEqual(samples[3]) ||
            samples[3].SequenceEqual(samples[4]))
