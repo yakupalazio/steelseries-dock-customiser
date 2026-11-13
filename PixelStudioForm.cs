@@ -149,13 +149,13 @@ internal sealed partial class PixelStudioForm : Form
     private readonly Button redoButton = new DarkButton() { Text="↷ İleri al", Width=96,Height=30 };
     private readonly Label status = new() { Width=755,Height=52,ForeColor=Color.FromArgb(44,170,104) };
     private readonly System.Windows.Forms.Timer ticker = new() { Interval=1000 };
-    private readonly System.Windows.Forms.Timer animationTicker = new() { Interval=80 };
+    private readonly System.Windows.Forms.Timer animationTicker = new() { Interval=60 };
     private readonly SystemAudioVisualizer audioVisualizer=new();
     private bool mediaVisualsNeeded;
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Media Preview 1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Media Preview 2 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -601,7 +601,11 @@ internal sealed partial class PixelStudioForm : Form
             new[]{ActiveMode,editingMode}.Distinct().Any(mode=>
                 project.For(mode).Widgets.Any(w=>
                     w.Visible&&w.Kind=="AudioVisualizer"));
-        audioVisualizer.SetEnabled(audioNeeded);
+        string endpoint=audioNeeded?new[]{ActiveMode,editingMode}.Distinct()
+            .SelectMany(mode=>project.For(mode).Widgets)
+            .FirstOrDefault(w=>w.Visible&&w.Kind=="AudioVisualizer")
+            ?.AudioEndpointId??"":"";
+        audioVisualizer.SetEnabled(audioNeeded,endpoint);
         bool any=Enum.GetValues<ScreenMode>().Any(mode=>
             project.For(mode).Widgets.Any(w=>w.Visible&&
                 w.Kind is "Lyrics" or "AudioVisualizer" or "AnimatedGif"));
@@ -928,6 +932,7 @@ internal sealed partial class PixelStudioForm : Form
         Record();
         selected.LyricOffsetMs=updated.LyricOffsetMs;
         selected.VisualizerStyle=updated.VisualizerStyle;
+        selected.AudioEndpointId=updated.AudioEndpointId;
         selected.VisualizerGain=updated.VisualizerGain;
         selected.VisualizerHeight=updated.VisualizerHeight;
         selected.WidgetWidth=updated.WidgetWidth;

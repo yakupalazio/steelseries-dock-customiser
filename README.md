@@ -1,4 +1,6 @@
-# Steelseries Dock Customiser — Optional Media Widgets Preview
+# Steelseries Dock Customiser — Media Preview 2 Hotfix
+
+> **Lyrics / visualizer fix:** synced lyrics now follow Windows' actual last media-timeline update, rather than resetting their timebase every second. Audio visualizers support SteelSeries Sonar's separate Media/Gaming/Chat outputs, manual device selection, and a visible silent baseline. GIF rendering is unchanged. See [Media Preview 2 Hotfix](MEDIA_PREVIEW2_LYRICS_VISUALIZER_FIX.md).
 
 > **New opt-in widgets:** synced lyrics (Windows media session + LRCLIB, 10 ms timing nudge), stereo audio visualizer (Bars / Stereo / Circular), and local GIF → 1-bit OLED animations (3 dithering modes). See [Optional Media Widgets Preview](OPTIONAL_MEDIA_WIDGETS_PREVIEW.md).
 

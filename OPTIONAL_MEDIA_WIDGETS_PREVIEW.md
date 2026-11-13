@@ -26,6 +26,9 @@ the relevant Media/Game/Idle layout.
 - This 10 ms **control precision does not guarantee actual physical
   10 ms response**: Windows session timestamps, source latency and OLED
   hardware refresh determine observed timing.
+- SMTC positions are anchored to TimelineProperties.LastUpdatedTime,
+  rather than reset to the app's every-second polling time. The app
+  interpolates the true elapsed track time between SMTC updates.
 - If a track does not have synchronized lyrics, the area stays blank,
   rather than showing incorrect lyrics or pretending plain text is timed.
 - LRCLIB: https://lrclib.net/docs ; identify HTTP User-Agent; respect
@@ -44,11 +47,17 @@ the relevant Media/Game/Idle layout.
 - Width, height and gain configurable in the widget settings.
 - An automatically started shared-mode device loopback is active
   **only while at least one visualizer is visible in the live or currently
-  edited screen**.
+  edited screen**. It is stopped when no such widget remains.
   Removing/hiding the last visualizer stops the capture.
-- Audio routing via SteelSeries Sonar or per-app output devices can mean
-  the default Windows output is not the desired stream. Planned later:
-  per-output endpoint selector and device-change listener.
+- SteelSeries Sonar separates Gaming, Media, Chat and other outputs.
+  Automatic mode monitors the default Windows render device and up to
+  five additional Sonar / Voicemeeter / active render endpoints, choosing
+  currently active endpoints first and then the strongest fresh signal. Users can also select a specific active
+  endpoint from the visualizer widget settings. When several audio widgets
+  are visible simultaneously, the first visible one selects the shared
+  audio capture source; all styles use the same sampled output.
+- When an endpoint is silent/unavailable, visible baseline bars remain;
+  the OLED never fakes moving audio levels.
 - Visuals are calculated from energy in 12 logarithmic bands/channel;
   they are a compact frequency-energy visualization, not a studio-grade
   calibrated FFT. No fake activity when muted or capture fails.

@@ -474,13 +474,15 @@ internal static class OledRenderer
     private static void DrawAudioVisualization(bool[] pixels,DockWidget widget,
         AudioVisualizationSnapshot? audio)
     {
-        if(audio?.Fresh!=true)return;
+        // An unconnected/silent endpoint still shows a 1-pixel baseline.
+        // Previously all three styles vanished completely without PCM.
         int x=widget.X,y=widget.Y;
         int width=Math.Min(Math.Clamp(widget.WidgetWidth,16,128),128-x);
         int height=Math.Min(Math.Clamp(widget.VisualizerHeight,8,54),64-y);
         if(width<2||height<2)return;
         float gain=Math.Clamp(widget.VisualizerGain,10,400)/100f;
-        var left=audio.Left;var right=audio.Right;
+        var left=audio?.Fresh==true?audio.Left:AudioVisualizationSnapshot.Silent.Left;
+        var right=audio?.Fresh==true?audio.Right:AudioVisualizationSnapshot.Silent.Right;
         if(left.Length<12||right.Length<12)return;
         if(widget.VisualizerStyle=="Circular")
         {
@@ -513,12 +515,12 @@ internal static class OledRenderer
             float value=widget.VisualizerStyle=="Stereo"
                 ?index<12?left[11-index]:right[index-12]
                 :(left[index]+right[index])*.5f;
-            int barHeight=(int)Math.Round(
-                Math.Clamp(value*gain,0,1)*height);
-            if(barHeight<=0)continue;
+            int barHeight=Math.Max(1,(int)Math.Round(
+                Math.Clamp(value*gain,0,1)*height));
             int start=x+(int)Math.Floor(index*width/(double)count);
-            int end=x+(int)Math.Floor((index+1)*width/(double)count)-1;
-            for(int bx=start;bx<end;bx++)
+            int cellRight=x+(int)Math.Floor((index+1)*width/(double)count);
+            int end=cellRight-1-(cellRight-start>=4?1:0);
+            for(int bx=start;bx<=end;bx++)
             for(int by=y+height-barHeight;by<y+height;by++)
                 Dot(pixels,bx,by);
         }

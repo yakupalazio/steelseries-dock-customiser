@@ -12,6 +12,11 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if(args.Contains("--media-pipeline-diagnostics"))
+        {
+            MediaPipelineDiagnostics.RunAsync().GetAwaiter().GetResult();
+            return;
+        }
         if(args.Contains("--audio-loopback-probe"))
         {
             // Diagnostic only. No waveform/audio bytes written anywhere.
@@ -19,6 +24,9 @@ internal static class Program
             analyzer.SetEnabled(true);
             System.Threading.Thread.Sleep(2500);
             var bands=analyzer.Snapshot;
+            Console.WriteLine("WASAPI_ACTIVE_OUTPUT_CAPTURES="+analyzer.ActiveCaptures);
+            Console.WriteLine("WASAPI_AUTO_ENDPOINTS_LISTED="+
+                SystemAudioVisualizer.AvailableOutputs().Count);
             Console.WriteLine("WASAPI_LOOPBACK_STARTED="+analyzer.Enabled);
             Console.WriteLine("WASAPI_SNAPSHOT_FRESH="+bands.Fresh);
             Console.WriteLine("WASAPI_CHANNEL_BANDS="+
@@ -876,6 +884,7 @@ public sealed class DockWidget
     // unchanged and do not instantiate these by default.
     public int LyricOffsetMs { get; set; } = 0;
     public string VisualizerStyle { get; set; } = "Bars";
+    public string AudioEndpointId { get; set; } = "";
     public int VisualizerGain { get; set; } = 100;
     public int VisualizerHeight { get; set; } = 24;
     public int WidgetWidth { get; set; } = 96;

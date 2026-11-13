@@ -93,8 +93,24 @@ internal sealed class OptionalMediaWidgetDialog:Form
 
     private void BuildVisualizer()
     {
-        Note("Windows varsayılan ses çıkışının sol/sağ kanalları okunur. "+
-            "Ham ses kaydedilmez; mikrofon veya şarkı içeriği açılmaz.");
+        Note("Otomatik mod Sonar/Windows çıkışlarında aktif sesi algılar. "+
+            "İstersen belirli ses çıkışını seçebilirsin. Ham ses kaydedilmez.");
+        var output=new ComboBox{
+            Width=185,Height=29,DropDownStyle=ComboBoxStyle.DropDownList,
+            DropDownWidth=440,BackColor=Color.FromArgb(23,31,43),
+            ForeColor=TextColor,FlatStyle=FlatStyle.Flat
+        };
+        foreach(var endpoint in SystemAudioVisualizer.AvailableOutputs())
+            output.Items.Add(endpoint);
+        var saved=Updated.AudioEndpointId;
+        int found=-1;
+        for(int i=0;i<output.Items.Count;i++)
+            if(output.Items[i] is AudioOutputOption item&&item.Id==saved)
+                {found=i;break;}
+        output.SelectedIndex=found<0?0:found;
+        output.SelectedIndexChanged+=(_,_)=>
+            Updated.AudioEndpointId=(output.SelectedItem as AudioOutputOption)?.Id??"";
+        Row("Ses çıkışı",output);
         var mode=Combo("Bars","Stereo","Circular");
         mode.SelectedItem=Updated.VisualizerStyle;
         Row("Görünüm",mode);

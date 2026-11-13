@@ -308,6 +308,8 @@ internal sealed class StudioProject
             w.LyricOffsetMs=Math.Clamp(w.LyricOffsetMs,-10000,10000);
             w.VisualizerStyle=w.VisualizerStyle is "Bars" or "Stereo" or "Circular"
                 ?w.VisualizerStyle:"Bars";
+            w.AudioEndpointId=(w.AudioEndpointId??"")[..
+                Math.Min(w.AudioEndpointId?.Length??0,512)];
             w.VisualizerGain=Math.Clamp(w.VisualizerGain,10,400);
             w.VisualizerHeight=Math.Clamp(w.VisualizerHeight,8,54);
             w.WidgetWidth=Math.Clamp(w.WidgetWidth,16,128);

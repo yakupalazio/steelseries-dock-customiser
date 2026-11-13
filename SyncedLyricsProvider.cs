@@ -195,6 +195,11 @@ internal static class SyncedLyricsProvider
         if(!track.IsPlaying)return track.Position;
         TimeSpan elapsed=track.SampledAt==DateTimeOffset.MinValue
             ?TimeSpan.Zero:DateTimeOffset.Now-track.SampledAt;
-        return track.Position+(elapsed>TimeSpan.Zero?elapsed:TimeSpan.Zero);
+        TimeSpan estimate=track.Position+
+            (elapsed>TimeSpan.Zero?elapsed:TimeSpan.Zero);
+        // A media player can keep the Playing flag while its timeline
+        // transitions at the end of a song. Never exceed its duration.
+        return track.Duration>TimeSpan.Zero&&estimate>track.Duration
+            ?track.Duration:estimate;
     }
 }

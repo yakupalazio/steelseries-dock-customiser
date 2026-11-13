@@ -66,6 +66,40 @@ internal static class Beta5SelfTests
         if(toneBands.Length!=12||toneBands.Max()<.1f||
            silentBands.Any(v=>v>0))
             throw new Exception("WASAPI spectrum PCM analysis regression");
+        // Lyrics must advance even if SMTC does not send another timeline
+        // update for >10 seconds. Prior builds wrongly reset the sampled
+        // time to each application's 1-second poll, freezing LRC lines.
+        var anchored=new MediaSnapshot(true,true,"Synthetic song",
+            "Synthetic artist","Spotify",TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(60),DateTimeOffset.Now.AddSeconds(-12));
+        var interpolated=SyncedLyricsProvider.PositionNow(anchored);
+        if(interpolated<TimeSpan.FromSeconds(16) ||
+           interpolated>TimeSpan.FromSeconds(19))
+            throw new Exception("Spotify SMTC timeline interpolation frozen");
+        var selectedAudio=new LayoutState{Widgets=[new DockWidget{
+            Kind="AudioVisualizer",AudioEndpointId="synthetic-sonar-output-id"
+        }]};
+        if(selectedAudio.DeepClone().Widgets[0].AudioEndpointId!=
+           "synthetic-sonar-output-id")
+            throw new Exception("Audio endpoint selector lost on save/undo");
+        // A silent or unconnected device must still render the widget's
+        // visible base shape rather than an entirely blank OLED region.
+        foreach(string style in new[]{"Bars","Stereo","Circular"})
+        {
+            var emptyWidget=new DockWidget{Kind="AudioVisualizer",
+                X=10,Y=18,VisualizerStyle=style,WidgetWidth=105,
+                VisualizerHeight=32};
+            using var emptyScreen=OledRenderer.Render(new LayoutState{
+                Widgets=[emptyWidget]},false,true,false,
+                protectHeader:true,layoutMode:ScreenMode.Idle);
+            var bounds=OledRenderer.GetBounds(emptyWidget);
+            bool anything=false;
+            for(int yy=bounds.Top;yy<bounds.Bottom;yy++)
+            for(int xx=bounds.Left;xx<bounds.Right;xx++)
+                if(Lit(emptyScreen,xx,yy))anything=true;
+            if(!anything)throw new Exception(
+                "Silent audio widget vanished: "+style);
+        }
         // Three independent visualizer styles must produce real black/white
         // pixels from synthetic separated left and right frequency signals.
         var fakeAudio=new AudioVisualizationSnapshot(

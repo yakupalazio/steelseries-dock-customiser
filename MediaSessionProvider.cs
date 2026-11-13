@@ -53,10 +53,18 @@ internal static class MediaSessionProvider
             if(duration<TimeSpan.Zero)duration=TimeSpan.Zero;
             if(position<TimeSpan.Zero)position=TimeSpan.Zero;
             var appId=playing.SourceAppUserModelId??"";
+            // SMTC timeline.Position is a *sampled* position. Spotify and
+            // other players may only update it every several seconds.
+            // Using the local poll time as its anchor repeatedly resets
+            // fractional progress, leaving lyrics frozen on a single line.
+            // LastUpdatedTime is the timestamp of the actual SMTC timeline.
+            DateTimeOffset sampled=timeline.LastUpdatedTime;
+            if(sampled==DateTimeOffset.MinValue || sampled>DateTimeOffset.Now)
+                sampled=DateTimeOffset.Now;
             return new MediaSnapshot(
                 true,MediaSnapshot.IsSpotifyApp(appId),
                 Short(props.Title),Short(props.Artist),Short(appId),
-                position,duration,DateTimeOffset.Now);
+                position,duration,sampled);
         }
         catch(Exception) // Unsupported or unavailable Windows media session.
         {
