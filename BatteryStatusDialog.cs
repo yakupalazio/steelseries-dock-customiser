@@ -99,6 +99,7 @@ internal sealed class BatteryStatusDialog : Form
     public BatteryStatusDialog(BatteryPreferences preferences,
         Func<BatterySnapshot> getSnapshot,Func<Task> update,Action apply)
     {
+        UiPolish.Register(this);
         prefs=preferences;snapshotGetter=getSnapshot;refresh=update;onApply=apply;
         Text="Pil cihazları — öncelik sıralaması";
         StartPosition=FormStartPosition.CenterParent;
@@ -154,6 +155,7 @@ internal sealed class BatteryStatusDialog : Form
             priority.Items.Add(kind);
         priority.SelectedIndex=0;
         var priorityMenu=new ContextMenuStrip();
+        UiPolish.StyleMenu(priorityMenu);
         var thresholdItem=new ToolStripMenuItem(UiLanguage.T("Cihaz pil uyarısı eşiği..."));
         thresholdItem.Click+=(_,_)=>
         {

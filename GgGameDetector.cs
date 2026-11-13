@@ -86,6 +86,24 @@ internal static class GgGameDetector
         finally{foreach(var p in processes)p.Dispose();}
     }
 
+    /// <summary>
+    /// Reuses GG's known local registered game executable. An icon is NOT
+    /// supplied by GG; the provider extracts the Windows icon from this path.
+    /// </summary>
+    internal static string? RegisteredExecutable(GameSnapshot game)
+    {
+        if(!game.IsRunning)return null;
+        var known=(DateTimeOffset.Now-cachedAt).TotalSeconds<40
+            ?games:LoadGgLibrary();
+        foreach(var (name,exe) in known)
+            if(string.Equals(name,game.Name,StringComparison.OrdinalIgnoreCase)&&
+               string.Equals(Path.GetFileNameWithoutExtension(exe),
+                   game.Executable,StringComparison.OrdinalIgnoreCase)&&
+               File.Exists(exe))
+                return exe;
+        return null;
+    }
+
     internal static bool NamesMatchPath(string actual,string registered)
     {
         // GG's Windows library sometimes normalizes/removes whitespace from

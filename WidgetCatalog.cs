@@ -52,7 +52,8 @@ internal static class WidgetCatalog
     private static readonly string[] Time=["Clock","Date","Custom text"];
     private static readonly string[] Visual=["AnimatedGif"];
     private static readonly string[] System=["SystemCpu","SystemRam","NetworkPing"];
-    private static readonly string[] Game=["GameLabel","GameTitle","GameMiniPlayer"];
+    private static readonly string[] Game=[
+        "GameLabel","GameTitle","GameLogo","GameMiniPlayer"];
     private static readonly string[] Controls=["VolumeChatMix"];
 
     internal static IReadOnlyList<string> ForCategory(string category)=>category switch
@@ -105,6 +106,7 @@ internal static class WidgetCatalog
         "Progress"=>"Playback progress bar",
         "VolumeChatMix"=>"Volume / game / chat controls",
         "GameMiniPlayer"=>"Game-specific compact media widget",
+        "GameLogo"=>"Running game's logo from a local EXE icon or custom image",
         _=>"Place in this screen and drag to reposition"
     };
 
@@ -123,7 +125,8 @@ internal static class WidgetCatalog
         "Artist"=>"Çalan parçanın sanatçısı",
         "Progress"=>"Çalan şarkının ilerleme çubuğu",
         "VolumeChatMix"=>"Ses seviyesi ve sohbet/oyun dengesi",
-        "GameMiniPlayer"=>"Oyun ekranına özel mini medya bilgisi",
+        "GameMiniPlayer"=>"Oynarken mini medya bilgisi",
+        "GameLogo"=>"Aktif oyunun EXE simgesi veya seçtiğin özel logosu",
         _=>"Seçili ekrana yerleştir, sürükleyerek konumlandır"
     };
 }

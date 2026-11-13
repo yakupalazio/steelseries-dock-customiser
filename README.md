@@ -1,4 +1,6 @@
-# Steelseries Dock Customiser — RC2 Text & Motion Preview
+# Steelseries Dock Customiser — RC3 Game Logo & UI Polish
+
+> **RC3 private preview (13 November 2026):** Daha yumuşak düğmeler, açılır seçimler ve ayar kutuları; mouse tekerleğinde hızlanmadan kısa, doğal atalet; Medya ekranında ayarlanabilir ilerleme çubuğu eni/kalınlığı; yalnızca Game ekranında GG tarafından tanınan aktif oyunun yerel EXE simgesi veya kullanıcının seçtiği özel logosunu gösteren widget. Geliştirme ayrıntıları: [RC3 Release Notes](RELEASE_NOTES_RC3_GAME_LOGO_UI_POLISH.md).
 
 > **RC2 preview:** Metin genişliği/kalınlığı, 28 px/s akıcı kaydırma, 1/2/3 satır söz, enstrümantal nota, doğrulanmış ±ms senkronizasyonu ve yumuşak animasyonlu arayüz. Ayrıntılar: [RC2 Release Notes](RELEASE_NOTES_RC2_TEXT_AND_MOTION.md).
 

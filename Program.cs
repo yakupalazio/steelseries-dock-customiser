@@ -821,6 +821,8 @@ internal static class Program
                 studio.ClientSize=new System.Drawing.Size(1120,730);
             if(args.Contains("--capture-idle"))studio.SelectCaptureMode(ScreenMode.Idle);
             else if(args.Contains("--capture-game"))studio.SelectCaptureMode(ScreenMode.Game);
+            if(args.Contains("--capture-game-logo-synthetic"))
+                studio.SelectGameLogoForCapture();
             else if(args.Contains("--capture-media"))studio.SelectCaptureMode(ScreenMode.Media);
             if(args.Contains("--capture-library-media"))
                 studio.SelectWidgetCategoryForCapture("Media");
@@ -903,6 +905,10 @@ public sealed class DockWidget
     public int VisualizerGain { get; set; } = 100;
     public int VisualizerHeight { get; set; } = 24;
     public int WidgetWidth { get; set; } = 96;
+    // Defaults preserve the original 98x5 bar in existing layouts.
+    public int ProgressWidth { get; set; } = 98;
+    public int ProgressThickness { get; set; } = 5;
+    public int GameLogoSize { get; set; } = 28;
     public string GifAssetId { get; set; } = "";
     public string GifFit { get; set; } = "Contain";
     public string GifDither { get; set; } = "FloydSteinberg";

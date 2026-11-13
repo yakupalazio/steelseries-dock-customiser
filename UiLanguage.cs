@@ -41,6 +41,13 @@ internal static class UiLanguage
         ["Bu ekranda kullanılabilir öğeleri seç"]="Choose widgets for this layout",
         ["Kategori"]="Category",
         ["Öğe"]="Widget",
+        ["Çubuk eni (px)"]="Bar width (px)",
+        ["Çubuk kalınlığı"]="Bar thickness",
+        ["Oyun logosu (px)"]="Game logo size (px)",
+        ["Aktif oyun logosu değiştir..."]="Change running game's logo...",
+        ["GG oyunu tanır; logo yerel EXE simgesinden veya özel görselinden gelir."]=
+            "GG detects the game; artwork comes from its local EXE icon or your image.",
+        ["Aktif oyun logosu"]="Running game logo",
         ["+ Ekrana ekle"]="+ Add widget",
         ["Seçileni kaldır"]="Remove selected",
         ["Özelliklerini değiştirmek için listeden bir öğe seç."]=

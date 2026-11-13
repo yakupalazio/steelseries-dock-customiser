@@ -32,6 +32,8 @@ internal sealed partial class PixelStudioForm
     private Control? modernVisibleRow,modernXRow,modernYRow;
     private Control? modernDialStyleRow,modernDialWidthRow,modernWheelEditRow;
     private Control? modernBarFrameRow,modernBarFillRow;
+    private Control? modernProgressWidthRow,modernProgressThicknessRow;
+    private Control? modernGameLogoSizeRow;
     private bool modernShellInitialized;
 
     private void BuildModernShell(TabPage legacyEditTab,
@@ -78,7 +80,7 @@ internal sealed partial class PixelStudioForm
         top.Controls.Add(brand);
         top.Controls.Add(new Label
         {
-            Text="OLED STUDIO    •    RC 2",
+            Text="OLED STUDIO    •    RC 3",
             ForeColor=UiMuted,Font=new Font("Segoe UI",8.1f,FontStyle.Bold),
             AutoSize=true,Left=21,Top=44
         });
@@ -368,6 +370,9 @@ internal sealed partial class PixelStudioForm
         modernFontRow=PropertyRow("Font",fontSize);
         modernStrokeRow=PropertyRow("Kalınlık",strokeWidth);
         modernTextWidthRow=PropertyRow("Metin eni (px)",textWidth);
+        modernProgressWidthRow=PropertyRow("Çubuk eni (px)",progressWidth);
+        modernProgressThicknessRow=PropertyRow("Çubuk kalınlığı",progressThickness);
+        modernGameLogoSizeRow=PropertyRow("Oyun logosu (px)",gameLogoSize);
         modernXRow=PropertyRow("X konumu",xPos);
         modernYRow=PropertyRow("Y konumu",yPos);
         inspector.Controls.Add(modernVisibleRow);
@@ -375,6 +380,17 @@ internal sealed partial class PixelStudioForm
         inspector.Controls.Add(modernFontRow);
         inspector.Controls.Add(modernStrokeRow);
         inspector.Controls.Add(modernTextWidthRow);
+        inspector.Controls.Add(modernProgressWidthRow);
+        inspector.Controls.Add(modernProgressThicknessRow);
+        inspector.Controls.Add(modernGameLogoSizeRow);
+        Decorate(gameLogoEditButton);
+        inspector.Controls.Add(gameLogoEditButton);
+        var logoHelp=new Label{
+            Text="GG oyunu tanır; logo yerel EXE simgesinden veya özel görselinden gelir.",
+            Width=268,Height=40,AutoEllipsis=true,ForeColor=UiMuted,
+            Font=new Font("Segoe UI",8.3f)};
+        inspector.Controls.Add(logoHelp);
+        gameLogoEditButton.Tag=logoHelp;
         inspector.Controls.Add(modernXRow);
         inspector.Controls.Add(modernYRow);
         modernDialStyleRow=PropertyRow("Gösterge tipi",dialStyle);
@@ -570,6 +586,15 @@ if(modernHint!=null)
         if(modernFontRow!=null)modernFontRow.Visible=fontSize.Enabled;
         if(modernStrokeRow!=null)modernStrokeRow.Visible=strokeWidth.Enabled;
         if(modernTextWidthRow!=null)modernTextWidthRow.Visible=textWidth.Enabled;
+        if(modernProgressWidthRow!=null)
+            modernProgressWidthRow.Visible=selected?.Kind=="Progress";
+        if(modernProgressThicknessRow!=null)
+            modernProgressThicknessRow.Visible=selected?.Kind=="Progress";
+        if(modernGameLogoSizeRow!=null)
+            modernGameLogoSizeRow.Visible=selected?.Kind=="GameLogo";
+        gameLogoEditButton.Visible=selected?.Kind=="GameLogo";
+        if(gameLogoEditButton.Tag is Control logoHelp)
+            logoHelp.Visible=gameLogoEditButton.Visible;
         if(modernXRow!=null)modernXRow.Visible=selected!=null;
         if(modernYRow!=null)modernYRow.Visible=selected!=null;
         if(modernDialStyleRow!=null)

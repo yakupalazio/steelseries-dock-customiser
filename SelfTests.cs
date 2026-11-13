@@ -1180,6 +1180,7 @@ internal static class SelfTests
             Console.WriteLine("PASS: charging icon appears only for confirmed charging");
             Beta5SelfTests.Run();
             ReleaseTextMotionSelfTests.Run();
+            ReleaseThreeSelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

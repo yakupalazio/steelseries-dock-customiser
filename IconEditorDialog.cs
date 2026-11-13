@@ -25,6 +25,7 @@ internal sealed class IconEditorDialog : Form
 
     public IconEditorDialog(Action update)
     {
+        UiPolish.Register(this);
         onSaved=update;
         Text="İkon Atölyesi — Steelseries Dock Customiser Beta 5";
         ClientSize=new Size(664,682);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;

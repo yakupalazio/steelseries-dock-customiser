@@ -264,7 +264,8 @@ internal sealed class StudioProject
     {
         "Source" or "Track" or "Artist" or "Progress" or "MediaClock" or
         "Lyrics" or "AudioVisualizer" =>mode==ScreenMode.Media,
-        "GameLabel" or "GameTitle" or "GameMiniPlayer"=>mode==ScreenMode.Game,
+        "GameLabel" or "GameTitle" or "GameMiniPlayer" or "GameLogo"=>
+            mode==ScreenMode.Game,
         "Clock" or "Date" or "Custom text" or
         "SystemCpu" or "SystemRam" or "NetworkPing" or
         "AnimatedGif" or
@@ -323,6 +324,9 @@ internal sealed class StudioProject
             w.VisualizerGain=Math.Clamp(w.VisualizerGain,10,400);
             w.VisualizerHeight=Math.Clamp(w.VisualizerHeight,8,54);
             w.WidgetWidth=Math.Clamp(w.WidgetWidth,16,128);
+            w.ProgressWidth=Math.Clamp(w.ProgressWidth,12,128);
+            w.ProgressThickness=Math.Clamp(w.ProgressThickness,3,14);
+            w.GameLogoSize=Math.Clamp(w.GameLogoSize,12,54);
             w.GifFit=w.GifFit is "Contain" or "Cover" or "Stretch"
                 ?w.GifFit:"Contain";
             w.GifDither=w.GifDither is "FloydSteinberg" or "Bayer" or "Threshold"

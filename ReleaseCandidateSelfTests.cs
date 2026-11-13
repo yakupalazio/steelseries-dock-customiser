@@ -18,8 +18,8 @@ internal static class ReleaseCandidateSelfTests
     {
         var allKinds=WidgetCatalog.Categories
             .SelectMany(c=>WidgetCatalog.ForCategory(c.Key)).ToArray();
-        if(allKinds.Length!=27||
-           allKinds.Distinct(StringComparer.Ordinal).Count()!=27)
+        if(allKinds.Length!=28||
+           allKinds.Distinct(StringComparer.Ordinal).Count()!=28)
             throw new Exception("Widget catalog is incomplete or duplicated");
         var multiple=new[]{"Clock","AnimatedGif","AudioVisualizer",
             "Custom text"};
@@ -40,6 +40,9 @@ internal static class ReleaseCandidateSelfTests
                 throw new Exception("Media widget leaked into other mode: "+name);
         }
         if(!StudioProject.IsAllowed(ScreenMode.Game,"GameMiniPlayer") ||
+           !StudioProject.IsAllowed(ScreenMode.Game,"GameLogo") ||
+           StudioProject.IsAllowed(ScreenMode.Media,"GameLogo") ||
+           StudioProject.IsAllowed(ScreenMode.Idle,"GameLogo") ||
            StudioProject.IsAllowed(ScreenMode.Media,"GameTitle"))
             throw new Exception("Dedicated game widget classification changed");
 

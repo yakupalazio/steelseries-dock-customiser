@@ -21,6 +21,7 @@ internal sealed class PhoneBatterySetupDialog : Form
 
     public PhoneBatterySetupDialog(bool currentlyAllowed)
     {
+        UiPolish.Register(this);
         adbAllowed=currentlyAllowed;
         Text=UiLanguage.T("Telefon pilini arka planda oku");
         ClientSize=new Size(610,410);

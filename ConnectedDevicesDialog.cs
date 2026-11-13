@@ -26,6 +26,7 @@ internal sealed class ConnectedDevicesDialog:Form
 
     public ConnectedDevicesDialog(Func<BatterySnapshot> snapshotGetter)
     {
+        UiPolish.Register(this);
         getSnapshot=snapshotGetter;
         Text=UiLanguage.English?"Connected peripherals":"Bağlı cihazlar";
         StartPosition=FormStartPosition.CenterParent;

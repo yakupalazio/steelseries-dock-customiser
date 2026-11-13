@@ -48,6 +48,7 @@ internal sealed class SettingsDialog : Form
         Action? onLanguageChanged = null,
         DisplayPreferences? displayPreferences = null)
     {
+        UiPolish.Register(this);
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
         this.suspendLive=suspendLive??(()=>Task.FromResult(false));
         this.resumeLive=resumeLive??(_=>Task.CompletedTask);
@@ -104,7 +105,7 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO • RC2", Left = 18, Top = 704,
+            Text = "OLED STUDIO • RC3", Left = 18, Top = 704,
             Width = 180, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 7.6f)
         });
@@ -138,7 +139,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.1.1 RC2\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.1.1 RC3\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });

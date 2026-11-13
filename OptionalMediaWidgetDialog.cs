@@ -25,6 +25,7 @@ internal sealed class OptionalMediaWidgetDialog:Form
 
     public OptionalMediaWidgetDialog(DockWidget source)
     {
+        UiPolish.Register(this);
         Updated=JsonSerializer.Deserialize<DockWidget>(
             JsonSerializer.Serialize(source))??new DockWidget{Kind=source.Kind};
         Text=source.Kind switch
@@ -208,11 +209,11 @@ internal sealed class OptionalMediaWidgetDialog:Form
         c.SelectedIndex=0;
         return c;
     }
-    private static NumericUpDown Number(int min,int max,int increment,int value)=>
+    private static DarkNumberBox Number(int min,int max,int increment,int value)=>
         new(){
             Minimum=min,Maximum=max,Increment=increment,
             Value=Math.Clamp(value,min,max),
-            Width=173,Height=30,TextAlign=HorizontalAlignment.Center,
+            Width=173,Height=30,
             BackColor=Color.FromArgb(23,31,43),ForeColor=TextColor
         };
     private void Note(string text)

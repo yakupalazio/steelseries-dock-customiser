@@ -76,6 +76,7 @@ internal sealed class WheelArtworkDialog : Form
         bool showGameLogo=true,bool showChatLogo=true,bool closeRingEnds=true,int thickness=3,
         bool compact=false,int sizePercent=100)
     {
+        UiPolish.Register(this);
         this.compact=compact;
         CompactSize=Math.Clamp(sizePercent,70,100);
         pixelZoom=compact?13:10;

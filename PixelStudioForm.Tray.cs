@@ -67,7 +67,7 @@ internal sealed partial class PixelStudioForm
         trayMenu=new ContextMenuStrip
         {
             ShowImageMargin=false,
-            Renderer=new ToolStripProfessionalRenderer(new TrayPalette()),
+            Renderer=UiPolish.MakeMenuRenderer(new TrayPalette()),
             ForeColor=Color.FromArgb(230,243,250),
             BackColor=Color.FromArgb(20,27,37),
             Font=new Font("Segoe UI",9f)

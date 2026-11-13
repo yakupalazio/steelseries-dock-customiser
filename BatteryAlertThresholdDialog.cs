@@ -13,6 +13,7 @@ internal sealed class BatteryAlertThresholdDialog:Form
     public BatteryAlertThresholdDialog(string device,int current,
         BatterySnapshot? snapshot=null)
     {
+        UiPolish.Register(this);
         Text=UiLanguage.English?"Device low battery alert":"Cihaz düşük pil uyarısı";
         ClientSize=new Size(390,186);
         FormBorderStyle=FormBorderStyle.FixedDialog;

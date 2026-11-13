@@ -15,6 +15,7 @@ internal static class WidgetLabels
         "GameLabel"=>"Oyun başlığı",
         "GameTitle"=>"Oyun adı",
         "GameMiniPlayer"=>"Mini Player (Oyun)",
+        "GameLogo"=>"Aktif oyun logosu",
         "Custom text"=>"Özel metin",
         "Clock"=>"Saat",
         "Date"=>"Tarih",

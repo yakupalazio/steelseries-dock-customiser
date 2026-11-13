@@ -34,6 +34,33 @@ internal sealed partial class PixelStudioForm : Form
         selected=state.Widgets.FirstOrDefault(w=>w.Kind=="VolumeChatMix");
         RefreshWidgetList();
     }
+    // Pure synthetic preview: never alters the saved user's game design.
+    internal void SelectGameLogoForCapture()
+    {
+        SwitchEditingMode(ScreenMode.Game);
+        var widget=state.Widgets.FirstOrDefault(w=>w.Kind=="GameLogo");
+        if(widget is null)
+        {
+            widget=new DockWidget{
+                Kind="GameLogo",X=96,Y=37,GameLogoSize=16};
+            state.Widgets.Add(widget);
+        }
+        selected=widget;
+        gameSnapshot=new GameSnapshot("SYNTHETIC GAME","synthetic",9999);
+        var pixels=new bool[32*32];
+        for(int y=0;y<32;y++)for(int x=0;x<32;x++)
+        {
+            // An explicit TEST-only logo (not a game/brand logo).
+            bool ring=Math.Abs((x-16)*(x-16)+(y-16)*(y-16)-155)<30;
+            bool bolt=x>=14&&x<=18&&y>=8&&y<=24;
+            pixels[y*32+x]=ring||bolt;
+        }
+        gameLogoSnapshot=new GameLogoSnapshot("synthetic","SYNTHETIC GAME",
+            32,pixels,"Preview only");
+        RefreshWidgetList();
+        Redraw();
+    }
+
     // Offscreen acceptance only: no hardware write or persistence.
     internal void SetHeaderProtectionForCapture(bool protect)
         =>headerProtect.Checked=protect;
@@ -53,6 +80,7 @@ internal sealed partial class PixelStudioForm : Form
     private StudioProject project=StudioProject.Load();
     private ScreenMode editingMode=ScreenMode.Media;
     private GameSnapshot gameSnapshot=GameSnapshot.None;
+    private GameLogoSnapshot? gameLogoSnapshot;
     private bool gamePolling,controllerConnectionPolling;
     private int gameCounter,controllerCounter;
     private readonly TabControl modeTabs=new(){
@@ -62,6 +90,16 @@ internal sealed partial class PixelStudioForm : Form
     private readonly DarkCheckBox liveOwnsDisplay=new(){
         Width=269,Height=34,Text="Canlıda tam ekran (128×64)",Checked=false};
     private readonly DarkNumberBox strokeWidth=new(){Minimum=1,Maximum=3,Width=85};
+    private readonly DarkNumberBox progressWidth=new(){
+        Minimum=12,Maximum=128,Value=98,Width=85};
+    private readonly DarkNumberBox progressThickness=new(){
+        Minimum=3,Maximum=14,Value=5,Width=85};
+    private readonly DarkNumberBox gameLogoSize=new(){
+        Minimum=12,Maximum=54,Value=28,Width=85};
+    private readonly Button gameLogoEditButton=new DarkButton{
+        Text="Aktif oyun logosu değiştir...",Width=268,Height=35,
+        BackColor=Color.FromArgb(38,68,82)};
+
     private readonly DarkNumberBox textWidth=new(){Minimum=16,Maximum=128,Value=96,Width=85};
     private readonly DarkNumberBox miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=100};
     private readonly DarkNumberBox barFrame=new(){Minimum=1,Maximum=2,Width=85};
@@ -166,7 +204,8 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 RC2 | OLED Studio";
+        UiPolish.Register(this);
+        Text = "Steelseries Dock Customiser 1.1.1 RC3 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -371,6 +410,10 @@ internal sealed partial class PixelStudioForm : Form
         fontSize.ValueChanged += (_,_) => ChangeNumber();
         strokeWidth.ValueChanged += (_,_) => ChangeNumber();
         textWidth.ValueChanged += (_,_) => ChangeNumber();
+        progressWidth.ValueChanged += (_,_) => ChangeNumber();
+        progressThickness.ValueChanged += (_,_) => ChangeNumber();
+        gameLogoSize.ValueChanged += (_,_) => ChangeNumber();
+        gameLogoEditButton.Click+=(_,_)=>EditGameLogo();
         miniWidth.ValueChanged += (_,_) => ChangeNumber();
         barFrame.ValueChanged += (_,_) => ChangeNumber();
         barFill.ValueChanged += (_,_) => ChangeNumber();
@@ -482,7 +525,7 @@ internal sealed partial class PixelStudioForm : Form
         "BatterySlot1","BatterySlot2","BatterySlot3","Mouse","Phone",
         "DualSense","Laptop","Headset","SpareBattery","Source","Track",
         "Artist","Progress","MediaClock","Lyrics","AudioVisualizer","AnimatedGif",
-        "GameLabel","GameTitle","GameMiniPlayer",
+        "GameLabel","GameTitle","GameLogo","GameMiniPlayer",
         "Clock","Date","VolumeChatMix","SystemCpu","SystemRam",
         "NetworkPing","Custom text"
     ];
@@ -498,7 +541,7 @@ internal sealed partial class PixelStudioForm : Form
             gameSnapshot,
             batteryPreferences,project.ProtectHeader&&!liveFull,mode,dialMonitor.Snapshot,
             telemetry,SyncedLyricsProvider.Current(mediaSnapshot),
-            audioVisualizer.Snapshot);
+            audioVisualizer.Snapshot,gameLogoSnapshot);
         if(liveFull&&project.ProtectHeader)
         {
             // Full ownership cannot retain the firmware's status strip.
@@ -632,8 +675,27 @@ internal sealed partial class PixelStudioForm : Form
         try{
             var latest=await GgGameDetector.PollAsync();
             if(IsDisposed)return;
-            if(!Equals(latest,gameSnapshot)){gameSnapshot=latest;Redraw();}
+            if(!Equals(latest,gameSnapshot))
+            {
+                gameSnapshot=latest;
+                gameLogoSnapshot=null;
+                Redraw();
+                if(latest.IsRunning)_=RefreshGameLogoAsync(latest);
+            }
         }catch{}finally{gamePolling=false;}
+    }
+
+    private async System.Threading.Tasks.Task RefreshGameLogoAsync(GameSnapshot game)
+    {
+        try
+        {
+            var icon=await System.Threading.Tasks.Task.Run(()=>
+                GameLogoProvider.Resolve(game));
+            if(IsDisposed || !Equals(gameSnapshot,game))return;
+            gameLogoSnapshot=icon;
+            Redraw();
+        }
+        catch { /* Absence of a game icon never blocks OLED Studio. */ }
     }
 
     private async System.Threading.Tasks.Task RefreshControllerConnectionAsync()
@@ -879,6 +941,9 @@ internal sealed partial class PixelStudioForm : Form
         strokeWidth.Enabled=fontSize.Enabled||has&&selected!.Kind=="Lyrics";
         textWidth.Enabled=strokeWidth.Enabled;
         fontSize.Enabled=fontSize.Enabled&&selected!.Kind!="Lyrics";
+        progressWidth.Enabled=has && selected!.Kind=="Progress";
+        progressThickness.Enabled=progressWidth.Enabled;
+        gameLogoSize.Enabled=has && selected!.Kind=="GameLogo";
         miniWidth.Enabled=has && selected!.Kind is "GameMiniPlayer" or "VolumeChatMix";
         barFrame.Enabled=has && selected!.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
         barFill.Enabled=barFrame.Enabled;
@@ -890,6 +955,9 @@ internal sealed partial class PixelStudioForm : Form
             customText.Text=selected.Text;
             fontSize.Value=Math.Clamp(selected.FontSize,7,24);
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
+            progressWidth.Value=Math.Clamp(selected.ProgressWidth,12,128);
+            progressThickness.Value=Math.Clamp(selected.ProgressThickness,3,14);
+            gameLogoSize.Value=Math.Clamp(selected.GameLogoSize,12,54);
             textWidth.Value=Math.Clamp(selected.Kind=="Lyrics"
                 ?selected.WidgetWidth:selected.Kind=="GameMiniPlayer"
                 ?selected.MiniWidth:selected.TextWidth>0
@@ -981,17 +1049,29 @@ internal sealed partial class PixelStudioForm : Form
             :selected.TextWidth;
         int newLyricWidth=selected.Kind=="Lyrics"&&textWidth.Enabled
             ?newTextWidth:selected.WidgetWidth;
+        int newProgressWidth=progressWidth.Enabled?(int)progressWidth.Value:
+            selected.ProgressWidth;
+        int newProgressThickness=progressThickness.Enabled
+            ?(int)progressThickness.Value:selected.ProgressThickness;
+        int newGameLogoSize=gameLogoSize.Enabled?(int)gameLogoSize.Value:
+            selected.GameLogoSize;
         int newFrame=(int)barFrame.Value,newFill=(int)barFill.Value;
         if(selected.X==newX&&selected.Y==newY&&selected.FontSize==newSize&&
            selected.StrokeWidth==newWeight&&selected.MiniWidth==newMiniWidth&&
            selected.TextWidth==savedTextWidth&&
            selected.WidgetWidth==newLyricWidth&&
+           selected.ProgressWidth==newProgressWidth&&
+           selected.ProgressThickness==newProgressThickness&&
+           selected.GameLogoSize==newGameLogoSize&&
            selected.BarFrameThickness==newFrame&&
            selected.BarFillThickness==newFill)return;
         Record();selected.X=newX;selected.Y=newY;selected.FontSize=newSize;
         selected.StrokeWidth=newWeight;selected.MiniWidth=newMiniWidth;
         selected.TextWidth=savedTextWidth;
         selected.WidgetWidth=newLyricWidth;
+        selected.ProgressWidth=newProgressWidth;
+        selected.ProgressThickness=newProgressThickness;
+        selected.GameLogoSize=newGameLogoSize;
         selected.BarFrameThickness=newFrame;selected.BarFillThickness=newFill;
         RefreshWidgetList();Redraw();
     }
@@ -1038,6 +1118,10 @@ internal sealed partial class PixelStudioForm : Form
         {
             w.X=4;w.Y=38;w.FontSize=7;w.MiniWidth=88;
         }
+        if(type=="GameLogo")
+        {
+            w.X=96;w.Y=37;w.GameLogoSize=16;
+        }
         if(type=="VolumeChatMix")
         {
             w.X=2;w.Y=11;w.MiniWidth=104;w.DialStyle="Wheel";
@@ -1072,6 +1156,60 @@ internal sealed partial class PixelStudioForm : Form
         RefreshWidgetList();
         Redraw();
         SetStatus("Widget ayarları güncellendi. Kaydet ile sakla.");
+    }
+
+    private async void EditGameLogo()
+    {
+        if(selected?.Kind!="GameLogo")return;
+        if(!gameSnapshot.IsRunning)
+        {
+            MessageBox.Show(this,
+                "Önce SteelSeries GG tarafından tanınan bir oyunu aç. "+
+                "Oyun açıkken bu bölümden kendi PNG, JPG veya ICO logonu "+
+                "seçebilir veya oyunun orijinal EXE simgesine dönebilirsin.",
+                "Oyun logosu",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            return;
+        }
+        GameSnapshot originallySelected=gameSnapshot;
+        string name=originallySelected.Name;
+        var answer=MessageBox.Show(this,
+            $"Aktif oyun: {name}\n\nEvet: Özel logo seç\nHayır: Yerel EXE simgesine dön"+
+            "\nİptal: Değişiklik yapma",
+            "Oyun logosu",MessageBoxButtons.YesNoCancel,MessageBoxIcon.Question);
+        if(answer==DialogResult.Cancel)return;
+        if(answer==DialogResult.Yes)
+        {
+            using var picker=new OpenFileDialog{
+                Filter="Logo görselleri|*.png;*.jpg;*.jpeg;*.ico;*.bmp",
+                Title="Aktif oyunun logosunu seç",CheckFileExists=true};
+            if(picker.ShowDialog(this)!=DialogResult.OK)return;
+            if(!Equals(gameSnapshot,originallySelected))
+            {
+                SetStatus("Oyun değişti; yanlış oyuna logo uygulanmadı.");
+                return;
+            }
+            try{GameLogoProvider.ImportOverride(originallySelected,picker.FileName);}
+            catch(Exception ex)
+            {
+                MessageBox.Show(this,ex.Message,"Oyun logosu yüklenemedi",
+                    MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        else
+        {
+            if(!Equals(gameSnapshot,originallySelected))return;
+            try{GameLogoProvider.RemoveOverride(originallySelected);}
+            catch(Exception ex)
+            {
+                MessageBox.Show(this,ex.Message,"Logo kaldırılamadı",
+                    MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        gameLogoSnapshot=null;
+        await RefreshGameLogoAsync(originallySelected);
+        SetStatus("Oyun logosu güncellendi. Önizlemede kontrol edebilirsin.");
     }
 
     private void RemoveWidget()
@@ -1166,8 +1304,11 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(e.Control && e.KeyCode==Keys.Z && !e.Shift){Undo();e.SuppressKeyPress=true;return;}
         if(e.Control && (e.KeyCode==Keys.Y || (e.Shift && e.KeyCode==Keys.Z))){Redo();e.SuppressKeyPress=true;return;}
-        if(ActiveControl==customText||ActiveControl==fontSize||ActiveControl==textWidth||ActiveControl==xPos||
-           ActiveControl==yPos||ActiveControl==strokeWidth||ActiveControl==miniWidth)return;
+        if(ActiveControl==customText||ActiveControl==fontSize||
+           ActiveControl==textWidth||ActiveControl==xPos||
+           ActiveControl==yPos||ActiveControl==strokeWidth||
+           ActiveControl==miniWidth||ActiveControl==progressWidth||
+           ActiveControl==progressThickness||ActiveControl==gameLogoSize)return;
         if(e.KeyCode==Keys.Delete){RemoveWidget();e.SuppressKeyPress=true;return;}
         if(selected==null)return;
         int dx=e.KeyCode==Keys.Left?-1:e.KeyCode==Keys.Right?1:0;

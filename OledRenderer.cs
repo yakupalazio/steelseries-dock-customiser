@@ -218,7 +218,8 @@ internal static class OledRenderer
         bool protectHeader=true,ScreenMode? layoutMode=null,DialSnapshot? dial=null,
         SystemTelemetrySnapshot? telemetry=null,
         SyncedLyricsSnapshot? lyrics=null,
-        AudioVisualizationSnapshot? audio=null)
+        AudioVisualizationSnapshot? audio=null,
+        GameLogoSnapshot? gameLogo=null)
     {
         bool wasEditable=EditableHeader.Value;
         EditableHeader.Value=!protectHeader;
@@ -245,7 +246,7 @@ internal static class OledRenderer
                     (w.Kind!="Date"||showDate)))
             .OrderBy(w=>w.Kind is "GameMiniPlayer" or "VolumeChatMix"?1:0))
             DrawWidget(frame,w,spotify,batteries,playback,game,kinds,dial,
-                telemetry,lyrics,audio);
+                telemetry,lyrics,audio,gameLogo);
 
         var bmp=new Bitmap(Width,Height,PixelFormat.Format24bppRgb);
         for(int y=0;y<Height;y++)
@@ -317,7 +318,12 @@ internal static class OledRenderer
     }
     private static Rectangle BoundsLegacy(DockWidget w)=>w.Kind switch
     {
-        "Progress" => new(w.X,w.Y,98,5),
+        "Progress" => new(w.X,w.Y,Math.Min(Width-w.X,
+            Math.Clamp(w.ProgressWidth,12,128)),
+            Math.Min(Height-w.Y,Math.Clamp(w.ProgressThickness,3,14))),
+        "GameLogo" => new(w.X,w.Y,Math.Min(Width-w.X,
+            Math.Clamp(w.GameLogoSize,12,54)),
+            Math.Min(Height-w.Y,Math.Clamp(w.GameLogoSize,12,54))),
         "Lyrics" => new(w.X,w.Y,Math.Min(Width-w.X,w.WidgetWidth),
             Math.Min(Height-w.Y,Math.Clamp(w.LyricLines,1,3)*8+8)),
         "AudioVisualizer" or "AnimatedGif" => new(w.X,w.Y,
@@ -389,7 +395,7 @@ internal static class OledRenderer
         BatterySnapshot? batteries,MediaSnapshot? playback,
         GameSnapshot? game,string[] currentDevices,DialSnapshot? dial,
         SystemTelemetrySnapshot? telemetry,SyncedLyricsSnapshot? lyrics,
-        AudioVisualizationSnapshot? audio)
+        AudioVisualizationSnapshot? audio,GameLogoSnapshot? gameLogo)
     {
         int x=w.X,y=w.Y;
         switch(w.Kind)
@@ -451,8 +457,16 @@ internal static class OledRenderer
                 }
                 break;
             case "Progress":
-                DrawProgress(px,x,y,Math.Min(98,Width-x),
+                DrawProgress(px,x,y,Math.Min(
+                    Math.Clamp(w.ProgressWidth,12,128),Width-x),
+                    Math.Clamp(w.ProgressThickness,3,14),
                     playback?.IsPlaying==true ? playback.ProgressPercent : 46);
+                break;
+            case "GameLogo":
+                if(game?.IsRunning==true&&gameLogo is not null&&
+                   string.Equals(game.Executable,gameLogo.Executable,
+                       StringComparison.OrdinalIgnoreCase))
+                    DrawGameLogo(px,w,gameLogo);
                 break;
             case "Clock":
                 DrawTextWithOptionalClip(px,w,target=>
@@ -938,14 +952,31 @@ internal static class OledRenderer
             if(rows[row][col]=='1')Dot(frame,x+col,y+row);
     }
 
-    private static void DrawProgress(bool[] px,int x,int y,int width,int percentage)
+    private static void DrawProgress(bool[] px,int x,int y,int width,
+        int height,int percentage)
     {
-        if(width<3)return;
-        int height=5;
+        if(width<3||height<3)return;
+        height=Math.Min(height,Height-y);
         for(int i=0;i<width;i++){Dot(px,x+i,y,false);Dot(px,x+i,y+height-1,false);}
         for(int j=0;j<height;j++){Dot(px,x,y+j);Dot(px,x+width-1,y+j);}
         int fill=(width-2)*Math.Clamp(percentage,0,100)/100;
         for(int i=0;i<fill;i++)for(int j=1;j<height-1;j++)Dot(px,x+i+1,y+j);
+    }
+
+    private static void DrawGameLogo(bool[] pixels,DockWidget widget,
+        GameLogoSnapshot snapshot)
+    {
+        int size=Math.Clamp(widget.GameLogoSize,12,54);
+        var image=snapshot.Pixels;
+        int src=snapshot.Size;
+        if(src<=0||image.Length!=src*src)return;
+        for(int row=0;row<size&&widget.Y+row<Height;row++)
+        for(int col=0;col<size&&widget.X+col<Width;col++)
+        {
+            int sx=Math.Min(src-1,col*src/size);
+            int sy=Math.Min(src-1,row*src/size);
+            if(image[sy*src+sx])Dot(pixels,widget.X+col,widget.Y+row);
+        }
     }
 
     private static void DrawBattery(bool[] px,int x,int y,int width,int height,int filled)

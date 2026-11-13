@@ -22,7 +22,14 @@ internal sealed class DarkNumberBox : UserControl
     };
     private readonly Button minus=new DarkButton(){Text="−",FlatStyle=FlatStyle.Flat,TabStop=false};
     private readonly Button plus=new DarkButton(){Text="+",FlatStyle=FlatStyle.Flat,TabStop=false};
-    private decimal value,minimum,maximum=100;
+    private decimal value,minimum,maximum=100,increment=1;
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public decimal Increment
+    {
+        get=>increment;
+        set=>increment=Math.Max(1,value);
+    }
     private bool updating;
     public event EventHandler? ValueChanged;
 
@@ -72,14 +79,14 @@ internal sealed class DarkNumberBox : UserControl
         }
         edit.Text="0";
         Controls.Add(edit);
-        minus.Click+=(_,_)=>Value--;
-        plus.Click+=(_,_)=>Value++;
+        minus.Click+=(_,_)=>Value-=Increment;
+        plus.Click+=(_,_)=>Value+=Increment;
         edit.Leave+=(_,_)=>Commit();
         edit.KeyDown+=(_,e)=>
         {
             if(e.KeyCode==Keys.Enter){Commit();e.SuppressKeyPress=true;}
-            if(e.KeyCode==Keys.Up){Value++;e.SuppressKeyPress=true;}
-            if(e.KeyCode==Keys.Down){Value--;e.SuppressKeyPress=true;}
+            if(e.KeyCode==Keys.Up){Value+=Increment;e.SuppressKeyPress=true;}
+            if(e.KeyCode==Keys.Down){Value-=Increment;e.SuppressKeyPress=true;}
         };
         edit.TextChanged+=(_,_)=>{if(!updating)Invalidate();};
         EnabledChanged+=(_,_)=>

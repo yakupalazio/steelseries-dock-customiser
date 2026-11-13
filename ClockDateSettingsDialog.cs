@@ -17,6 +17,7 @@ internal sealed class ClockDateSettingsDialog : Form
     private readonly Action<string,int,string,int> save;
     public ClockDateSettingsDialog(LayoutState state,Action<string,int,string,int> onSave)
     {
+        UiPolish.Register(this);
         original=state.DeepClone();save=onSave;
         Text="Saat ve tarih — OLED kişiselleştirme";
         Font=new Font("Segoe UI",10f);

@@ -26,6 +26,7 @@ internal sealed class LayoutProfileDialog : Form
     public LayoutProfileDialog(ScreenMode editingMode,Func<LayoutState> current,
         Action<LayoutState> onApply)
     {
+        UiPolish.Register(this);
         mode=editingMode;
         snapshot=current;
         apply=onApply;
