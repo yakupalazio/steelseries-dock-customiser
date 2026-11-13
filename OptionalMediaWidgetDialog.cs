@@ -76,9 +76,9 @@ internal sealed class OptionalMediaWidgetDialog:Form
 
     private void BuildLyrics()
     {
-        Note("Windows medya oturumundaki şarkı ve zaman bilgisi kullanılır. "+
-            "Zamanlı LRC sözleri bağımsız LRCLIB kaynağından alınır. "+
-            "Söz bulunamazsa sahte söz gösterilmez.");
+        Note("Dynamic Island benzeri: süre ve küçük ikon solda sabit "+
+            "kalır. Uzun sözler sola kayar; yeni satır alttan yukarı "+
+            "geçerek görünür. Kaynak: Windows medya oturumu + LRCLIB.");
         var offset=Number(-10000,10000,10,Updated.LyricOffsetMs);
         Row("Senkron kaydırma (ms)",offset);
         Note("Negatif değer sözleri erkene alır. Pozitif değer geç gösterir. "+
@@ -88,7 +88,8 @@ internal sealed class OptionalMediaWidgetDialog:Form
         var width=Number(16,128,1,Updated.WidgetWidth);
         Row("Yazı alanı genişliği",width);
         width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
-        Note("İsteğe bağlıdır. Medya, Oyun ve Boşta tasarımlarına eklenebilir.");
+        Note("Bu öğe yalnızca Medya ekranında kullanılabilir. "+
+            "Kaynakta senkronize söz yoksa sahte satır gösterilmez.");
     }
 
     private void BuildVisualizer()

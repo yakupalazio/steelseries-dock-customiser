@@ -36,6 +36,25 @@ internal static class UiLanguage
 
     private static readonly Dictionary<string,string> Texts=new(StringComparer.Ordinal)
     {
+        // Release candidate: categorized widget library and safer inspector.
+        ["ÖĞE KÜTÜPHANESİ"]="WIDGET LIBRARY",
+        ["Bu ekranda kullanılabilir öğeleri seç"]="Choose widgets for this layout",
+        ["Kategori"]="Category",
+        ["Öğe"]="Widget",
+        ["+ Ekrana ekle"]="+ Add widget",
+        ["Seçileni kaldır"]="Remove selected",
+        ["Özelliklerini değiştirmek için listeden bir öğe seç."]=
+            "Select a widget above to edit its properties.",
+        ["▸ Gelişmiş OLED ayarları"]="▸ Advanced OLED settings",
+        ["▾ Gelişmiş OLED ayarları"]="▾ Advanced OLED settings",
+        ["Orijinal üst 10 pikseli koru"]="Protect top 10 OEM pixels",
+        ["Canlı tam ekran: deneysel. Firmware'in ses/ChatMix ekranları önceliklidir. Dock Reset ile geri dönebilirsin."]=
+            "Experimental full-screen mode. The firmware may override the volume/ChatMix UI. Use Dock Reset to restore it.",
+        ["Özelleştireceğin öğeleri kategoriye göre seç."]=
+            "Find and add widgets by category.",
+        ["GİZLİ AYARLAR"]="ADVANCED SETTINGS",
+        ["PİKSEL • 128 × 64"]="PIXEL • 128 × 64",
+        ["Açık moda geri dön"]="Back to current mode",
         ["Ayarlar"]="Settings",["AYARLAR"]="SETTINGS",
         ["ⓘ   Hakkında"]="ⓘ   About",["HAKKINDA"]="ABOUT",
         ["◫   Pil ve öncelik"]="◫   Battery & priority",
@@ -57,8 +76,8 @@ internal static class UiLanguage
             "Changes apply immediately and persist across restarts.",
         ["SteelSeries Nova Pro Wireless için kişisel OLED stüdyosu"]=
             "Personal OLED studio for SteelSeries Nova Pro Wireless",
-        ["SÜRÜM   1.1.1 Beta 5 Media Preview 2\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
-            "VERSION   1.1.1 Beta 5 Media Preview 2\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
+        ["SÜRÜM   1.1.1 RC1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
+            "VERSION   1.1.1 RC1\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
         ["Tasarlayan ve geliştiren"]="Designed and developed by",
         ["© 2026 Yakup Can Palaz. Tüm hakları saklıdır. Ücretsiz kullanım; değiştirme ve yeniden dağıtım izne tabidir. SteelSeries ile bağlantılı değildir."]=
             "© 2026 Yakup Can Palaz. All rights reserved. Free use; modification and redistribution require permission. Not affiliated with SteelSeries.",

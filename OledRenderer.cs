@@ -277,7 +277,8 @@ internal static class OledRenderer
     public static Rectangle GetBounds(DockWidget w)=>w.Kind switch
     {
         "Progress" => new(w.X,w.Y,98,5),
-        "Lyrics" => new(w.X,w.Y,Math.Min(Width-w.X,w.WidgetWidth),9),
+        "Lyrics" => new(w.X,w.Y,Math.Min(Width-w.X,w.WidgetWidth),
+            Math.Min(Height-w.Y,16)),
         "AudioVisualizer" or "AnimatedGif" => new(w.X,w.Y,
             Math.Min(Width-w.X,w.WidgetWidth),
             Math.Min(Height-w.Y,w.VisualizerHeight)),
@@ -355,13 +356,7 @@ internal static class OledRenderer
             case "Lyrics":
                 if(playback?.IsPlaying==true && lyrics?.TrackKey==
                    SyncedLyricsProvider.Key(playback))
-                {
-                    string lyric=SyncedLyricsProvider.AtTime(lyrics.Lines,
-                        SyncedLyricsProvider.PositionNow(playback),
-                        w.LyricOffsetMs);
-                    if(!string.IsNullOrWhiteSpace(lyric))
-                        DrawMarquee(px,lyric,x,y,1,w.WidgetWidth);
-                }
+                    DrawIslandLyrics(px,w,playback,lyrics);
                 break;
             case "AudioVisualizer":
                 DrawAudioVisualization(px,w,audio);
@@ -468,6 +463,105 @@ internal static class OledRenderer
                 DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
                     Math.Clamp(w.StrokeWidth,1,3));
                 break;
+        }
+    }
+
+    /// <summary>
+    /// OLED interpretation of the uploaded Dynamic Island example:
+    /// stationary duration/mini-cover at the LEFT; current lyric glides
+    /// LEFT through a clipped single-line viewport. On a new timecoded LRC
+    /// line the old sentence rises/dims while the next rises from BELOW.
+    /// All phase values depend on real song position, never wall-clock
+    /// counters; a seek immediately picks the corresponding line.
+    /// </summary>
+    private static void DrawIslandLyrics(bool[] pixels,DockWidget widget,
+        MediaSnapshot playback,SyncedLyricsSnapshot lyrics)
+    {
+        int left=Math.Clamp(widget.X,0,127);
+        int top=Math.Clamp(widget.Y,0,63);
+        int right=Math.Min(Width,left+Math.Clamp(widget.WidgetWidth,16,128));
+        int bottom=Math.Min(Height,top+16);
+        int baseline=top+4;
+        if(right-left<16||bottom-baseline<7||lyrics.Lines.Count==0)return;
+
+        // On a full-width 128px widget the compact left header costs 42px.
+        // In narrow custom widgets we use the entire area for lyrics.
+        bool hasHeader=right-left>=74;
+        int textLeft=left+(hasHeader?43:0);
+        int available=right-textLeft;
+        if(available<10)return;
+
+        if(hasHeader)
+        {
+            var duration=playback.Duration;
+            int minutes=Math.Clamp((int)duration.TotalMinutes,0,99);
+            int seconds=Math.Clamp(duration.Seconds,0,59);
+            string clock=minutes.ToString("D2",CultureInfo.InvariantCulture)+":"+
+                seconds.ToString("D2",CultureInfo.InvariantCulture);
+            DrawIslandGlyphs(pixels,clock,left,baseline,left,
+                Math.Min(right,left+29),top,bottom,1f);
+            int coverX=left+32,coverY=baseline;
+            // 7x7 one-bit media-art placeholder. It is deliberately small:
+            // the lyrics, not artwork, are the focus of the OLED widget.
+            for(int dy=0;dy<7;dy++)
+            for(int dx=0;dx<7;dx++)
+                if(dx==0||dx==6||dy==0||dy==6||
+                   (dx==3&&(dy==2||dy==4))|| (dx==4&&dy==3))
+                    Dot(pixels,coverX+dx,coverY+dy);
+        }
+
+        // Negative user offset means earlier words; positive means later.
+        TimeSpan at=SyncedLyricsProvider.PositionNow(playback)-
+            TimeSpan.FromMilliseconds(widget.LyricOffsetMs);
+        var layout=IslandLyricsMotion.Evaluate(lyrics.Lines,at,available);
+        if(layout.CurrentIndex<0)return;
+        if(layout.Transitioning)
+        {
+            // Old line leaves upwards and vanishes via spatial dithering.
+            DrawIslandGlyphs(pixels,layout.PreviousText,
+                textLeft-layout.PreviousScrollPx,
+                baseline-layout.TransitionPx,
+                textLeft,right,top,bottom,1f-layout.Progress);
+            // New line travels from bottom into the lyric strip.
+            DrawIslandGlyphs(pixels,layout.CurrentText,
+                textLeft-layout.CurrentScrollPx,
+                baseline+IslandLyricsMotion.LineHeight-layout.TransitionPx,
+                textLeft,right,top,bottom,Math.Max(.3f,layout.Progress));
+        }
+        else
+        {
+            DrawIslandGlyphs(pixels,layout.CurrentText,
+                textLeft-layout.CurrentScrollPx,baseline,textLeft,right,
+                top,bottom,1f);
+        }
+    }
+
+    private static void DrawIslandGlyphs(bool[] pixels,string text,
+        int startX,int startY,int clipLeft,int clipRight,
+        int clipTop,int clipBottom,float opacity)
+    {
+        if(string.IsNullOrWhiteSpace(text)||opacity<=0)return;
+        string label=ToPixelAlphabet(text);
+        int keep=Math.Clamp((int)Math.Round(opacity*16),0,16);
+        // Keep the raster entirely inside the widget; never spill glyphs
+        // onto neighboring media widgets or the protected OEM header.
+        for(int i=0;i<label.Length;i++)
+        {
+            int gx0=startX+i*6;
+            if(gx0>=clipRight)break;
+            if(gx0+5<=clipLeft)continue;
+            if(!Glyphs.TryGetValue(label[i],out var glyph))continue;
+            for(int gy=0;gy<7;gy++)
+            for(int gx=0;gx<5;gx++)
+            {
+                int px=gx0+gx,py=startY+gy;
+                if(px<clipLeft||px>=clipRight||
+                   py<clipTop||py>=clipBottom||
+                   glyph[gy][gx]!='1')continue;
+                // 4x4 distributed opacity mask for monochrome fade.
+                if(((px&3)*5+(py&3)*3)%16<keep)
+                    Dot(pixels,px,py);
+            }
         }
     }
 

@@ -35,6 +35,14 @@ internal static class Program
             Console.WriteLine("WASAPI_RIGHT_PEAK="+bands.Right.Max().ToString("F3"));
             return;
         }
+        if(args.Contains("--release-lyrics-preview"))
+        {
+            int index=Array.IndexOf(args,"--release-lyrics-preview");
+            if(index+1>=args.Length)
+                throw new ArgumentException("Missing preview folder");
+            ReleaseCandidateSelfTests.RenderIslandExamples(args[index+1]);
+            return;
+        }
         if(args.Contains("--optional-media-examples"))
         {
             int position=Array.IndexOf(args,"--optional-media-examples");
@@ -813,6 +821,9 @@ internal static class Program
                 studio.ClientSize=new System.Drawing.Size(1120,730);
             if(args.Contains("--capture-idle"))studio.SelectCaptureMode(ScreenMode.Idle);
             else if(args.Contains("--capture-game"))studio.SelectCaptureMode(ScreenMode.Game);
+            else if(args.Contains("--capture-media"))studio.SelectCaptureMode(ScreenMode.Media);
+            if(args.Contains("--capture-library-media"))
+                studio.SelectWidgetCategoryForCapture("Media");
             if(args.Contains("--capture-header-unlocked"))
                 studio.SetHeaderProtectionForCapture(false);
             studio.EnableOffscreenCapture();

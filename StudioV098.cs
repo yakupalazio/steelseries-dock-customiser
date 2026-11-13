@@ -262,12 +262,12 @@ internal sealed class StudioProject
 
     public static bool IsAllowed(ScreenMode mode,string kind) => kind switch
     {
-        "Source" or "Track" or "Artist" or "Progress" or "MediaClock" =>
-            mode==ScreenMode.Media,
+        "Source" or "Track" or "Artist" or "Progress" or "MediaClock" or
+        "Lyrics" or "AudioVisualizer" =>mode==ScreenMode.Media,
         "GameLabel" or "GameTitle" or "GameMiniPlayer"=>mode==ScreenMode.Game,
         "Clock" or "Date" or "Custom text" or
         "SystemCpu" or "SystemRam" or "NetworkPing" or
-        "AudioVisualizer" or "AnimatedGif" or "Lyrics" or
+        "AnimatedGif" or
         "Mouse" or "Phone" or "DualSense" or "Headset" or "SpareBattery" or "Laptop" or
         "BatterySlot1" or "BatterySlot2" or "BatterySlot3" or "VolumeChatMix"=>true,
         _=>false
@@ -277,11 +277,19 @@ internal sealed class StudioProject
     {
         if(layout.Pixels?.Length!=8192)layout.Pixels=new bool[8192];
         layout.Widgets??=[];
-        var mandatorySeen=new HashSet<string>();
-        layout.Widgets=layout.Widgets.Take(80)
-            .Where(w=>w!=null && IsAllowed(mode,w.Kind) &&
-                (!IsLocked(mode,w.Kind)||mandatorySeen.Add(w.Kind)) &&
-                (w.Kind!="GameMiniPlayer"||mandatorySeen.Add(w.Kind)))
+        // One instance per normal widget, only four explicit exceptions.
+        // If old profiles contain duplicates, retain a VISIBLE instance
+        // rather than hiding the user's design by keeping an older invisible
+        // entry. The original on-disk profile is never overwritten by Load.
+        var candidates=layout.Widgets.Take(80)
+            .Where(w=>w!=null && IsAllowed(mode,w.Kind)).ToList();
+        var preferred=candidates.Where(w=>!WidgetCatalog.AllowsMultiple(w.Kind))
+            .GroupBy(w=>w.Kind,StringComparer.Ordinal)
+            .ToDictionary(g=>g.Key,g=>g.FirstOrDefault(w=>w.Visible)??g.First(),
+                StringComparer.Ordinal);
+        layout.Widgets=candidates
+            .Where(w=>WidgetCatalog.AllowsMultiple(w.Kind) ||
+                ReferenceEquals(w,preferred[w.Kind]))
             .ToList();
         foreach(var w in layout.Widgets)
         {

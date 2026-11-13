@@ -1,4 +1,6 @@
-# Steelseries Dock Customiser — Media Preview 2 Hotfix
+# Steelseries Dock Customiser — Media Preview 2 RC1
+
+> **Release candidate:** Dynamic Island benzeri senkron söz animasyonu (yatay akış ve alttan yukarı geçiş), kategorilere ayrılmış öğe kütüphanesi, ekran başına tekil widget kuralları ve dört çoklu widget istisnası, sadeleştirilmiş çift dilli düzenleme arayüzü. Önceki Media Preview 2 Sonar ve senkronizasyon düzeltmeleri korunmuştur. Ayrıntılar: [RC1 Release Checklist](MEDIA_PREVIEW2_RC1_RELEASE_CHECKLIST.md).
 
 > **Lyrics / visualizer fix:** synced lyrics now follow Windows' actual last media-timeline update, rather than resetting their timebase every second. Audio visualizers support SteelSeries Sonar's separate Media/Gaming/Chat outputs, manual device selection, and a visible silent baseline. GIF rendering is unchanged. See [Media Preview 2 Hotfix](MEDIA_PREVIEW2_LYRICS_VISUALIZER_FIX.md).
 

@@ -78,7 +78,7 @@ internal sealed partial class PixelStudioForm
         top.Controls.Add(brand);
         top.Controls.Add(new Label
         {
-            Text="OLED STUDIO    •    BETA 5",
+            Text="OLED STUDIO    •    RC 1",
             ForeColor=UiMuted,Font=new Font("Segoe UI",8.1f,FontStyle.Bold),
             AutoSize=true,Left=21,Top=44
         });
@@ -285,23 +285,42 @@ internal sealed partial class PixelStudioForm
             Padding=new Padding(15,18,10,12),BackColor=UiSidebar
         };
         inspectorSurface.Controls.Add(inspector);
-        inspector.Controls.Add(Section("WIDGET YÖNETİMİ",275));
+        inspector.Controls.Add(Section("ÖĞE KÜTÜPHANESİ",275));
+        catalogSummary=new Label{
+            Text="Bu ekranda kullanılabilir öğeleri seç",
+            Width=268,Height=23,ForeColor=UiMuted,
+            Font=new Font("Segoe UI",8.3f)
+        };
+        inspector.Controls.Add(catalogSummary);
         inspector.Controls.Add(new Label{
-            Text="Öğe ekle",Height=21,Width=274,ForeColor=UiMuted
+            Text="Kategori",Height=22,Width=267,ForeColor=UiMuted
+        });
+        DecorateInput(kindCategory);
+        kindCategory.Width=267;
+        inspector.Controls.Add(kindCategory);
+        inspector.Controls.Add(new Label{
+            Text="Öğe",Height=21,Width=267,ForeColor=UiMuted
         });
         kind.Width=267;
         DecorateInput(kind);
         DecorateCombo(kind);
         inspector.Controls.Add(kind);
-        var addRow=Row(288,41);
+        inspector.Controls.Add(kindHelp);
+        var pickTip=new ToolTip{AutoPopDelay=9000};
+        pickTip.SetToolTip(kindCategory,
+            "Yalnızca bu ekranda kullanılabilen kategoriler gösterilir.");
+        pickTip.SetToolTip(kind,
+            "Bir kez eklenebilen öğeler eklenince listeden çıkar.");
+        var addRow=Row(288,43);
+        catalogAddButton=add;
         Decorate(add,true);Decorate(remove);
-        add.Text="+ Öğe ekle";remove.Text="Seçileni sil";
-        add.Width=122;remove.Width=145;
+        add.Text="+ Ekrana ekle";remove.Text="Seçileni kaldır";
+        add.Width=125;remove.Width=145;
         addRow.Controls.AddRange([add,remove]);
         inspector.Controls.Add(addRow);
         inspector.Controls.Add(Spacer(9,266));
         inspector.Controls.Add(Section("EKRANDAKİ ÖĞELER",275));
-        widgets.Width=268;widgets.Height=147;
+        widgets.Width=268;widgets.Height=139;
         widgets.BorderStyle=BorderStyle.None;
         widgets.BackColor=UiSurface;
         widgets.ForeColor=UiText;
@@ -322,12 +341,24 @@ internal sealed partial class PixelStudioForm
                 TextFormatFlags.EndEllipsis);
         };
         inspector.Controls.Add(widgets);
+        var listTip=new ToolTip{AutoPopDelay=12000};
+        int lastTipItem=-2;
+        widgets.MouseMove+=(_,e)=>
+        {
+            int index=widgets.IndexFromPoint(e.Location);
+            if(index==lastTipItem)return;
+            lastTipItem=index;
+            listTip.SetToolTip(widgets,
+                index>=0&&index<widgets.Items.Count
+                  ?widgets.Items[index]?.ToString()??"":"");
+        };
         inspector.Controls.Add(Spacer(10,268));
         modernSelectedLabel=Section("ÖĞE AYARLARI",268);
         inspector.Controls.Add(modernSelectedLabel);
         inspector.Controls.Add(new Label{
-            Text="Seçtiğin öğenin özellikleri",Width=268,Height=24,
-            Font=new Font("Segoe UI",8.5f),ForeColor=UiMuted
+            Text="Özelliklerini değiştirmek için listeden bir öğe seç.",
+            Width=268,Height=27,
+            Font=new Font("Segoe UI",8.3f),ForeColor=UiMuted
         });
         modernVisibleRow=PropertyRow("Göster",widgetVisible);
         modernTextRow=PropertyRow("Metin",customText);
@@ -354,24 +385,38 @@ internal sealed partial class PixelStudioForm
         inspector.Controls.Add(modernBarFillRow);
         Decorate(mediaWidgetSettingsButton);
         inspector.Controls.Add(mediaWidgetSettingsButton);
-        inspector.Controls.Add(Spacer(12,268));
-        inspector.Controls.Add(Section("EKRAN KORUMASI",268));
+        inspector.Controls.Add(Spacer(8,268));
+        // Advanced hardware controls belong in a collapsed, clearly labeled
+        // panel instead of occupying most of the ordinary widget inspector.
+        var advancedToggle=ModernButton("▸ Gelişmiş OLED ayarları",268);
+        advancedToggle.ForeColor=UiMuted;
+        advancedToggle.Height=38;
+        inspector.Controls.Add(advancedToggle);
+        var advancedBody=new FlowLayoutPanel{
+            Width=267,Height=167,FlowDirection=FlowDirection.TopDown,
+            WrapContents=false,BackColor=UiSidebar,
+            Margin=new Padding(0,2,0,6),Visible=false
+        };
         headerProtect.Text="Orijinal üst 10 pikseli koru";
         headerProtect.AutoSize=false;
-        headerProtect.Width=269;headerProtect.Height=38;
+        headerProtect.Width=267;headerProtect.Height=35;
         headerProtect.ForeColor=UiText;
-        inspector.Controls.Add(headerProtect);
+        advancedBody.Controls.Add(headerProtect);
         liveOwnsDisplay.ForeColor=UiAccent;
         liveOwnsDisplay.BackColor=UiSidebar;
-        inspector.Controls.Add(liveOwnsDisplay);
-        inspector.Controls.Add(new Label{
-            Text="Deneysel: Tam OLED yazımı firmware'in tekerlek ekranını engellemez. Dock Reset ile geri dön.",
-            Width=267,Height=60,ForeColor=UiMuted,Font=new Font("Segoe UI",8.3f)
+        advancedBody.Controls.Add(liveOwnsDisplay);
+        advancedBody.Controls.Add(new Label{
+            Text="Canlı tam ekran: deneysel. Firmware'in ses/ChatMix ekranları önceliklidir. Dock Reset ile geri dönebilirsin.",
+            Width=263,Height=67,ForeColor=UiMuted,
+            Font=new Font("Segoe UI",8.2f)
         });
-        inspector.Controls.Add(new Label{
-            Text="Kapalıysa tam 128×64 OLED alanını düzenlersin. Dock'a göndermeden önce onay istenir.",
-            Width=267,Height=54,ForeColor=UiMuted,Font=new Font("Segoe UI",8.4f)
-        });
+        inspector.Controls.Add(advancedBody);
+        advancedToggle.Click+=(_,_)=>
+        {
+            advancedBody.Visible=!advancedBody.Visible;
+            advancedToggle.Text=UiLanguage.T(advancedBody.Visible
+                ?"▾ Gelişmiş OLED ayarları":"▸ Gelişmiş OLED ayarları");
+        };
         inspector.Controls.Add(Spacer(8,268));
         // Keep the inspector compact and fully visible at normal desktop sizes.
         // Runtime toggles and device state belong with the sidebar, not with
@@ -383,7 +428,9 @@ internal sealed partial class PixelStudioForm
             left.Controls.Remove(staticNote);
             staticNote.Dispose();
         }
-        autoMedia.Text="Medya otomatik algılansın";
+        autoMedia.Text="Otomatik medya";
+        new ToolTip().SetToolTip(autoMedia,
+            "Windows'ta çalan müziği otomatik algılar. Kaynak: Spotify ve diğer medya uygulamaları.");
         autoMedia.ForeColor=UiMuted;
         autoMedia.AutoSize=false;
         autoMedia.Width=190;
@@ -444,7 +491,9 @@ internal sealed partial class PixelStudioForm
     private void ApplyLanguage()
     {
         UiLanguage.ApplyTree(this);
-        kind.Refresh();tool.Refresh();dialStyle.Refresh();widgets.Refresh();
+        kind.Refresh();kindCategory.Refresh();
+        tool.Refresh();dialStyle.Refresh();widgets.Refresh();
+        UpdateKindChoices();UpdateKindHelp();
         UpdateModernUi();
     }
 
@@ -475,11 +524,13 @@ internal sealed partial class PixelStudioForm
             b.FlatAppearance.BorderSize=active?1:0;
             b.FlatAppearance.BorderColor=active?UiAccent:UiSurface;
         }
-        if(modernHint!=null)
-            modernHint.Text=UiLanguage.T(selected?.Kind=="VolumeChatMix"
-                ?"Salt-okunur tekerlek: "+dialMonitor.Snapshot.Status+
-                  " · Mod, ses veya ChatMix hareketi algılandığında değişir."
-                :"Seçili moddaki her değişiklik dock üzerinde anında görünür.");
+if(modernHint!=null)
+            modernHint.Text=selected?.Kind=="VolumeChatMix"
+                ?(UiLanguage.English?"Volume / ChatMix: ":"Ses / ChatMix: ")+
+                    dialMonitor.Snapshot.Status
+                :(UiLanguage.English
+                    ?"Changes appear in the preview. Use Apply or Live to update the physical dock."
+                    :"Değişiklikler önizlemededir. Dock'a göndermek için Uygula veya Canlı'yı kullan.");
         if(modernModeLabel!=null)
             modernModeLabel.Text=UiLanguage.T(editingMode switch
             {

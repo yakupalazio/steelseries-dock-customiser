@@ -123,7 +123,17 @@ internal sealed partial class PixelStudioForm : Form
     private DockPreviewPanel? dockPreview;
     private readonly PictureBox editor = new() { Left = 18, Top = 16, Width = CanvasWidth*6, Height = CanvasHeight*6, BackColor = Color.Black, BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Cross };
     private readonly ComboBox tool = new() { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox kind = new() { Width = 134, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox kind = new() { Width = 267, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox kindCategory = new() {
+        Width=267,DropDownStyle=ComboBoxStyle.DropDownList
+    };
+    private readonly Label kindHelp = new() {
+        Width=268,Height=42,ForeColor=Color.FromArgb(151,169,187),
+        Font=new Font("Segoe UI",8.5f),AutoEllipsis=true
+    };
+    private Button? catalogAddButton;
+    private Label? catalogSummary;
+    private bool rebuildingKindChoices;
     private readonly ComboBox dialStyle = new() { Width=153,DropDownStyle=ComboBoxStyle.DropDownList };
     private readonly Button mediaWidgetSettingsButton=new DarkButton(){
         Text="Widget ayarları...",Width=264,Height=36,
@@ -155,7 +165,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 Beta 5 Media Preview 2 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 RC1 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -193,8 +203,10 @@ internal sealed partial class PixelStudioForm : Form
             if(e.ListItem is string name)
                 e.Value=WidgetLabels.Display(name);
         };
-        kind.Items.AddRange(AllWidgetKinds);
-        kind.SelectedIndex=0;
+        kindCategory.SelectedIndexChanged+=(_,_)=>RefillCategoryKinds();
+        kind.SelectedIndexChanged+=(_,_)=>UpdateKindHelp();
+        // The legacy editor is kept in memory, but the visible modern
+        // picker is now categorized and populated by UpdateKindChoices().
         dialStyle.Items.AddRange(["Bar","Wheel","MiniWheel"]);
         dialStyle.Format+=(_,e)=>
         {
@@ -277,7 +289,7 @@ internal sealed partial class PixelStudioForm : Form
         iconButton.Left=467;iconButton.Top=674;
         editTab.Controls.Add(iconButton);
         iconButton.Click+=(_,_)=>new IconEditorDialog(Redraw).ShowDialog(this);
-        status.Text="Her modun düzeni bağımsızdır. Donanım için Dock Preview'da onay ver.";
+        status.Text="Modların düzenleri bağımsızdır. Fiziksel ekrana göndermek için Uygula veya Canlı'yı kullan.";
         // Three editor tabs, with one independent layout and undo history per mode.
         foreach(var c in editTab.Controls.Cast<Control>().ToArray())c.Top+=45;
         modeTabs.TabPages.Add("Medya çalarken");
@@ -309,12 +321,25 @@ internal sealed partial class PixelStudioForm : Form
         remove.Click += (_,_) => RemoveWidget();
         save.Click += (_,_) => SaveLayout();
         load.Click += (_,_) => LoadLayout();
-        reset.Click += (_,_)=>{
+        reset.Click += (_,_)=>
+        {
+            string modeName=editingMode switch
+            {
+                ScreenMode.Media=>"Medya",
+                ScreenMode.Game=>"Oyun",
+                _=>"Boşta"
+            };
+            if(MessageBox.Show(this,
+                modeName+" ekranındaki öğeleri ve çizimi varsayılana döndürmek istiyor musun?\n"+
+                "Bu işlemden sonra Geri Al seçeneği kullanılabilir.",
+                "Tasarımı sıfırla",MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,MessageBoxDefaultButton.Button2)!=
+                DialogResult.Yes)return;
             Record();
             state=StudioProject.UserDefault(editingMode);
             project.Set(editingMode,state);
             selected=null;RefreshWidgetList();Redraw();
-            SetStatus("Yalnızca açık mod varsayılana döndürüldü.");
+            SetStatus(modeName+" ekranı sıfırlandı. Geri Al ile dönebilirsin.");
         };
         clear.Click += (_,_) => { if(state.Pixels.Any(x=>x)){Record();Array.Clear(state.Pixels,0,state.Pixels.Length);Redraw();SetStatus("Serbest çizim pikselleri temizlendi.");} };
         export.Click += (_,_) => ExportPng();
@@ -526,14 +551,76 @@ internal sealed partial class PixelStudioForm : Form
         UpdateModernUi();
     }
 
+    internal void SelectWidgetCategoryForCapture(string key)
+    {
+        var category=kindCategory.Items.Cast<WidgetCatalog.Category>()
+            .FirstOrDefault(c=>c.Key==key);
+        if(category!=null)kindCategory.SelectedItem=category;
+    }
+
     private void UpdateKindChoices()
     {
-        string? previous=kind.SelectedItem?.ToString();
+        if(rebuildingKindChoices)return;
+        string? selectedKind=kind.SelectedItem as string;
+        string? currentCategory=(kindCategory.SelectedItem as
+            WidgetCatalog.Category)?.Key;
+        rebuildingKindChoices=true;
+        try
+        {
+            var categories=WidgetCatalog.AvailableCategories(
+                editingMode,state.Widgets);
+            kindCategory.Items.Clear();
+            kindCategory.Items.AddRange(categories.Cast<object>().ToArray());
+            kindCategory.SelectedItem=categories.FirstOrDefault(
+                c=>c.Key==currentCategory)??categories.FirstOrDefault();
+            FillKinds(selectedKind);
+        }
+        finally{rebuildingKindChoices=false;}
+        UpdateKindHelp();
+    }
+
+    private void RefillCategoryKinds()
+    {
+        if(rebuildingKindChoices)return;
+        rebuildingKindChoices=true;
+        try{FillKinds(null);}
+        finally{rebuildingKindChoices=false;}
+        UpdateKindHelp();
+    }
+
+    private void FillKinds(string? previous)
+    {
+        string? category=(kindCategory.SelectedItem as
+            WidgetCatalog.Category)?.Key;
+        var available=category is null?Array.Empty<string>():
+            WidgetCatalog.Available(editingMode,category,state.Widgets)
+            .ToArray();
         kind.Items.Clear();
-        kind.Items.AddRange(AllWidgetKinds.Where(k=>StudioProject.IsAllowed(editingMode,k))
-            .Cast<object>().ToArray());
-        kind.SelectedItem=previous is not null && kind.Items.Contains(previous)
-            ? previous : (kind.Items.Count>0?kind.Items[0]:null);
+        kind.Items.AddRange(available.Cast<object>().ToArray());
+        kind.SelectedItem=previous is not null && available.Contains(previous)
+            ?previous:(available.Length>0?available[0]:null);
+    }
+
+    private void UpdateKindHelp()
+    {
+        if(rebuildingKindChoices)return;
+        string? value=kind.SelectedItem as string;
+        kindHelp.Text=value is null
+            ?(UiLanguage.English
+                ?"No more widgets available in this category."
+                :"Bu kategoride eklenebilecek başka öğe bulunmuyor.")
+            :WidgetCatalog.Description(value);
+        if(catalogAddButton is not null)
+            catalogAddButton.Enabled=value is not null;
+        if(catalogSummary is not null)
+        {
+            int remaining=WidgetCatalog.Categories.Sum(c=>
+                WidgetCatalog.Available(editingMode,c.Key,
+                    state.Widgets).Count);
+            catalogSummary.Text=UiLanguage.English
+                ?$"{state.Widgets.Count} added  •  {remaining} available"
+                :$"{state.Widgets.Count} öğe eklendi  •  {remaining} eklenebilir";
+        }
     }
 
     private async System.Threading.Tasks.Task RefreshGameAsync()
@@ -762,6 +849,7 @@ internal sealed partial class PixelStudioForm : Form
         foreach(var w in state.Widgets)widgets.Items.Add(w);
         widgets.SelectedItem=selected;
         changeUi=false;UpdateEditorControls();
+        UpdateKindChoices();
         UpdateModernUi();
     }
     private void UpdateEditorControls()
@@ -873,12 +961,13 @@ internal sealed partial class PixelStudioForm : Form
     }
     private void AddWidget()
     {
-        string type=kind.SelectedItem?.ToString()??kind.Text;
-        if(!StudioProject.IsAllowed(editingMode,type))return;
-        if((StudioProject.IsLocked(editingMode,type) || type=="GameMiniPlayer") &&
-           state.Widgets.Any(w=>w.Kind==type))
+        if(kind.SelectedItem is not string type)return;
+        if(!WidgetCatalog.CanAdd(editingMode,type,state.Widgets))
         {
-            selected=state.Widgets.First(w=>w.Kind==type);RefreshWidgetList();return;
+            var already=state.Widgets.FirstOrDefault(w=>w.Kind==type);
+            if(already is not null){selected=already;RefreshWidgetList();}
+            SetStatus("Bu öğe bu ekranda zaten bulunuyor veya bu moda uygun değil.");
+            return;
         }
         if(state.Widgets.Count>=70){SetStatus("En fazla 70 widget.");return;}
         string gifId="";

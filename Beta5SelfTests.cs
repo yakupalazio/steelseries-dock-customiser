@@ -42,6 +42,7 @@ internal static class Beta5SelfTests
                 w=>optionalKinds.Contains(w.Kind)))
                 throw new Exception(
                     "An optional media widget was forced into factory defaults");
+        ReleaseCandidateSelfTests.Run();
         // Optional lyrics: real LRC timecodes, 10ms shifts and seek math,
         // no copyrighted lyrics, API calls or Spotify login during tests.
         var syntheticLrc=SyncedLyricsProvider.Parse(
@@ -53,7 +54,7 @@ internal static class Beta5SelfTests
                TimeSpan.FromMilliseconds(2495),-10)!="NEXT LINE" ||
            SyncedLyricsProvider.AtTime(syntheticLrc,
                TimeSpan.FromMilliseconds(2505),10)!="FIRST LINE" ||
-           !StudioProject.IsAllowed(ScreenMode.Game,"Lyrics") ||
+           StudioProject.IsAllowed(ScreenMode.Game,"Lyrics") ||
            !StudioProject.IsAllowed(ScreenMode.Media,"Lyrics"))
             throw new Exception("10ms LRC sync / optional-only mode failed");
 
@@ -91,7 +92,7 @@ internal static class Beta5SelfTests
                 VisualizerHeight=32};
             using var emptyScreen=OledRenderer.Render(new LayoutState{
                 Widgets=[emptyWidget]},false,true,false,
-                protectHeader:true,layoutMode:ScreenMode.Idle);
+                protectHeader:true,layoutMode:ScreenMode.Media);
             var bounds=OledRenderer.GetBounds(emptyWidget);
             bool anything=false;
             for(int yy=bounds.Top;yy<bounds.Bottom;yy++)
@@ -115,7 +116,7 @@ internal static class Beta5SelfTests
             };
             using var rendered=OledRenderer.Render(new LayoutState{
                 Widgets=[widget]},false,true,false,
-                protectHeader:true,layoutMode:ScreenMode.Idle,
+                protectHeader:true,layoutMode:ScreenMode.Media,
                 audio:fakeAudio);
             var rect=OledRenderer.GetBounds(widget);
             int lit=0;
@@ -732,7 +733,7 @@ internal static class Beta5SelfTests
                     WidgetWidth=114,VisualizerHeight=39,
                     VisualizerStyle=style}]
             },false,true,false,
-                protectHeader:true,layoutMode:ScreenMode.Idle,audio:audio);
+                protectHeader:true,layoutMode:ScreenMode.Media,audio:audio);
             bitmap.Save(Path.Combine(folder,"audio-"+style+".png"),
                 ImageFormat.Png);
         }
