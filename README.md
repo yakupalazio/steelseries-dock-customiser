@@ -1,3 +1,7 @@
+# Steelseries Dock Customiser — RC4.1 Windows Integration
+
+> **RC4.1 private preview:** Windows oturumu açıldığında uygulamayı başlatma (varsayılan kapalı, yalnızca kullanıcı hesabı); isteğe bağlı High işlem önceliği (varsayılan kapalı, Realtime yok); yalnızca Windows izin vermiyorsa kullanıcı onayıyla UAC yardımcısı. Kaynak kodlar, profiller, OLED ve gelecekteki Workshop etkilenmez. Ayrıntılar: [RC4.1 Windows Integration Notes](RELEASE_NOTES_RC41_WINDOWS_INTEGRATION.md).
+
 # Steelseries Dock Customiser — RC4 Release Preparation
 
 > **RC4 private preview (13 November 2026):** New original app logo and icons; bounded startup splash; first-run Next/Skip guide and replay menu; clearer Windows animations; selectable physical OLED mode transitions (Slide/Fade/Wipe/Pixel/Zoom/Instant) with 25–200% speed and protected OEM battery rows; overwrite existing saved profile with backup; private, opt-in bug-report screen (local unsent queue until HTTPS backend is deployed); share-safe future Workshop draft schema (Workshop itself is **not** implemented). See [RC4 Release Notes](RELEASE_NOTES_RC4_PRE_RELEASE.md).

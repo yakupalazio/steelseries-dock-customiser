@@ -106,7 +106,7 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO • RC4", Left = 18, Top = 704,
+            Text = "OLED STUDIO • RC4.1", Left = 18, Top = 704,
             Width = 180, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 7.6f)
         });
@@ -129,6 +129,12 @@ internal sealed class SettingsDialog : Form
             onGuideRequested?.Invoke();
         };
         menu.Controls.Add(guideButton);
+        var windowsItem=new DarkButton{
+            Text="Windows ve performans",Left=13,Top=384,Width=178,Height=49,
+            TextAlign=ContentAlignment.MiddleLeft,
+            Padding=new Padding(12,0,0,0),
+            BackColor=Surface,ForeColor=Muted,Cursor=Cursors.Hand};
+        menu.Controls.Add(windowsItem);
 
         var contentHost = new Panel { Dock = DockStyle.Fill, BackColor = Background };
         root.Controls.Add(contentHost, 1, 0);
@@ -159,7 +165,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.1.1 RC4\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.1.1 RC4.1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });
@@ -367,6 +373,152 @@ internal sealed class SettingsDialog : Form
             contentHost.Controls.Add(displayPage);
         }
 
+        // Per-user Windows settings are independent from OLED design and
+        // profile files. Initial display never creates an autorun entry.
+        var windowsPage=new Panel{Dock=DockStyle.Fill,BackColor=Background};
+        contentHost.Controls.Add(windowsPage);
+        windowsPage.Controls.Add(new Label{
+            Text="WINDOWS ENTEGRASYONU",Left=32,Top=29,Width=730,Height=24,
+            ForeColor=Accent,Font=new Font("Segoe UI Semibold",10f,FontStyle.Bold)});
+        windowsPage.Controls.Add(new Label{
+            Text="Başlangıç ve performans",Left=30,Top=64,Width=770,Height=50,
+            ForeColor=Primary,Font=new Font("Segoe UI Semibold",24f,FontStyle.Bold)});
+        windowsPage.Controls.Add(new Label{
+            Text="Bu ayarlar yalnızca senin Windows hesabına uygulanır. "+
+                "Varsayılan durumda ikisi de kapalıdır.",
+            Left=32,Top=128,Width=760,Height=50,
+            ForeColor=Muted,Font=new Font("Segoe UI",10f)});
+
+        var runOnLogin=new DarkCheckBox{
+            Text="Windows açıldığında otomatik başlat",
+            Left=32,Top=211,Width=680,Height=43,AutoSize=false,
+            ForeColor=Primary,
+            Checked=WindowsIntegration.IsAutostartEnabled()};
+        var runDescription=new Label{
+            Text="Yalnızca mevcut Windows kullanıcısında başlar. "+
+                "Yönetici izni gerektirmez. Bu seçenek varsayılan olarak kapalıdır.",
+            Left=34,Top=263,Width=739,Height=55,ForeColor=Muted,
+            Font=new Font("Segoe UI",9.5f)};
+        var runStatus=new Label{
+            Left=34,Top=318,Width=740,Height=37,ForeColor=Muted,
+            Font=new Font("Segoe UI",9f)};
+        if(!WindowsIntegration.CanRegisterAutostart())
+        {
+            runOnLogin.Enabled=false;
+            runStatus.Text=UiLanguage.English
+                ?"Autostart is available in the published Windows EXE."
+                :"Otomatik başlatma, yayımlanmış Windows EXE sürümünde kullanılabilir.";
+        }
+        else
+            runStatus.Text=runOnLogin.Checked
+                ?(UiLanguage.English
+                    ?"Launch at Windows sign-in is enabled."
+                    :"Windows oturum açılışında çalışacak.")
+                :(UiLanguage.English
+                    ?"Autostart is off."
+                    :"Otomatik başlangıç kapalı.");
+        bool updatingAutostart=false;
+        runOnLogin.CheckedChanged+=(_,_)=>{
+            if(updatingAutostart)return;
+            try
+            {
+                WindowsIntegration.SetAutostartEnabled(runOnLogin.Checked);
+                runStatus.Text=runOnLogin.Checked
+                    ?(UiLanguage.English
+                        ?"Enabled for your Windows sign-in."
+                        :"Windows oturum açılışına eklendi.")
+                    :(UiLanguage.English
+                        ?"Removed from Windows sign-in."
+                        :"Windows oturum açılışından kaldırıldı.");
+                runStatus.ForeColor=Accent;
+            }
+            catch(Exception ex)
+            {
+                // Keep the UI truthful when registry access is denied.
+                updatingAutostart=true;
+                runOnLogin.Checked=WindowsIntegration.IsAutostartEnabled();
+                updatingAutostart=false;
+                runStatus.Text="Başlangıç ayarı uygulanamadı: "+ex.Message;
+                runStatus.ForeColor=Color.FromArgb(244,195,115);
+            }
+        };
+        windowsPage.Controls.AddRange([runOnLogin,runDescription,runStatus]);
+
+        windowsPage.Controls.Add(new Label{
+            Text="İŞLEM ÖNCELİĞİ",Left=32,Top=393,Width=700,Height=26,
+            ForeColor=Accent,Font=new Font("Segoe UI Semibold",10f,FontStyle.Bold)});
+        var highPriority=new DarkCheckBox{
+            Text="Uygulamayı yüksek öncelikte çalıştır",
+            Left=32,Top=433,Width=680,Height=42,AutoSize=false,
+            ForeColor=Primary,Checked=WindowsIntegration.HighPriorityEnabled()};
+        var priorityInfo=new Label{
+            Text="High önceliği kullanılır; Realtime hiçbir zaman kullanılmaz. "+
+                "Önce yönetici izni istemeden denenir. Windows izin vermezse "+
+                "yalnızca sen onaylarsan UAC penceresi açılır.",
+            Left=34,Top=489,Width=746,Height=73,
+            ForeColor=Muted,Font=new Font("Segoe UI",9.5f)};
+        var priorityStatus=new Label{
+            Left=34,Top=583,Width=749,Height=50,
+            ForeColor=Muted,Font=new Font("Segoe UI",9f)};
+        priorityStatus.Text=highPriority.Checked
+            ?(UiLanguage.English
+                ?"High priority preference is saved."
+                :"Yüksek öncelik tercihi kayıtlı.")
+            :(UiLanguage.English
+                ?"Normal priority (default)."
+                :"Normal öncelik (varsayılan).");
+        bool updatingPriority=false;
+        highPriority.CheckedChanged+=async (_,_)=>{
+            if(updatingPriority)return;
+            bool desired=highPriority.Checked;
+            highPriority.Enabled=false;
+            try
+            {
+                bool succeeded=WindowsIntegration.TrySetCurrentPriority(
+                    desired,out string error);
+                if(!succeeded&&desired)
+                {
+                    if(MessageBox.Show(this,
+                        "Windows yüksek önceliği doğrudan uygulayamadı. "+
+                        "Yalnızca işlem önceliğini değiştiren yardımcı uygulama "+
+                        "için yönetici izni istenecek. Devam edilsin mi?\n"+
+                        error,"Yönetici izni",
+                        MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes)
+                    {
+                        if(WindowsIntegration.CanRequestElevatedHelper())
+                        {
+                            try{succeeded=await WindowsIntegration
+                                .RequestElevatedHighPriorityAsync();}
+                            catch(System.ComponentModel.Win32Exception)
+                            {succeeded=false;}
+                        }
+                    }
+                }
+                if(!succeeded)
+                    throw new InvalidOperationException(
+                        "İşlem önceliği değiştirilemedi; ayar korunmadı.");
+                WindowsIntegration.SaveHighPriority(desired);
+                priorityStatus.ForeColor=Accent;
+                priorityStatus.Text=desired
+                    ?(UiLanguage.English
+                        ?"High priority enabled. It will also apply at next launch."
+                        :"High öncelik etkin. Sonraki açılışlarda da uygulanacak.")
+                    :(UiLanguage.English
+                        ?"Restored Normal priority."
+                        :"Normal önceliğe dönüldü.");
+            }
+            catch(Exception ex)
+            {
+                updatingPriority=true;
+                highPriority.Checked=WindowsIntegration.HighPriorityEnabled();
+                updatingPriority=false;
+                priorityStatus.ForeColor=Color.FromArgb(244,195,115);
+                priorityStatus.Text=ex.Message;
+            }
+            finally{if(!IsDisposed)highPriority.Enabled=true;}
+        };
+        windowsPage.Controls.AddRange([highPriority,priorityInfo,priorityStatus]);
+
         int currentPage=-1;
         void SwitchPage(int page)
         {
@@ -379,9 +531,11 @@ internal sealed class SettingsDialog : Form
                 languagePage.Visible=page==0;
                 if(batteryPage!=null)batteryPage.Visible=page==1;
                 if(displayPage!=null)displayPage.Visible=page==3;
+                windowsPage.Visible=page==4;
                 foreach(var (button,active) in new[]{
                     (languageItem,page==0),(aboutItem,page==2),
-                    (batteryButton,page==1),(displayButton,page==3)})
+                    (batteryButton,page==1),(displayButton,page==3),
+                    (windowsItem,page==4)})
                 {
                     if(button==null)continue;
                     button.BackColor=active?Color.FromArgb(38,68,82):Surface;
@@ -395,6 +549,7 @@ internal sealed class SettingsDialog : Form
         aboutItem.Click+=(_,_)=>SwitchPage(2);
         if(batteryButton!=null)batteryButton.Click+=(_,_)=>SwitchPage(1);
         if(displayButton!=null)displayButton.Click+=(_,_)=>SwitchPage(3);
+        windowsItem.Click+=(_,_)=>SwitchPage(4);
         languageSelector.SelectedIndexChanged+=(_,_)=>
         {
             bool english=languageSelector.SelectedIndex==1;

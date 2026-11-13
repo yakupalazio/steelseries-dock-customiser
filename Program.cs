@@ -12,6 +12,14 @@ internal static class Program
     static void Main()
     {
         var args=Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if(args.Length>0&&args[0]=="--priority-helper")
+        {
+            // The optional UAC helper does only this targeted operation;
+            // no user UI, services, HID or profile access in elevated mode.
+            Environment.ExitCode=WindowsIntegration.RunElevatedPriorityHelper(args)
+                ?0:1;
+            return;
+        }
         if(args.Contains("--media-pipeline-diagnostics"))
         {
             MediaPipelineDiagnostics.RunAsync().GetAwaiter().GetResult();
@@ -845,6 +853,7 @@ internal static class Program
                 if(args.Contains("--capture-battery"))settings.SelectPageForCapture(1);
                 else if(args.Contains("--capture-about"))settings.SelectPageForCapture(2);
                 else if(args.Contains("--capture-display"))settings.SelectPageForCapture(3);
+                else if(args.Contains("--capture-windows"))settings.SelectPageForCapture(4);
                 Application.DoEvents();
                 using var image=new System.Drawing.Bitmap(settings.Width,settings.Height);
                 settings.DrawToBitmap(image,new System.Drawing.Rectangle(0,0,
@@ -894,6 +903,9 @@ internal static class Program
             PixelStudioForm.RunTraySmoke();
             return;
         }
+        // Never request UAC at login. A saved preference can only try the
+        // process's normal, non-elevated High class and can fail harmlessly.
+        WindowsIntegration.ApplySavedPriorityAtLaunch();
         Application.Run(new PixelStudioForm());
     }
 }

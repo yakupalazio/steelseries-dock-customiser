@@ -43,7 +43,20 @@ internal static class UiLanguage
         ["Öğe"]="Widget",
         ["▶ Geçişi önizle"]="▶ Preview transition",
         ["Dock Customiser — Hata Bildir"]="Dock Customiser — Report a bug",
-        ["SÜRÜM   1.1.1 RC4\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]="VERSION   1.1.1 RC4\nPLATFORM   Windows 11  ·  .NET 10\nSCREEN   128 × 64  ·  Monochrome OLED",
+        ["SÜRÜM   1.1.1 RC4.1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]="VERSION   1.1.1 RC4.1\nPLATFORM   Windows 11  ·  .NET 10\nSCREEN   128 × 64  ·  Monochrome OLED",
+        // RC4.1: Windows startup and non-Realtime process priority.
+        ["Windows ve performans"]="Windows & performance",
+        ["WINDOWS ENTEGRASYONU"]="WINDOWS INTEGRATION",
+        ["Başlangıç ve performans"]="Startup and performance",
+        ["Bu ayarlar yalnızca senin Windows hesabına uygulanır. Varsayılan durumda ikisi de kapalıdır."]=
+            "These settings apply only to your Windows account. Both start disabled by default.",
+        ["Windows açıldığında otomatik başlat"]="Launch at Windows sign-in",
+        ["Yalnızca mevcut Windows kullanıcısında başlar. Yönetici izni gerektirmez. Bu seçenek varsayılan olarak kapalıdır."]=
+            "Starts only in your Windows account. No administrator rights needed. Off by default.",
+        ["İŞLEM ÖNCELİĞİ"]="PROCESS PRIORITY",
+        ["Uygulamayı yüksek öncelikte çalıştır"]="Run application at High priority",
+        ["High önceliği kullanılır; Realtime hiçbir zaman kullanılmaz. Önce yönetici izni istemeden denenir. Windows izin vermezse yalnızca sen onaylarsan UAC penceresi açılır."]=
+            "Uses High priority, never Realtime. First tries without elevation; UAC is offered only if Windows denies access.",
         // RC4: onboarding, transitions and private bug report UX.
         ["◈   Hata Bildir"]="◈   Report a bug",
         ["ⓘ   Kullanım rehberi"]="ⓘ   Quick guide",
