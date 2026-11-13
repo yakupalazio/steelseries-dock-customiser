@@ -141,6 +141,45 @@ internal static class SyncedLyricsProvider
         root.TryGetProperty(key,out var p)&&p.ValueKind==JsonValueKind.Number&&
         p.TryGetDouble(out var v)?v:0;
 
+    private static bool IsMusicMarker(string text)
+    {
+        string value=text.Trim().Trim('[',']','(',')').Trim()
+            .ToLowerInvariant();
+        if(value.Length>0 && value.All(ch=>
+            ch is '♪' or '♫' or '♬' or '♩' or ' ' or '.' or '-' or '…'))
+            return true;
+        return value.Length==0 || value is
+            "♪" or "♫" or "🎵" or "🎶" or "♪ ♪" or
+            "instrumental" or "instrumental break" or "music" or
+            "music playing" or "solo" or "interlude" or
+            "enstrümantal" or "müzik" or "gitar solo";
+    }
+
+    internal static bool InstrumentalAt(IReadOnlyList<SyncedLyricLine> lines,
+        TimeSpan position)
+    {
+        if(lines.Count==0)return false;
+        long ms=Math.Max(0,(long)position.TotalMilliseconds);
+        int index=-1,lo=0,hi=lines.Count-1;
+        while(lo<=hi)
+        {
+            int middle=lo+(hi-lo)/2;
+            if(lines[middle].At.TotalMilliseconds<=ms)
+            {index=middle;lo=middle+1;}
+            else hi=middle-1;
+        }
+        if(index<0)return true; // Instrumental intro until first timecode.
+        var line=lines[index];
+        if(string.IsNullOrWhiteSpace(line.Text))return true;
+        long start=(long)line.At.TotalMilliseconds;
+        long next=index+1<lines.Count
+            ?(long)lines[index+1].At.TotalMilliseconds:long.MaxValue;
+        long expected=Math.Clamp(2500+line.Text.Length*90,6000,9000);
+        // Long instrumental bridges or outro without an explicit blank LRC
+        // marker: retire the old lyric but NEVER modify subsequent timecodes.
+        return ms-start>expected && next-start>expected+4500;
+    }
+
     internal static IReadOnlyList<SyncedLyricLine> Parse(string? lrc)
     {
         if(string.IsNullOrWhiteSpace(lrc)||lrc.Length>256000)
@@ -151,7 +190,10 @@ internal static class SyncedLyricsProvider
             var matches=Timestamp.Matches(raw);
             if(matches.Count==0)continue;
             string sentence=Timestamp.Replace(raw,"").Trim();
-            if(sentence.Length==0)continue;
+            // Empty LRC timestamps and explicit instrumental cues are
+            // significant: they STOP the prior line, without shifting any
+            // later timestamp. Never count them as spoken lyric lines.
+            if(IsMusicMarker(sentence))sentence="";
             sentence=sentence[..Math.Min(160,sentence.Length)];
             foreach(Match stamp in matches)
             {
@@ -187,7 +229,9 @@ internal static class SyncedLyricsProvider
             {match=mid;left=mid+1;}
             else right=mid-1;
         }
-        return match>=0?lines[match].Text:"";
+        return match>=0&&!InstrumentalAt(lines,
+            TimeSpan.FromMilliseconds(Math.Max(0,at)))
+            ?lines[match].Text:"";
     }
 
     internal static TimeSpan PositionNow(MediaSnapshot track)

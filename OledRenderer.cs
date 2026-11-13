@@ -274,11 +274,52 @@ internal static class OledRenderer
         _=>""
     };
 
-    public static Rectangle GetBounds(DockWidget w)=>w.Kind switch
+    internal static bool IsTextWidget(string kind)=>kind is
+        "Track" or "Artist" or "GameTitle" or "GameLabel" or
+        "Custom text" or "Clock" or "Date" or "MediaClock" or
+        "SystemCpu" or "SystemRam" or "NetworkPing" or "GameMiniPlayer";
+
+    private static int TextAreaWidth(DockWidget w)=>
+        Math.Max(1,Math.Min(Width-w.X,w.TextWidth>0
+            ?Math.Clamp(w.TextWidth,16,128):Width-w.X));
+
+    internal static bool NeedsMarquee(DockWidget w,string text)
+    {
+        if(!IsTextWidget(w.Kind)||w.Kind is "Clock" or "Date" or "MediaClock")
+            return false;
+        int scale=Scale(w.FontSize);
+        int advance=6*scale+Math.Clamp(w.StrokeWidth,1,3)-1;
+        int available=w.Kind=="GameMiniPlayer"
+            ?Math.Max(0,Math.Min(w.MiniWidth,Width-w.X)-16)
+            :TextAreaWidth(w);
+        return ToPixelAlphabet(text).Length*advance>available;
+    }
+
+    private static void DrawTextWithOptionalClip(bool[] px,DockWidget w,
+        Action<bool[]> paint)
+    {
+        if(w.TextWidth<=0){paint(px);return;}
+        var clipped=new bool[Width*Height];
+        paint(clipped);
+        int x1=Math.Clamp(w.X,0,Width),x2=Math.Min(Width,w.X+w.TextWidth);
+        int y1=Math.Clamp(w.Y,0,Height);
+        int y2=Math.Min(Height,y1+Math.Max(16,TextHeight(w.FontSize)+4));
+        for(int yy=y1;yy<y2;yy++)for(int xx=x1;xx<x2;xx++)
+            if(clipped[yy*Width+xx])px[yy*Width+xx]=true;
+    }
+
+    public static Rectangle GetBounds(DockWidget w)
+    {
+        if(IsTextWidget(w.Kind)&&w.Kind!="GameMiniPlayer"&&w.TextWidth>0)
+            return new(w.X,w.Y,TextAreaWidth(w),Math.Min(Height-w.Y,
+                w.Kind=="Clock"&&w.FontSize>=15?16:TextHeight(w.FontSize)+4));
+        return BoundsLegacy(w);
+    }
+    private static Rectangle BoundsLegacy(DockWidget w)=>w.Kind switch
     {
         "Progress" => new(w.X,w.Y,98,5),
         "Lyrics" => new(w.X,w.Y,Math.Min(Width-w.X,w.WidgetWidth),
-            Math.Min(Height-w.Y,16)),
+            Math.Min(Height-w.Y,Math.Clamp(w.LyricLines,1,3)*8+8)),
         "AudioVisualizer" or "AnimatedGif" => new(w.X,w.Y,
             Math.Min(Width-w.X,w.WidgetWidth),
             Math.Min(Height-w.Y,w.VisualizerHeight)),
@@ -414,19 +455,24 @@ internal static class OledRenderer
                     playback?.IsPlaying==true ? playback.ProgressPercent : 46);
                 break;
             case "Clock":
-                if(w.FontSize>=15)
-                    DrawClock(px,DisplayText(w),x,y,Math.Clamp(w.StrokeWidth,1,3));
-                else
-                    DrawReadableDateTime(px,DisplayText(w),x,y,
+                DrawTextWithOptionalClip(px,w,target=>
+                {
+                    if(w.FontSize>=15)
+                        DrawClock(target,DisplayText(w),x,y,
+                            Math.Clamp(w.StrokeWidth,1,3));
+                    else DrawReadableDateTime(target,DisplayText(w),x,y,
                         Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
+                });
                 break;
             case "MediaClock":
-                DrawReadableDateTime(px,DisplayText(w),x,y,
-                    Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
+                DrawTextWithOptionalClip(px,w,target=>
+                    DrawReadableDateTime(target,DisplayText(w),x,y,
+                        Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3)));
                 break;
             case "GameTitle":
                 DrawMarquee(px,game?.IsRunning==true?game.Name:
-                    "GAME NOT RUNNING",x,y,Scale(w.FontSize));
+                    "GAME NOT RUNNING",x,y,Scale(w.FontSize),
+                    TextAreaWidth(w),w.StrokeWidth);
                 break;
             case "GameLabel":
                 string label=w.Text?.Trim()??"";
@@ -434,7 +480,8 @@ internal static class OledRenderer
                    label.Equals("NOW PLAYING:",StringComparison.OrdinalIgnoreCase) ||
                    label.Equals("OYUN:",StringComparison.OrdinalIgnoreCase))
                     label=UiLanguage.English?"Game:":"Oyun:";
-                DrawText(px,label,x,y,Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
+                DrawMarquee(px,label,x,y,Scale(w.FontSize),
+                    TextAreaWidth(w),w.StrokeWidth);
                 break;
             case "GameMiniPlayer":
                 DrawGameMiniPlayer(px,w,playback);
@@ -443,25 +490,30 @@ internal static class OledRenderer
                 DrawDialWidget(px,w,dial);
                 break;
             case "SystemCpu":
-                DrawText(px,$"CPU {FormatPercent(telemetry?.Cpu)}",x,y,1);
+                DrawMarquee(px,$"CPU {FormatPercent(telemetry?.Cpu)}",
+                    x,y,Scale(w.FontSize),TextAreaWidth(w),w.StrokeWidth);
                 break;
             case "SystemRam":
-                DrawText(px,$"RAM {FormatPercent(telemetry?.Memory)}",x,y,1);
+                DrawMarquee(px,$"RAM {FormatPercent(telemetry?.Memory)}",
+                    x,y,Scale(w.FontSize),TextAreaWidth(w),w.StrokeWidth);
                 break;
             case "NetworkPing":
-                DrawText(px,$"PING {FormatPing(telemetry?.Ping)}",x,y,1);
+                DrawMarquee(px,$"PING {FormatPing(telemetry?.Ping)}",
+                    x,y,Scale(w.FontSize),TextAreaWidth(w),w.StrokeWidth);
                 break;
             case "Track":
             case "Artist":
-                DrawMarquee(px,DisplayText(w,playback),x,y,Scale(w.FontSize));
+                DrawMarquee(px,DisplayText(w,playback),x,y,Scale(w.FontSize),
+                    TextAreaWidth(w),w.StrokeWidth);
                 break;
             case "Date":
-                DrawReadableDateTime(px,DisplayText(w),x,y,
-                    Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3));
+                DrawTextWithOptionalClip(px,w,target=>
+                    DrawReadableDateTime(target,DisplayText(w),x,y,
+                        Scale(w.FontSize),Math.Clamp(w.StrokeWidth,1,3)));
                 break;
             default:
-                DrawText(px,DisplayText(w),x,y,Scale(w.FontSize),
-                    Math.Clamp(w.StrokeWidth,1,3));
+                DrawMarquee(px,DisplayText(w),x,y,Scale(w.FontSize),
+                    TextAreaWidth(w),w.StrokeWidth);
                 break;
         }
     }
@@ -480,66 +532,112 @@ internal static class OledRenderer
         int left=Math.Clamp(widget.X,0,127);
         int top=Math.Clamp(widget.Y,0,63);
         int right=Math.Min(Width,left+Math.Clamp(widget.WidgetWidth,16,128));
-        int bottom=Math.Min(Height,top+16);
+        int rows=Math.Clamp(widget.LyricLines,1,3);
+        int bottom=Math.Min(Height,top+rows*8+8);
         int baseline=top+4;
         if(right-left<16||bottom-baseline<7||lyrics.Lines.Count==0)return;
 
-        // No track-duration prefix: keep the original tiny media glyph,
-        // then use the reclaimed OLED width for the actual lyrics.
-        // Extremely narrow widgets reserve their full width for text.
         bool hasIcon=right-left>=25;
         int textLeft=left+(hasIcon?12:0);
         int available=right-textLeft;
         if(available<10)return;
-
         if(hasIcon)
         {
             int iconX=left+1,iconY=baseline;
-            for(int dy=0;dy<7;dy++)
-            for(int dx=0;dx<7;dx++)
+            for(int dy=0;dy<7;dy++)for(int dx=0;dx<7;dx++)
                 if(dx==0||dx==6||dy==0||dy==6||
-                   (dx==3&&(dy==2||dy==4))|| (dx==4&&dy==3))
+                   (dx==3&&(dy==2||dy==4))||(dx==4&&dy==3))
                     Dot(pixels,iconX+dx,iconY+dy);
         }
 
-        // Negative user offset means earlier words; positive means later.
+        // The offset applies to the ACTUAL interpolated media position
+        // before timecode lookup, wrapping, notes and transition animation.
+        // -500ms advances the lyrics; +500ms delays by half a second.
         TimeSpan at=SyncedLyricsProvider.PositionNow(playback)-
             TimeSpan.FromMilliseconds(widget.LyricOffsetMs);
-        var layout=IslandLyricsMotion.Evaluate(lyrics.Lines,at,available);
-        if(layout.CurrentIndex<0)return;
-        if(layout.Transitioning)
+        if(SyncedLyricsProvider.InstrumentalAt(lyrics.Lines,at))
         {
-            // Old line leaves upwards and vanishes via spatial dithering.
-            DrawIslandGlyphs(pixels,layout.PreviousText,
-                textLeft-layout.PreviousScrollPx,
-                baseline-layout.TransitionPx,
-                textLeft,right,top,bottom,1f-layout.Progress);
-            // New line travels from bottom into the lyric strip.
-            DrawIslandGlyphs(pixels,layout.CurrentText,
-                textLeft-layout.CurrentScrollPx,
-                baseline+IslandLyricsMotion.LineHeight-layout.TransitionPx,
-                textLeft,right,top,bottom,Math.Max(.3f,layout.Progress));
+            DrawInstrumentalNote(pixels,textLeft+2,baseline,right,bottom);
+            return;
+        }
+        var motion=IslandLyricsMotion.Evaluate(lyrics.Lines,at,available);
+        if(motion.CurrentIndex<0)return;
+        int movement=(int)Math.Round(rows*IslandLyricsMotion.LineHeight*
+            motion.Progress);
+        if(motion.Transitioning)
+        {
+            DrawLyricRows(pixels,motion.PreviousText,textLeft,
+                baseline-movement,textLeft,right,top,bottom,
+                1f-motion.Progress,rows,available,motion.PreviousScrollPx,
+                1,1,widget.StrokeWidth);
+            DrawLyricRows(pixels,motion.CurrentText,textLeft,
+                baseline+rows*IslandLyricsMotion.LineHeight-movement,
+                textLeft,right,top,bottom,Math.Max(.3f,motion.Progress),
+                rows,available,motion.CurrentScrollPx,1,1,
+                widget.StrokeWidth);
         }
         else
         {
-            DrawIslandGlyphs(pixels,layout.CurrentText,
-                textLeft-layout.CurrentScrollPx,baseline,textLeft,right,
-                top,bottom,1f);
+            long now=Math.Max(0,(long)at.TotalMilliseconds);
+            long start=(long)lyrics.Lines[motion.CurrentIndex].At.TotalMilliseconds;
+            long next=motion.CurrentIndex+1<lyrics.Lines.Count
+                ?(long)lyrics.Lines[motion.CurrentIndex+1].At.TotalMilliseconds
+                :start+5000;
+            DrawLyricRows(pixels,motion.CurrentText,textLeft,baseline,
+                textLeft,right,top,bottom,1f,rows,available,
+                motion.CurrentScrollPx,Math.Max(0,now-start),
+                Math.Max(500,next-start),widget.StrokeWidth);
+        }
+    }
+
+    private static void DrawInstrumentalNote(bool[] pixels,int x,int y,
+        int clipRight,int clipBottom)
+    {
+        // Compact 7x7 note drawn ONLY when no lyric is scheduled.
+        // This is a visual placeholder, not an extra timecoded LRC entry.
+        for(int dy=0;dy<5;dy++)
+            if(x+5<clipRight && y+dy<clipBottom)Dot(pixels,x+5,y+dy);
+        for(int dx=2;dx<=5;dx++)
+            if(x+dx<clipRight&&y<clipBottom)Dot(pixels,x+dx,y);
+        for(int dy=0;dy<2;dy++)for(int dx=0;dx<3;dx++)
+            if(dx+dy<3&&x+dx<clipRight&&y+5+dy<clipBottom)
+                Dot(pixels,x+dx,y+5+dy);
+    }
+
+    private static void DrawLyricRows(bool[] pixels,string text,
+        int x,int startY,int clipLeft,int clipRight,int clipTop,
+        int clipBottom,float opacity,int rows,int width,int singleScroll,
+        long elapsed,long duration,int stroke)
+    {
+        if(string.IsNullOrWhiteSpace(text))return;
+        int weight=Math.Clamp(stroke,1,3);
+        var segments=IslandLyricsMotion.WrapRows(text,
+            Math.Max(6,(width*6)/(6+weight-1)),rows);
+        for(int row=0;row<segments.Length;row++)
+        {
+            string segment=segments[row];
+            int scroll=rows==1&&weight==1?singleScroll:
+                IslandLyricsMotion.ScrollRow(segment,width,elapsed,duration,
+                    weight);
+            DrawIslandGlyphs(pixels,segment,x-scroll,startY+row*8,
+                clipLeft,clipRight,clipTop,clipBottom,opacity,weight);
         }
     }
 
     private static void DrawIslandGlyphs(bool[] pixels,string text,
         int startX,int startY,int clipLeft,int clipRight,
-        int clipTop,int clipBottom,float opacity)
+        int clipTop,int clipBottom,float opacity,int stroke)
     {
         if(string.IsNullOrWhiteSpace(text)||opacity<=0)return;
         string label=ToPixelAlphabet(text);
+        int weight=Math.Clamp(stroke,1,3);
+        int advance=6+weight-1;
         int keep=Math.Clamp((int)Math.Round(opacity*16),0,16);
         // Keep the raster entirely inside the widget; never spill glyphs
         // onto neighboring media widgets or the protected OEM header.
         for(int i=0;i<label.Length;i++)
         {
-            int gx0=startX+i*6;
+            int gx0=startX+i*advance;
             if(gx0>=clipRight)break;
             if(gx0+5<=clipLeft)continue;
             if(!Glyphs.TryGetValue(label[i],out var glyph))continue;
@@ -552,7 +650,9 @@ internal static class OledRenderer
                    glyph[gy][gx]!='1')continue;
                 // 4x4 distributed opacity mask for monochrome fade.
                 if(((px&3)*5+(py&3)*3)%16<keep)
-                    Dot(pixels,px,py);
+                    for(int weightX=0;weightX<weight;weightX++)
+                        if(px+weightX<clipRight)
+                            Dot(pixels,px+weightX,py);
             }
         }
     }
@@ -1047,7 +1147,7 @@ internal static class OledRenderer
 
     // A physical OLED is 128 pixels wide: text moves by actual PIXELS,
     // rather than jumping one entire character at each update.
-    public const int MarqueePixelsPerSecond=3;
+    public const int MarqueePixelsPerSecond=28;
     internal static int MarqueeOffset(int textWidth,int displayWidth,long seconds,int gap=24)
     {
         if(textWidth<=displayWidth)return 0;
@@ -1055,8 +1155,17 @@ internal static class OledRenderer
         return (int)((seconds*MarqueePixelsPerSecond)%cycle);
     }
 
+    internal static int MarqueeOffsetMs(int textWidth,int displayWidth,
+        long milliseconds,int gap=24)
+    {
+        if(textWidth<=displayWidth)return 0;
+        long cycle=textWidth+gap;
+        long pixels=(milliseconds*MarqueePixelsPerSecond/1000)%cycle;
+        return (int)((pixels+cycle)%cycle);
+    }
+
     /// <summary>
-    /// Per-second pixel marquee, optionally confined to a mini-player box.
+    /// 60 ms pixel marquee, optionally confined to a mini-player box.
     /// Text weight 1–3 is supported for the game mini player without leaking
     /// pixels outside its horizontal layout bounds.
     /// </summary>
@@ -1077,8 +1186,8 @@ internal static class OledRenderer
         int stride=labelWidth+gap;
         bool longText=labelWidth>displayWidth;
         int offset=longText
-            ?MarqueeOffset(labelWidth,displayWidth,
-                DateTimeOffset.UtcNow.ToUnixTimeSeconds(),gap)
+            ?MarqueeOffsetMs(labelWidth,displayWidth,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),gap)
             :0;
         int copies=longText?2:1;
 

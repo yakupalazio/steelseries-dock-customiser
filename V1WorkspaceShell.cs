@@ -27,8 +27,8 @@ internal sealed partial class PixelStudioForm
     private Button? modernLive,modernOriginal,modernCustom;
     private Label? modernModeLabel,modernRuntimeLabel,modernSelectedLabel;
     private Label? modernDockStatus,modernFooter,modernHint;
-    private Panel? modernCanvasHost;
-    private Control? modernTextRow,modernFontRow,modernStrokeRow;
+    private Panel? modernCanvasHost,modernWorkspaceHost;
+    private Control? modernTextRow,modernFontRow,modernStrokeRow,modernTextWidthRow;
     private Control? modernVisibleRow,modernXRow,modernYRow;
     private Control? modernDialStyleRow,modernDialWidthRow,modernWheelEditRow;
     private Control? modernBarFrameRow,modernBarFillRow;
@@ -78,7 +78,7 @@ internal sealed partial class PixelStudioForm
         top.Controls.Add(brand);
         top.Controls.Add(new Label
         {
-            Text="OLED STUDIO    •    RC 1",
+            Text="OLED STUDIO    •    RC 2",
             ForeColor=UiMuted,Font=new Font("Segoe UI",8.1f,FontStyle.Bold),
             AutoSize=true,Left=21,Top=44
         });
@@ -174,7 +174,10 @@ internal sealed partial class PixelStudioForm
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute,48));
         workspace.RowStyles.Add(new RowStyle(SizeType.Percent,48));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute,49));
-        root.Controls.Add(workspace,1,1);
+        var workspaceFrame=new Panel{Dock=DockStyle.Fill,BackColor=UiBg};
+        workspaceFrame.Controls.Add(workspace);
+        root.Controls.Add(workspaceFrame,1,1);
+        modernWorkspaceHost=workspaceFrame;
 
         var titleRow=new Panel{Dock=DockStyle.Fill,BackColor=UiBg};
         modernModeLabel=new Label{
@@ -364,12 +367,14 @@ internal sealed partial class PixelStudioForm
         modernTextRow=PropertyRow("Metin",customText);
         modernFontRow=PropertyRow("Font",fontSize);
         modernStrokeRow=PropertyRow("Kalınlık",strokeWidth);
+        modernTextWidthRow=PropertyRow("Metin eni (px)",textWidth);
         modernXRow=PropertyRow("X konumu",xPos);
         modernYRow=PropertyRow("Y konumu",yPos);
         inspector.Controls.Add(modernVisibleRow);
         inspector.Controls.Add(modernTextRow);
         inspector.Controls.Add(modernFontRow);
         inspector.Controls.Add(modernStrokeRow);
+        inspector.Controls.Add(modernTextWidthRow);
         inspector.Controls.Add(modernXRow);
         inspector.Controls.Add(modernYRow);
         modernDialStyleRow=PropertyRow("Gösterge tipi",dialStyle);
@@ -484,8 +489,12 @@ internal sealed partial class PixelStudioForm
 
     private void SelectModernMode(ScreenMode screen)
     {
-        SwitchEditingMode(screen);
-        UpdateModernUi();
+        if(screen==editingMode){UpdateModernUi();return;}
+        UiPageTransition.Swap(modernWorkspaceHost,()=>
+        {
+            SwitchEditingMode(screen);
+            UpdateModernUi();
+        },!captureMode && !traySmokeMode && modernShellInitialized);
     }
 
     private void ApplyLanguage()
@@ -560,6 +569,7 @@ if(modernHint!=null)
         if(modernTextRow!=null)modernTextRow.Visible=customText.Enabled;
         if(modernFontRow!=null)modernFontRow.Visible=fontSize.Enabled;
         if(modernStrokeRow!=null)modernStrokeRow.Visible=strokeWidth.Enabled;
+        if(modernTextWidthRow!=null)modernTextWidthRow.Visible=textWidth.Enabled;
         if(modernXRow!=null)modernXRow.Visible=selected!=null;
         if(modernYRow!=null)modernYRow.Visible=selected!=null;
         if(modernDialStyleRow!=null)
@@ -568,8 +578,8 @@ if(modernHint!=null)
             modernWheelEditRow.Visible=selected?.Kind=="VolumeChatMix" &&
                 selected.DialStyle is "Wheel" or "MiniWheel";
         if(modernDialWidthRow!=null)
-            modernDialWidthRow.Visible=selected?.Kind=="GameMiniPlayer" ||
-                (selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar");
+            modernDialWidthRow.Visible=
+                selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
         if(modernBarFrameRow!=null)modernBarFrameRow.Visible=
             selected?.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
         if(modernBarFillRow!=null)modernBarFillRow.Visible=
@@ -656,14 +666,8 @@ if(modernHint!=null)
         b.Font=new Font("Segoe UI Semibold",9.1f,FontStyle.Bold);
         b.Cursor=Cursors.Hand;
         b.Margin=new Padding(0,0,7,0);
-        b.MouseEnter+=(_,_)=>{
-            if(!b.Enabled)return;
-            b.BackColor=primary?Color.FromArgb(122,218,248):
-                Color.FromArgb(44,58,73);
-        };
-        b.MouseLeave+=(_,_)=>{
-            b.BackColor=primary?UiAccent:UiSurface;
-        };
+        // DarkButton owns the hover/press animation, avoiding instant
+        // background jumps and mismatched mouse-leave color resets.
     }
     private static void DecorateInput(Control c)
     {

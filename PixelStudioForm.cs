@@ -62,6 +62,7 @@ internal sealed partial class PixelStudioForm : Form
     private readonly DarkCheckBox liveOwnsDisplay=new(){
         Width=269,Height=34,Text="Canlıda tam ekran (128×64)",Checked=false};
     private readonly DarkNumberBox strokeWidth=new(){Minimum=1,Maximum=3,Width=85};
+    private readonly DarkNumberBox textWidth=new(){Minimum=16,Maximum=128,Value=96,Width=85};
     private readonly DarkNumberBox miniWidth=new(){Minimum=35,Maximum=128,Value=88,Width=100};
     private readonly DarkNumberBox barFrame=new(){Minimum=1,Maximum=2,Width=85};
     private readonly DarkNumberBox barFill=new(){Minimum=1,Maximum=5,Width=85};
@@ -165,7 +166,7 @@ internal sealed partial class PixelStudioForm : Form
 
     public PixelStudioForm()
     {
-        Text = "Steelseries Dock Customiser 1.1.1 RC1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 RC2 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -369,6 +370,7 @@ internal sealed partial class PixelStudioForm : Form
         customText.KeyDown += (_,e) => { if(e.KeyCode==Keys.Enter){ChangeText();e.SuppressKeyPress=true;} };
         fontSize.ValueChanged += (_,_) => ChangeNumber();
         strokeWidth.ValueChanged += (_,_) => ChangeNumber();
+        textWidth.ValueChanged += (_,_) => ChangeNumber();
         miniWidth.ValueChanged += (_,_) => ChangeNumber();
         barFrame.ValueChanged += (_,_) => ChangeNumber();
         barFill.ValueChanged += (_,_) => ChangeNumber();
@@ -696,9 +698,25 @@ internal sealed partial class PixelStudioForm : Form
         bool any=Enum.GetValues<ScreenMode>().Any(mode=>
             project.For(mode).Widgets.Any(w=>w.Visible&&
                 w.Kind is "Lyrics" or "AudioVisualizer" or "AnimatedGif"));
-        mediaVisualsNeeded=any;
-        if(any&&!animationTicker.Enabled)animationTicker.Start();
-        else if(!any&&animationTicker.Enabled)animationTicker.Stop();
+        // A fast marquee needs 60ms preview frames too, but avoid polling
+        // when every visible text fits its user-selected width.
+        bool marquee=new[]{ActiveMode,editingMode}.Distinct().Any(mode=>
+            project.For(mode).Widgets.Any(w=>w.Visible&&
+                OledRenderer.IsTextWidget(w.Kind) &&
+                OledRenderer.NeedsMarquee(w,w.Kind switch
+                {
+                    "GameTitle"=>gameSnapshot.IsRunning
+                        ?gameSnapshot.Name:"GAME NOT RUNNING",
+                    "GameMiniPlayer"=>mediaSnapshot.IsPlaying
+                        ?mediaSnapshot.Title:"PLAYING",
+                    "SystemCpu"=>"CPU 100%",
+                    "SystemRam"=>"RAM 100%",
+                    "NetworkPing"=>"PING 9999MS",
+                    _=>OledRenderer.DisplayText(w,mediaSnapshot)
+                })));
+        mediaVisualsNeeded=any||marquee;
+        if(mediaVisualsNeeded&&!animationTicker.Enabled)animationTicker.Start();
+        else if(!mediaVisualsNeeded&&animationTicker.Enabled)animationTicker.Stop();
     }
 
     private void OpenClockDateSettings()
@@ -857,10 +875,10 @@ internal sealed partial class PixelStudioForm : Form
         changeUi=true;
         bool has=selected!=null;
         customText.Enabled=has && selected!.Kind is "Custom text" or "GameLabel";
-        fontSize.Enabled=has && selected!.Kind is "Clock" or "MediaClock" or "Date" or
-            "Track" or "Artist" or "GameTitle" or "GameLabel" or
-            "GameMiniPlayer" or "Custom text";
-        strokeWidth.Enabled=fontSize.Enabled;
+        fontSize.Enabled=has && OledRenderer.IsTextWidget(selected!.Kind);
+        strokeWidth.Enabled=fontSize.Enabled||has&&selected!.Kind=="Lyrics";
+        textWidth.Enabled=strokeWidth.Enabled;
+        fontSize.Enabled=fontSize.Enabled&&selected!.Kind!="Lyrics";
         miniWidth.Enabled=has && selected!.Kind is "GameMiniPlayer" or "VolumeChatMix";
         barFrame.Enabled=has && selected!.Kind=="VolumeChatMix"&&selected.DialStyle=="Bar";
         barFill.Enabled=barFrame.Enabled;
@@ -872,6 +890,10 @@ internal sealed partial class PixelStudioForm : Form
             customText.Text=selected.Text;
             fontSize.Value=Math.Clamp(selected.FontSize,7,24);
             strokeWidth.Value=Math.Clamp(selected.StrokeWidth,1,3);
+            textWidth.Value=Math.Clamp(selected.Kind=="Lyrics"
+                ?selected.WidgetWidth:selected.Kind=="GameMiniPlayer"
+                ?selected.MiniWidth:selected.TextWidth>0
+                    ?selected.TextWidth:128-selected.X,16,128);
             miniWidth.Minimum=selected.Kind=="VolumeChatMix"?60:35;
             miniWidth.Value=Math.Clamp(selected.MiniWidth,(int)miniWidth.Minimum,128);
             barFrame.Value=Math.Clamp(selected.BarFrameThickness,1,2);
@@ -948,14 +970,28 @@ internal sealed partial class PixelStudioForm : Form
         if(changeUi||selected==null)return;
         int newX=(int)xPos.Value,newY=(int)yPos.Value,newSize=(int)fontSize.Value;
         int newWeight=(int)strokeWidth.Value;
-        int newMiniWidth=(int)miniWidth.Value;
+        int newTextWidth=(int)textWidth.Value;
+        int newMiniWidth=selected.Kind=="GameMiniPlayer"&&textWidth.Enabled
+            ?newTextWidth:(int)miniWidth.Value;
+        int effectiveWidth=selected.TextWidth>0
+            ?selected.TextWidth:Math.Clamp(128-selected.X,16,128);
+        int savedTextWidth=textWidth.Enabled && selected.Kind is not
+            ("GameMiniPlayer" or "Lyrics")
+            ?(newTextWidth==effectiveWidth?selected.TextWidth:newTextWidth)
+            :selected.TextWidth;
+        int newLyricWidth=selected.Kind=="Lyrics"&&textWidth.Enabled
+            ?newTextWidth:selected.WidgetWidth;
         int newFrame=(int)barFrame.Value,newFill=(int)barFill.Value;
         if(selected.X==newX&&selected.Y==newY&&selected.FontSize==newSize&&
            selected.StrokeWidth==newWeight&&selected.MiniWidth==newMiniWidth&&
+           selected.TextWidth==savedTextWidth&&
+           selected.WidgetWidth==newLyricWidth&&
            selected.BarFrameThickness==newFrame&&
            selected.BarFillThickness==newFill)return;
         Record();selected.X=newX;selected.Y=newY;selected.FontSize=newSize;
         selected.StrokeWidth=newWeight;selected.MiniWidth=newMiniWidth;
+        selected.TextWidth=savedTextWidth;
+        selected.WidgetWidth=newLyricWidth;
         selected.BarFrameThickness=newFrame;selected.BarFillThickness=newFill;
         RefreshWidgetList();Redraw();
     }
@@ -1020,6 +1056,7 @@ internal sealed partial class PixelStudioForm : Form
         var updated=dialog.Updated;
         Record();
         selected.LyricOffsetMs=updated.LyricOffsetMs;
+        selected.LyricLines=updated.LyricLines;
         selected.VisualizerStyle=updated.VisualizerStyle;
         selected.AudioEndpointId=updated.AudioEndpointId;
         selected.VisualizerGain=updated.VisualizerGain;
@@ -1129,7 +1166,7 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(e.Control && e.KeyCode==Keys.Z && !e.Shift){Undo();e.SuppressKeyPress=true;return;}
         if(e.Control && (e.KeyCode==Keys.Y || (e.Shift && e.KeyCode==Keys.Z))){Redo();e.SuppressKeyPress=true;return;}
-        if(ActiveControl==customText||ActiveControl==fontSize||ActiveControl==xPos||
+        if(ActiveControl==customText||ActiveControl==fontSize||ActiveControl==textWidth||ActiveControl==xPos||
            ActiveControl==yPos||ActiveControl==strokeWidth||ActiveControl==miniWidth)return;
         if(e.KeyCode==Keys.Delete){RemoveWidget();e.SuppressKeyPress=true;return;}
         if(selected==null)return;

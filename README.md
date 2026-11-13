@@ -1,4 +1,6 @@
-# Steelseries Dock Customiser — Media Preview 2 RC1 Hotfix 1
+# Steelseries Dock Customiser — RC2 Text & Motion Preview
+
+> **RC2 preview:** Metin genişliği/kalınlığı, 28 px/s akıcı kaydırma, 1/2/3 satır söz, enstrümantal nota, doğrulanmış ±ms senkronizasyonu ve yumuşak animasyonlu arayüz. Ayrıntılar: [RC2 Release Notes](RELEASE_NOTES_RC2_TEXT_AND_MOTION.md).
 
 > **RC1 Hotfix 1 (13 November 2026):** Removed the song-duration prefix from synchronized lyrics, reclaimed the width for words, and made Circular audio visualization more responsive with a bass-reactive centre and thicker stereo rays. Bars, Stereo, GIF and existing user settings are unchanged.
 

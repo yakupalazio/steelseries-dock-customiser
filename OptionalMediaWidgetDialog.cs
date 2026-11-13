@@ -76,15 +76,23 @@ internal sealed class OptionalMediaWidgetDialog:Form
 
     private void BuildLyrics()
     {
-        Note("Dynamic Island benzeri: süre ve küçük ikon solda sabit "+
+        Note("Dynamic Island benzeri: küçük medya ikonu solda sabit "+
             "kalır. Uzun sözler sola kayar; yeni satır alttan yukarı "+
             "geçerek görünür. Kaynak: Windows medya oturumu + LRCLIB.");
         var offset=Number(-10000,10000,10,Updated.LyricOffsetMs);
         Row("Senkron kaydırma (ms)",offset);
-        Note("Negatif değer sözleri erkene alır. Pozitif değer geç gösterir. "+
-            "10 ms adımlarla ayarlanabilir; fiziksel dock'un yenilemesi "+
-            "10 ms hassasiyet garanti etmez.");
+        Note("Negatif değer sözleri erkene alır; pozitif değer geç gösterir. "+
+            "Örneğin -500 ms yarım saniye erken, +500 ms geç görünür. "+
+            "10 ms adımlar matematiksel olarak uygulanır; dock'un gerçek "+
+            "yenileme hızı bu hassasiyeti garanti etmez.");
         offset.ValueChanged+=(_,_)=>Updated.LyricOffsetMs=(int)offset.Value;
+        var rowCount=Combo("1 satır","2 satır","3 satır");
+        rowCount.SelectedIndex=Math.Clamp(Updated.LyricLines,1,3)-1;
+        Row("Görüntülenecek satır",rowCount);
+        rowCount.SelectedIndexChanged+=(_,_)=>Updated.LyricLines=
+            Math.Clamp(rowCount.SelectedIndex+1,1,3);
+        Note("Şarkı sözleri kelime sınırında 2 veya 3 satıra bölünür. "+
+            "Enstrümantal aralıklarda yalnızca nota gösterilir.");
         var width=Number(16,128,1,Updated.WidgetWidth);
         Row("Yazı alanı genişliği",width);
         width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
@@ -185,7 +193,7 @@ internal sealed class OptionalMediaWidgetDialog:Form
             "kare hızıyla çizilir. Kaynak GIF yeniden kodlanmaz.");
     }
 
-    private static Button Button(string title)=>new(){
+    private static Button Button(string title)=>new DarkButton(){
         Text=title,Width=174,Height=35,BackColor=Color.FromArgb(38,68,82),
         ForeColor=TextColor,FlatStyle=FlatStyle.Flat,Margin=new Padding(3,6,5,4)
     };

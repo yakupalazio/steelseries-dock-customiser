@@ -220,8 +220,8 @@ internal static class SelfTests
                 throw new Exception("Phone Link parser accepted non-battery or invalid data");
             // Continuous OLED marquee must advance by real pixels each second.
             if(OledRenderer.MarqueeOffset(210,80,0)!=0 ||
-                OledRenderer.MarqueeOffset(210,80,1)!=3 ||
-                OledRenderer.MarqueeOffset(210,80,2)!=6 ||
+                OledRenderer.MarqueeOffset(210,80,1)!=28 ||
+                OledRenderer.MarqueeOffset(210,80,2)!=56 ||
                 OledRenderer.MarqueeOffset(18,80,10)!=0)
                 throw new Exception("Per-second pixel marquee timing failed");
             // Phone ADB provider parses only system battery output, not demo percentages.
@@ -1179,6 +1179,7 @@ internal static class SelfTests
             Console.WriteLine("PASS: Phone Link battery parser, optional read-only dial widget");
             Console.WriteLine("PASS: charging icon appears only for confirmed charging");
             Beta5SelfTests.Run();
+            ReleaseTextMotionSelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

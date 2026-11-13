@@ -104,7 +104,7 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO • RC1", Left = 18, Top = 704,
+            Text = "OLED STUDIO • RC2", Left = 18, Top = 704,
             Width = 180, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 7.6f)
         });
@@ -138,7 +138,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.1.1 RC1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.1.1 RC2\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });
@@ -285,22 +285,28 @@ internal sealed class SettingsDialog : Form
             contentHost.Controls.Add(displayPage);
         }
 
+        int currentPage=-1;
         void SwitchPage(int page)
         {
-            aboutActive=page==2;
-            content.Visible=aboutActive;
-            languagePage.Visible=page==0;
-            if(batteryPage!=null)batteryPage.Visible=page==1;
-            if(displayPage!=null)displayPage.Visible=page==3;
-            foreach(var (button,active) in new[]{
-                (languageItem,page==0),(aboutItem,page==2),
-                (batteryButton,page==1),(displayButton,page==3)})
+            if(page==currentPage)return;
+            UiPageTransition.Swap(contentHost,()=>
             {
-                if(button==null)continue;
-                button.BackColor=active?Color.FromArgb(38,68,82):Surface;
-                button.ForeColor=active?Accent:Muted;
-            }
-            if(page==1)batteryEditor?.UpdateRows();
+                currentPage=page;
+                aboutActive=page==2;
+                content.Visible=aboutActive;
+                languagePage.Visible=page==0;
+                if(batteryPage!=null)batteryPage.Visible=page==1;
+                if(displayPage!=null)displayPage.Visible=page==3;
+                foreach(var (button,active) in new[]{
+                    (languageItem,page==0),(aboutItem,page==2),
+                    (batteryButton,page==1),(displayButton,page==3)})
+                {
+                    if(button==null)continue;
+                    button.BackColor=active?Color.FromArgb(38,68,82):Surface;
+                    button.ForeColor=active?Accent:Muted;
+                }
+                if(page==1)batteryEditor?.UpdateRows();
+            },!captureMode);
         }
         selectPageForCapture=SwitchPage;
         languageItem.Click+=(_,_)=>SwitchPage(0);

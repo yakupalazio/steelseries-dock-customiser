@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace SteelseriesDockCustomiser;
@@ -146,26 +147,113 @@ internal sealed class DarkCheckBox : CheckBox
 /// </summary>
 internal sealed class DarkButton : Button
 {
+    private System.Windows.Forms.Timer? motion;
+    private Color? paintedBase;
+    private float hoverLevel;
+    private bool motionHooked;
+    private bool pointerInside,pressed;
     public DarkButton()
     {
         SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|
-            ControlStyles.OptimizedDoubleBuffer,true);
+            ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);
         FlatStyle=FlatStyle.Flat;
+        FlatAppearance.BorderSize=0;
+        Cursor=Cursors.Hand;
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {base.OnMouseEnter(e);pointerInside=true;EnsureMotion();}
+    protected override void OnMouseLeave(EventArgs e)
+    {base.OnMouseLeave(e);pointerInside=false;pressed=false;EnsureMotion();}
+    protected override void OnMouseDown(MouseEventArgs e)
+    {base.OnMouseDown(e);pressed=e.Button==MouseButtons.Left;EnsureMotion();}
+    protected override void OnMouseUp(MouseEventArgs e)
+    {base.OnMouseUp(e);pressed=false;EnsureMotion();}
+    protected override void OnBackColorChanged(EventArgs e)
+    {base.OnBackColorChanged(e);EnsureMotion();}
+    protected override void OnEnabledChanged(EventArgs e)
+    {base.OnEnabledChanged(e);Invalidate();}
+
+    private void EnsureMotion()
+    {
+        if(!IsHandleCreated||IsDisposed)return;
+        motion??=new System.Windows.Forms.Timer{Interval=16};
+        if(!motionHooked)
+        {
+            motionHooked=true;
+            motion.Tick+=(_,_)=>
+            {
+                float goal=Enabled&&pointerInside?(pressed?.43f:1f):0f;
+                hoverLevel+=(goal-hoverLevel)*.35f;
+                Color target=BackColor;
+                Color current=paintedBase??target;
+                paintedBase=Mix(current,target,.35f);
+                Invalidate();
+                if(Math.Abs(hoverLevel-goal)<.015f&&
+                   paintedBase.Value.ToArgb()==target.ToArgb())
+                    motion.Stop();
+                else if(Math.Abs(hoverLevel-goal)<.015f&&
+                        ChannelDistance(paintedBase.Value,target)<3)
+                {
+                    hoverLevel=goal;paintedBase=target;
+                    Invalidate();motion.Stop();
+                }
+            };
+        }
+        if(paintedBase is null)paintedBase=BackColor;
+        if(!motion.Enabled)motion.Start();
+    }
+    private static int ChannelDistance(Color a,Color b)=>
+        Math.Abs(a.R-b.R)+Math.Abs(a.G-b.G)+Math.Abs(a.B-b.B);
+    private static Color Mix(Color a,Color b,float ratio)
+    {
+        ratio=Math.Clamp(ratio,0,1);
+        return Color.FromArgb(
+            (int)Math.Round(a.R+(b.R-a.R)*ratio),
+            (int)Math.Round(a.G+(b.G-a.G)*ratio),
+            (int)Math.Round(a.B+(b.B-a.B)*ratio));
+    }
+    private static GraphicsPath Rounded(RectangleF r,float radius)
+    {
+        float d=Math.Min(Math.Max(1,radius*2),Math.Min(r.Width,r.Height));
+        var path=new GraphicsPath();
+        path.AddArc(r.X,r.Y,d,d,180,90);
+        path.AddArc(r.Right-d,r.Y,d,d,270,90);
+        path.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);
+        path.AddArc(r.X,r.Bottom-d,d,d,90,90);
+        path.CloseFigure();
+        return path;
     }
     protected override void OnPaint(PaintEventArgs e)
     {
-        var area=ClientRectangle;
-        using(var background=new SolidBrush(BackColor))
-            e.Graphics.FillRectangle(background,area);
-        if(FlatAppearance.BorderSize>0)
+        e.Graphics.Clear(Parent?.BackColor??Color.FromArgb(19,26,37));
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        var rect=new RectangleF(.7f,.7f,Math.Max(1,Width-1.4f),
+            Math.Max(1,Height-1.4f));
+        using var rounded=Rounded(rect,Math.Min(9f,Height*.26f));
+        Color background=paintedBase??BackColor;
+        Color hoverTint=pressed?Color.FromArgb(10,19,29):
+            Color.FromArgb(102,199,228);
+        background=Mix(background,hoverTint,hoverLevel*(pressed?.32f:.16f));
+        if(!Enabled)background=Mix(background,
+            Parent?.BackColor??Color.FromArgb(19,26,37),.38f);
+        using(var fill=new SolidBrush(background))
+            e.Graphics.FillPath(fill,rounded);
+        Color outline=FlatAppearance.BorderSize>0
+            ?FlatAppearance.BorderColor:Color.FromArgb(53,72,90);
+        outline=Mix(outline,Color.FromArgb(102,199,228),hoverLevel*.45f);
+        using(var stroke=new Pen(outline,1f))
+            e.Graphics.DrawPath(stroke,rounded);
+        if(Focused&&ShowFocusCues)
         {
-            using var border=new Pen(FlatAppearance.BorderColor);
-            e.Graphics.DrawRectangle(border,0,0,Math.Max(0,Width-1),Math.Max(0,Height-1));
+            using var focus=new Pen(Color.FromArgb(145,216,241),1f)
+            {DashStyle=DashStyle.Dot};
+            e.Graphics.DrawPath(focus,rounded);
         }
         TextFormatFlags alignment=TextAlign switch
         {
-            System.Drawing.ContentAlignment.MiddleLeft=>TextFormatFlags.Left,
-            System.Drawing.ContentAlignment.MiddleRight=>TextFormatFlags.Right,
+            ContentAlignment.MiddleLeft=>TextFormatFlags.Left,
+            ContentAlignment.MiddleRight=>TextFormatFlags.Right,
             _=>TextFormatFlags.HorizontalCenter
         };
         TextRenderer.DrawText(e.Graphics,Text,Font,
@@ -174,6 +262,11 @@ internal sealed class DarkButton : Button
             Enabled?ForeColor:Color.FromArgb(89,110,129),
             TextFormatFlags.VerticalCenter|alignment|TextFormatFlags.EndEllipsis|
             TextFormatFlags.NoPrefix);
+    }
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing){motion?.Stop();motion?.Dispose();motion=null;}
+        base.Dispose(disposing);
     }
 }
 

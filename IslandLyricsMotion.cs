@@ -67,6 +67,35 @@ internal static class IslandLyricsMotion
             eased,line.Text,prior);
     }
 
+    internal static string[] WrapRows(string text,int availablePixels,int rows)
+    {
+        rows=Math.Clamp(rows,1,3);
+        int limit=Math.Max(1,availablePixels/6);
+        var output=new List<string>(rows);
+        string remaining=text.Trim();
+        for(int row=0;row<rows-1 && remaining.Length>0;row++)
+        {
+            if(remaining.Length<=limit)break;
+            int split=remaining.LastIndexOf(' ',Math.Min(limit,remaining.Length-1));
+            if(split<=0)split=limit;
+            output.Add(remaining[..split].Trim());
+            remaining=remaining[split..].TrimStart();
+        }
+        if(remaining.Length>0)output.Add(remaining);
+        return output.ToArray();
+    }
+
+    internal static int ScrollRow(string text,int viewportWidth,
+        long elapsed,long duration,int weight=1)
+    {
+        int advance=6+Math.Clamp(weight,1,3)-1;
+        int travel=Math.Max(0,text.Length*advance-1-viewportWidth);
+        if(travel==0)return 0;
+        long moveDuration=Math.Max(360,duration-420);
+        double phase=Math.Clamp((elapsed-180.0)/moveDuration,0.0,1.0);
+        return (int)Math.Round(travel*phase);
+    }
+
     private static int Scroll(string text,int viewportWidth,
         long elapsed,long duration)
     {

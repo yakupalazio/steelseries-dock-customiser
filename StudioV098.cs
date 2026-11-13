@@ -314,6 +314,8 @@ internal sealed class StudioProject
             w.FontSize=Math.Clamp(w.FontSize,7,24);
             w.Text=(w.Text??"")[..Math.Min(w.Text?.Length??0,160)];
             w.LyricOffsetMs=Math.Clamp(w.LyricOffsetMs,-10000,10000);
+            w.LyricLines=Math.Clamp(w.LyricLines,1,3);
+            w.TextWidth=Math.Clamp(w.TextWidth,0,128);
             w.VisualizerStyle=w.VisualizerStyle is "Bars" or "Stereo" or "Circular"
                 ?w.VisualizerStyle:"Bars";
             w.AudioEndpointId=(w.AudioEndpointId??"")[..
