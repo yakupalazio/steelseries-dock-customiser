@@ -1,3 +1,7 @@
+# SteelSeries Dock Customiser — Public Beta 1 (Windows x64)
+
+> **New:** Beta 1 feedback hand-off opens public GitHub Issue forms (with a separate optional screenshot upload that the tester confirms). The app never silently uploads a report or embeds a GitHub credential. Windows x64 single-file beta is self-contained. Refer to [BETA_TESTING.md](BETA_TESTING.md) and [RELEASE_NOTES_BETA1_PUBLIC.md](RELEASE_NOTES_BETA1_PUBLIC.md). The bundled ZIP excludes the private dock photograph and any third-party SDK binary; all source remains in the developer's local working tree.
+
 # SteelSeries Dock Customiser — RC7.2 UI/Phone/Lyrics Hotfix (PRIVATE TEST)
 
 > RC7.2 keeps the compact Profile Manager with a fixed, fully visible Close footer and saved-layout mini OLED preview; fixes the separate Battery Settings Save footer, the lyric transition choice unexpectedly reverting to Slide, and the old PALE TORTURED / DRACONIAN demo fallback (now No media playing). It adds per-connected-device icon presets or local 11x11 import, safer unique phone deduplication and phone glyphs, correct Quick Guide highlight coordinates including the WinForms title-bar crop, plus a crisp simulated 128x10 USB-1 OLED reference (the real dock firmware-owned rows remain untouched). The user's ATK 373B:101A CompX battery was observed at 90% on the development PC. Other-brand device battery support still requires verification. See [RC7.2 hotfix notes](RELEASE_NOTES_RC72_UI_HOTFIX.md). No user settings, public release or previous private ZIP changed.

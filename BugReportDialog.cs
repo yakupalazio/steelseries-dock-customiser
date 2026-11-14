@@ -49,8 +49,8 @@ internal static class BugReportService
         if(!string.IsNullOrEmpty(attachedFile))
         {
             var source=new FileInfo(attachedFile);
-            if(!source.Exists||source.Length>2_000_000)
-                throw new InvalidDataException("Ekran görüntüsü 2 MB'dan küçük olmalı.");
+            if(!source.Exists||source.Length>8_000_000)
+                throw new InvalidDataException("Ekran görüntüsü 8 MB'dan küçük olmalı.");
             var extension=source.Extension.ToLowerInvariant();
             if(extension is not (".png" or ".jpg" or ".jpeg"))
                 throw new InvalidDataException("Yalnızca PNG/JPG ekran görüntüsü ekleyebilirsin.");
@@ -75,9 +75,9 @@ internal static class BugReportService
             }
             using var output=new MemoryStream();
             clean.Save(output,ImageFormat.Png);
-            if(output.Length>2_000_000)
+            if(output.Length>8_000_000)
                 throw new InvalidDataException(
-                    "Temizlenen ekran görüntüsü 2 MB sınırını aşıyor.");
+                    "Temizlenen ekran görüntüsü 8 MB sınırını aşıyor.");
             encoded=Convert.ToBase64String(output.ToArray());
             name="screenshot.png";
         }
@@ -158,10 +158,11 @@ internal sealed class BugReportDialog:Form
         Text="Windows sürümünü tanılama bilgisine ekle",
         Left=30,Top=438,Width=590,Height=35,Checked=false};
     private readonly Label fileLabel=new(){
-        Left=183,Top=483,Width=434,Height=34,AutoEllipsis=true};
+        Left=368,Top=483,Width=245,Height=34,AutoEllipsis=true};
     private readonly Label result=new(){
-        Left=30,Top=570,Width=595,Height=38,AutoEllipsis=true};
+        Left=30,Top=573,Width=595,Height=59,AutoEllipsis=true};
     private string? file;
+    private GitHubFeedbackBridge.Prepared? prepared;
     internal BugReportDialog()
     {
         UiPolish.Register(this);
@@ -169,7 +170,7 @@ internal sealed class BugReportDialog:Form
         BackColor=Color.FromArgb(13,18,26);
         ForeColor=Color.FromArgb(235,242,248);
         Font=new Font("Segoe UI",10);
-        ClientSize=new Size(650,618);
+        ClientSize=new Size(650,645);
         FormBorderStyle=FormBorderStyle.FixedDialog;
         StartPosition=FormStartPosition.CenterParent;
         MaximizeBox=false;MinimizeBox=false;
@@ -177,8 +178,9 @@ internal sealed class BugReportDialog:Form
             Height=43,Width=550,
             Font=new Font("Segoe UI Semibold",23f,FontStyle.Bold)});
         Controls.Add(new Label{
-            Text="Raporların daha hızlı düzeltilmesine yardımcı ol. "+
-                "Hangi bilgileri göndereceğin senin kontrolünde.",
+            Text="Beta geri bildirimi GitHub Issues'da herkese açık "+
+                "paylaşılır. Gönderim öncesinde metni ve görseli kontrol et. "+
+                "GitHub hesabıyla giriş yapılması gerekir.",
             Left=30,Top=73,Width=590,Height=52,ForeColor=muted});
         Controls.Add(Label("Kategori",132));Controls.Add(category);
         category.FormattingEnabled=true;
@@ -200,12 +202,69 @@ internal sealed class BugReportDialog:Form
                 CheckFileExists=true,Title="İsteğe bağlı ekran görüntüsü seç"};
             if(picker.ShowDialog(this)!=DialogResult.OK)return;
             file=picker.FileName;
-            fileLabel.Text=Path.GetFileName(file)+" (en fazla 2 MB)";
+            fileLabel.Text=Path.GetFileName(file)+" (en fazla 8 MB)";
         };
         fileLabel.ForeColor=muted;
-        Controls.Add(fileLabel);Controls.Add(attach);
-        var send=Button("Raporu gönder / kaydet",390,526,228);
-        send.Click+=async (_,_)=>
+        fileLabel.Cursor=Cursors.Hand;
+        fileLabel.Click+=(_,_)=>{
+            if(prepared?.CleanScreenshot is not string png)return;
+            try{
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo{
+                        FileName="explorer.exe",
+                        Arguments="/select,\""+png+"\"",
+                        UseShellExecute=true
+                    })?.Dispose();
+            }
+            catch{}
+        };
+        Controls.Add(fileLabel);
+        Controls.Add(attach);
+
+        var copyImage=Button(UiLanguage.English
+            ?"Copy clean image":"Temiz görseli kopyala",183,480,175);
+        copyImage.Enabled=false;
+        copyImage.Click+=(_,_) =>
+        {
+            if(prepared?.CleanScreenshot is not string png)return;
+            try
+            {
+                using var fileImage=Image.FromFile(png);
+                using var cleanBitmap=new Bitmap(fileImage);
+                Clipboard.SetImage(cleanBitmap);
+                result.ForeColor=Color.FromArgb(133,199,236);
+                result.Text=UiLanguage.English
+                    ?"Image copied. Paste it into the GitHub issue upload field, "+
+                      "then press Submit new issue."
+                    :"Görsel panoda. GitHub'daki dosya alanına yapıştır, "+
+                      "ardından Submit new issue düğmesine bas.";
+            }
+            catch(Exception ex) when(ex is IOException or ArgumentException
+                or System.Runtime.InteropServices.ExternalException)
+            {
+                result.ForeColor=Color.FromArgb(248,146,130);
+                result.Text=ex.Message;
+            }
+        };
+        Controls.Add(copyImage);
+
+        var copyDetails=Button(UiLanguage.English
+            ?"Copy full description":"Açıklamayı kopyala",30,526,208);
+        copyDetails.Click+=(_,_) =>
+        {
+            try{Clipboard.SetText(description.Text);}
+            catch{return;}
+            result.ForeColor=muted;
+            result.Text=UiLanguage.English
+                ?"Full description copied; paste in GitHub before submitting."
+                :"Tam açıklama kopyalandı; göndermeden önce GitHub'a yapıştır.";
+        };
+        Controls.Add(copyDetails);
+
+        var send=Button(UiLanguage.English
+            ?"Open GitHub report form":"GitHub bildirim formunu aç",
+            304,526,314);
+        send.Click+=(_,_) =>
         {
             send.Enabled=false;
             try
@@ -213,35 +272,50 @@ internal sealed class BugReportDialog:Form
                 var report=BugReportService.Compose(
                     title.Text,category.SelectedItem?.ToString()??"",
                     description.Text,includeSystem.Checked,file);
-                var response=await BugReportService.SubmitAsync(report);
-                result.Text=UiLanguage.T(response.Message);
-                result.ForeColor=response.Uploaded
-                    ?Color.FromArgb(97,218,168):Color.FromArgb(244,195,115);
-                if(!response.Uploaded&&response.LocalPath!=null)
-                    new ToolTip{AutoPopDelay=12000}.SetToolTip(result,response.LocalPath);
+                prepared=GitHubFeedbackBridge.Prepare(report);
+                copyImage.Enabled=prepared.CleanScreenshot is not null;
+                if(prepared.CleanScreenshot is string localScreenshot)
+                {
+                    fileLabel.Text=UiLanguage.English
+                        ?"Screenshot ready (click to locate)"
+                        :"Temiz görsel hazır (klasörde göster)";
+                    new ToolTip{AutoPopDelay=12000}.SetToolTip(
+                        copyImage,localScreenshot);
+                }
+                GitHubFeedbackBridge.OpenBrowser(prepared);
+                result.ForeColor=Color.FromArgb(244,195,115);
+                result.Text=prepared.NeedsFullDescriptionPaste
+                    ?(UiLanguage.English
+                        ?"GitHub opened. The description is too long for the URL: "+
+                          "Copy full description, attach image and submit there."
+                        :"GitHub açıldı. Metin uzun: açıklamayı kopyala, "+
+                          "görseli ekle ve GitHub'da gönder.")
+                    :(UiLanguage.English
+                        ?"GitHub opened; add your screenshot and press Submit "+
+                          "new issue. Nothing has been sent yet."
+                        :"GitHub açıldı; görseli ekleyip Submit new issue'ya "+
+                          "bas. Henüz hiçbir rapor gönderilmedi.");
             }
             catch(Exception ex) when(ex is ArgumentException or
                 InvalidDataException or IOException or UnauthorizedAccessException
-                or System.Runtime.InteropServices.ExternalException)
+                or InvalidOperationException or
+                System.ComponentModel.Win32Exception or
+                System.Runtime.InteropServices.ExternalException)
             {
                 result.ForeColor=Color.FromArgb(248,146,130);
-                result.Text=ex.Message;
+                result.Text=(UiLanguage.English
+                    ?"Could not prepare/open GitHub report: "
+                    :"GitHub formu hazırlanamadı/açılamadı: ")+ex.Message;
             }
             finally {send.Enabled=true;}
         };
         Controls.Add(send);Controls.Add(result);
-        if(BugReportService.Endpoint() is null)
-        {
-            result.ForeColor=Color.FromArgb(244,195,115);
-            result.Text="Şu anda rapor sunucusu bağlı değil. Raporun gönderilmeden "+
-                "yerel taslak olarak saklanacak.";
-        }
-        else
-        {
-            result.ForeColor=muted;
-            result.Text="Yalnızca seçtiğin açıklama, ekran görüntüsü ve "+
-                "izin verdiğin teknik bilgiler gönderilir.";
-        }
+        result.ForeColor=muted;
+        result.Text=UiLanguage.English
+            ?"Signed-in GitHub account required. Form and file are public "+
+              "only after you submit on GitHub."
+            :"GitHub hesabı gereklidir. Rapor ve görsel yalnızca GitHub'da "+
+              "sen gönderince herkese açık olur.";
         UiLanguage.ApplyTree(this);
     }
     private Label Label(string text,int y)=>new(){
