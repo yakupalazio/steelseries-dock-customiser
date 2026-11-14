@@ -43,7 +43,7 @@ internal static class PeripheralBatteryProviderRegistry
     // Neither a vendor application nor SDK is installed/started by us.
     private static readonly IPeripheralBatteryProvider[] Providers=[
         new BleGatt(),new WindowsBluetooth(),new StandardHid(),
-        new CorsairIcueBatteryProvider()
+        new CorsairIcueBatteryProvider(),new CompxWirelessBatteryProvider()
     ];
 
     private static async Task<IReadOnlyList<BatteryReading>> ReadBounded(

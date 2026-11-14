@@ -1,6 +1,7 @@
 # Third-party notices
 
 - **NAudio.Wasapi / NAudio.Core 3.3.0**, <https://github.com/naudio/NAudio>: MIT licensed libraries for optional, read-only Windows system output loopback. Audio sample bytes are processed only in memory for the active visualizer widget; no audio file is recorded. Complete MIT license copied from the upstream NAudio repository in `THIRD_PARTY_LICENSES/NAudio-MIT-LICENSE.txt`.
+- **Halo Battery Compx battery protocol documentation**, <https://github.com/HeyOkay/HaloBattery/blob/main/docs/protocols.md> (HaloBattery is MIT licensed: <https://github.com/HeyOkay/HaloBattery/blob/main/LICENSE>): public hardware status-frame descriptions and independently collected tester reports were consulted for the 17-byte 0x08/0x04 battery-only Compx protocol. Dock Customiser independently implements the C# protocol adapter; HaloBattery Python and OpenMouse AGPL source code are **not** bundled, linked or copied. No manufacturer configuration/firmware command is used.
 - **GGIF Studio** <https://github.com/D4rkTT/GGIF-Studio>: MIT project consulted as an architecture and dithering **reference only**. Its Electron/TypeScript source code was not copied or included. The app has its own standalone C# implementation.
 - **LRCLIB** <https://lrclib.net/docs>: voluntary external lyrics service called only when a user enables the optional lyrics widget; no lyrics corpus or track-specific data is bundled. Users should respect applicable lyrics rights.
 

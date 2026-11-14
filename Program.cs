@@ -82,6 +82,28 @@ internal static class Program
                 $"{devices.Count(d=>d.Percent.HasValue)} verified readings.");
             return;
         }
+        if(args.Contains("--compx-inspect"))
+        {
+            // HID interface metadata only: no output/feature report.
+            foreach(string line in
+                CompxWirelessBatteryProvider.DescribeDetectedInterfaces())
+                Console.WriteLine(line);
+            Console.WriteLine("No battery requests sent by --compx-inspect.");
+            return;
+        }
+        if(args.Contains("--compx-power-probe"))
+        {
+            // Explicit diagnostic mode. This uses only the documented
+            // 0x08/0x04 power query against exact whitelist + ff02:0002.
+            var reader=new CompxWirelessBatteryProvider();
+            var results=reader.ReadAsync().GetAwaiter().GetResult();
+            foreach(var reading in results)
+                Console.WriteLine($"{reading.FriendlyName}: "+
+                    $"{reading.Display} | "+reading.Source+" | "+
+                    reading.Detail);
+            Console.WriteLine(CompxWirelessBatteryProvider.LastDiagnostic);
+            return;
+        }
         if(args.Contains("--battery-scan") || args.Contains("--battery-scan-file"))
         {
             var snapshot=BatterySources.PollAsync().GetAwaiter().GetResult();

@@ -314,6 +314,16 @@ internal static class WirelessCompatibilityCatalog
             "Alıcı kimliği tanındı; canlı pil okuyucusu henüz doğrulanmadı",
             "documented-receiver");
 
+        // Shared receiver labels are deliberately NOT promoted to an
+        // unverified physical mouse model in the blind ATK hardware test.
+        if(vendorId==0x373B&&productId==0x101A)
+            return new("ATK",null,"Mouse",
+                "CompX 0x04 live battery reader installed; query pending",
+                "protocol-dongle");
+        if(vendorId==0x373B&&productId==0x101B)
+            return new("ATK",null,"Mouse",
+                "Experimental CompX battery reader; needs hardware test",
+                "protocol-dongle");
         if(vendorId==0x373B&&productId==0x10C9)
             return Exact("ATK","A9 Plus");
         if(vendorId==0x36A7)

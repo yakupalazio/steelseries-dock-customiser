@@ -180,6 +180,9 @@ internal sealed class WirelessCompatibilityDialog:Form
                 "SteelSeries"=>en
                     ?"GG / Bluetooth: depends on verified device":
                     "GG / Bluetooth: doğrulanan cihaza bağlı",
+                "ATK" or "Pulsar"=>en
+                    ?"CompX: only supported exact receiver IDs":
+                    "CompX: yalnızca desteklenen kesin alıcı kimlikleri",
                 "Corsair"=>en
                     ?"iCUE SDK: supported models only":
                     "iCUE SDK: yalnızca desteklenen modeller",

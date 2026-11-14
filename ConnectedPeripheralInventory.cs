@@ -238,15 +238,19 @@ internal static class ConnectedPeripheralInventory
                 x=>!string.IsNullOrWhiteSpace(x))??"";
             var recognized=WirelessCompatibilityCatalog.Recognize(
                 name,maker,connection);
-            if(recognized is null)
-            {
-                var identity=group.Select(x=>
-                    WirelessCompatibilityCatalog.ReadHardwareId(x.HardwareId))
-                    .FirstOrDefault(x=>x.HasValue);
-                if(identity.HasValue)
-                    recognized=WirelessCompatibilityCatalog.RecognizeUsbIdentity(
-                        identity.Value.Vid,identity.Value.Pid);
-            }
+            // Some generic 1K dongles expose only a brand name. Prefer
+            // an explicit, documented USB battery reader over a brand-only
+            // guess, while keeping the physical mouse model unknown.
+            var usbId=group.Select(x=>
+                WirelessCompatibilityCatalog.ReadHardwareId(x.HardwareId))
+                .FirstOrDefault(x=>x.HasValue);
+            bool compx=usbId.HasValue &&
+                CompxWirelessBatteryProvider.FindReceiver(
+                    usbId.Value.Vid,usbId.Value.Pid) is not null;
+            if(usbId.HasValue&&
+               (recognized is null||!recognized.ExactModel))
+                recognized=WirelessCompatibilityCatalog.RecognizeUsbIdentity(
+                    usbId.Value.Vid,usbId.Value.Pid)??recognized;
             string? kind=RecognizedKind(name);
             if(LocalBatteryDeviceNames.ClassifyConnectedBluetooth(name)=="Phone")
                 kind=phoneCount==1?"Phone":null;
@@ -284,16 +288,21 @@ internal static class ConnectedPeripheralInventory
             rows.Add(new ConnectedPeripheral(group.Key,name,connection,maker,
                 reading?.IconKind?.Length>0?reading.IconKind:icon,
                 reading?.Percent,
-                reading?.Source??(recognized is null
+                reading?.Source??(compx
+                    ?"CompX pil okuyucusu":recognized is null
                     ?"Pil bilgisi okunamadı":"Kablosuz cihaz kütüphanesi"),
-                reading?.Detail??(recognized is null
-                    ?"Bağlı; güncel pil yüzdesi sağlanmıyor. "+
-                     "Cihaz pilli olmayabilir veya üreticiye özel protokol gerektirebilir."
-                    :recognized.ExactModel
-                        ?"Tanınan model: "+recognized.Name+
-                         ". Canlı pil okuyucusu doğrulanmadı; yüzde gösterilmiyor."
-                        :"Tanınan marka: "+recognized.Brand+
-                         ". Model ve pil protokolü henüz doğrulanmadı."),
+                reading?.Detail??(compx
+                    ?"CompX pil sorgusu destekleniyor, ancak geçerli yanıt "+
+                      "alınamadı. Fareyi hareket ettirip yeniden dene. "+
+                      CompxWirelessBatteryProvider.LastDiagnostic
+                    :recognized is null
+                        ?"Bağlı; güncel pil yüzdesi sağlanmıyor. "+
+                         "Cihaz pilli olmayabilir veya üreticiye özel protokol gerektirebilir."
+                        :recognized.ExactModel
+                            ?"Tanınan model: "+recognized.Name+
+                             ". Canlı pil okuyucusu doğrulanmadı; yüzde gösterilmiyor."
+                            :"Tanınan marka: "+recognized.Brand+
+                             ". Model ve pil protokolü henüz doğrulanmadı."),
                 kind)
             {
                 HardwareSummary=group.Select(item=>

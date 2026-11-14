@@ -1188,6 +1188,7 @@ internal static class SelfTests
             ReleaseSevenUiSelfTests.Run();
             WirelessCatalogSelfTests.Run();
             WindowsBluetoothBatterySelfTests.Run();
+            CompxBatterySelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

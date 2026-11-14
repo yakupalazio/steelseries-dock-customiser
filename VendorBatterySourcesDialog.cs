@@ -22,6 +22,10 @@ internal sealed class VendorBatterySourcesDialog:Form
             return [
                 new("SteelSeries GG","Local Engine API",
                     "Built in","Nova Pro headset/spare status from verified GG"),
+                new("ATK / VXE / Pulsar","CompX 0x04 battery-status HID",
+                    "Built in for exact receiver IDs; hardware varies",
+                    "27 positive-listed USB IDs, FF02:0002; mouse must be "+
+                    "awake. No generic vendor-ID probing or configuration."),
                 new("Corsair iCUE","Official SDK BatteryLevel",
                     corsair?"SDK library found":"Optional SDK file required",
                     "iCUE 4.31+; official x64 SDK, read-only, supported devices"),
@@ -50,6 +54,10 @@ internal sealed class VendorBatterySourcesDialog:Form
         return [
             new("SteelSeries GG","Yerel Engine API",
                 "Yerleşik","Nova Pro ana ve yedek pil: doğrulanmış GG durumu"),
+            new("ATK / VXE / Pulsar","CompX 0x04 pil durumu HID",
+                "Kesin alıcı kimliklerinde yerleşik; cihaz testi gerekli",
+                "27 izinli USB kimliği, FF02:0002; fare uyanık olmalı. "+
+                "Bilinmeyen cihaza HID komutu veya yapılandırma gönderilmez."),
             new("Corsair iCUE","Resmî SDK BatteryLevel",
                 corsair?"SDK dosyası bulundu":"İsteğe bağlı SDK dosyası gerekli",
                 "iCUE 4.31+; resmî x64 SDK, salt-okunur, uygun cihazlar"),
