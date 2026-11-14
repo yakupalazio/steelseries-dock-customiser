@@ -1,0 +1,64 @@
+name: "Beta bug report / Hata bildirimi"
+description: "Report a bug in Dock Customiser beta / Beta sürümündeki hataları bildirin."
+title: "[Beta bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing Dock Customiser! / Test ettiğiniz için teşekkürler!
+        **Public report:** do not upload personal information, private screenshots, email addresses, passwords, tokens, device serial numbers, or Bluetooth addresses.
+        **Account required:** GitHub requires you to sign in before publishing your issue. The report is NOT sent until you click Submit new issue.
+  - type: input
+    id: summary
+    attributes:
+      label: "Summary / Kısa açıklama"
+      placeholder: "Example: OLED freezes after reconnect"
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: "App version / Uygulama sürümü"
+      placeholder: "1.0.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: category
+    attributes:
+      label: "Category / Kategori"
+      placeholder: "OLED / Dock, Media, Battery, UI, Performance..."
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: "What happened? Steps to reproduce / Hata ve tekrar adımları"
+      description: "Include what happened and what you expected. Do not include secrets."
+      placeholder: |
+        1. Open...
+        2. Click...
+        3. Error appears...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Windows and devices (optional) / Sistem ve cihazlar"
+      description: "Optional. Never share serial numbers or Bluetooth MAC addresses."
+    validations:
+      required: false
+  - type: upload
+    id: screenshot
+    attributes:
+      label: "Attach screenshot or log / Ekran görüntüsü veya günlük"
+      description: "Click to choose your cleaned screenshot (.png/.jpg); max 10 MB. Attach only what you want made public. The Dock Customiser app can prepare an EXIF-free PNG."
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.log,.txt,.zip"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: "Privacy / Gizlilik"
+      options:
+        - label: "I checked that this public report and files contain no personal information / Kişisel bilgi içermediğini kontrol ettim."
+          required: true
