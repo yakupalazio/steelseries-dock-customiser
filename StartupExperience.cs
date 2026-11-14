@@ -88,6 +88,7 @@ internal sealed class FirstRunGuide:Control
     internal sealed record Step(string Title,string Description,Control? Focus);
     private readonly Step[] steps;
     private readonly Action finished;
+    private readonly Form owner;
     private Bitmap? snapshot;
     private int index;
     private readonly DarkButton next=new(){
@@ -113,14 +114,13 @@ internal sealed class FirstRunGuide:Control
     private Rectangle card;
     internal FirstRunGuide(Form owner,Step[] steps,Action onFinish)
     {
-        this.steps=steps;finished=onFinish;
+        this.steps=steps;finished=onFinish;this.owner=owner;
         Dock=DockStyle.Fill;TabStop=true;
         SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|
             ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);
         try
         {
-            snapshot=new Bitmap(owner.ClientSize.Width,owner.ClientSize.Height);
-            owner.DrawToBitmap(snapshot,new Rectangle(Point.Empty,snapshot.Size));
+            snapshot=CaptureClientOnly();
         }
         catch{snapshot?.Dispose();snapshot=null;}
         Controls.AddRange([title,detail,count,next,skip]);
@@ -133,11 +133,105 @@ internal sealed class FirstRunGuide:Control
         Resize+=(_,_)=>UpdateStep();
         UpdateStep();
     }
+    // DrawToBitmap(Form) includes the nonclient title bar/borders even if
+    // the destination bitmap is only ClientSize. The previous screenshot
+    // was therefore shifted ~30-45px versus target control coordinates.
+    // Capture the whole window then crop to its actual client origin.
+    private Bitmap CaptureClientOnly()
+    {
+        using var window=new Bitmap(Math.Max(1,owner.Width),
+            Math.Max(1,owner.Height));
+        owner.DrawToBitmap(window,new Rectangle(
+            Point.Empty,window.Size));
+        var clientOnWindow=owner.PointToScreen(Point.Empty);
+        int left=Math.Max(0,clientOnWindow.X-owner.Left);
+        int top=Math.Max(0,clientOnWindow.Y-owner.Top);
+        int width=Math.Min(owner.ClientSize.Width,window.Width-left);
+        int height=Math.Min(owner.ClientSize.Height,window.Height-top);
+        var result=new Bitmap(owner.ClientSize.Width,owner.ClientSize.Height);
+        using(var graphics=Graphics.FromImage(result))
+        {
+            graphics.Clear(Color.FromArgb(15,22,32));
+            if(width>0&&height>0)
+                graphics.DrawImage(window,new Rectangle(0,0,width,height),
+                    new Rectangle(left,top,width,height),GraphicsUnit.Pixel);
+        }
+        return result;
+    }
+
+    internal Rectangle? FocusBoundsForTest()=>GetTargetRectangle();
+    internal void SelectStepForCapture(int next)
+    {
+        index=Math.Clamp(next,0,steps.Length-1);
+        UpdateStep();
+    }
+
+    private Rectangle? GetTargetRectangle()
+    {
+        var control=steps[index].Focus;
+        if(control is null||!control.IsHandleCreated||
+           !control.Visible||control.IsDisposed)return null;
+        try
+        {
+            // Screen rectangles account for nested autoscroll, owner DPI,
+            // docking, and any sidebar/inspector repositioning.
+            var screenBounds=control.RectangleToScreen(
+                control.ClientRectangle);
+            var topLeft=PointToClient(screenBounds.Location);
+            var bottomRight=PointToClient(new Point(
+                screenBounds.Right,screenBounds.Bottom));
+            var box=Rectangle.FromLTRB(topLeft.X-5,topLeft.Y-5,
+                bottomRight.X+5,bottomRight.Y+5);
+            box.Intersect(ClientRectangle);
+            return box.Width>4&&box.Height>4?box:null;
+        }
+        catch{return null;}
+    }
+
+    private void RevealTargetAndCapture()
+    {
+        var focus=steps[index].Focus;
+        if(focus is not null&&focus.IsHandleCreated)
+        {
+            for(Control? ancestor=focus.Parent;
+                ancestor is not null&&ancestor!=owner;
+                ancestor=ancestor.Parent)
+            {
+                if(ancestor is ScrollableControl sc&&sc.AutoScroll)
+                {
+                    try{sc.ScrollControlIntoView(focus);}catch{}
+                }
+            }
+        }
+        if(!IsHandleCreated||!owner.IsHandleCreated)return;
+        // Underlying controls may have moved or scrolled since the first
+        // screenshot; never highlight coordinates against a stale backdrop.
+        try
+        {
+            bool wasVisible=Visible;
+            Visible=false;
+            var fresh=CaptureClientOnly();
+            var old=snapshot;
+            snapshot=fresh;
+            old?.Dispose();
+            Visible=wasVisible;
+        }
+        catch{Visible=true;}
+    }
+
     private void UpdateStep()
     {
+        RevealTargetAndCapture();
         int w=Math.Min(700,Math.Max(420,Width-50));
         card=new Rectangle(Math.Max(15,(Width-w)/2),
-            Math.Max(95,Height-220),w,184);
+            Math.Max(15,Height-220),w,184);
+        var highlight=GetTargetRectangle();
+        if(highlight.HasValue&&highlight.Value.IntersectsWith(card))
+        {
+            var above=new Rectangle(card.X,18,card.Width,card.Height);
+            if(!highlight.Value.IntersectsWith(above))
+                card=above;
+        }
         count.SetBounds(card.X+23,card.Y+16,140,22);
         title.SetBounds(card.X+23,card.Y+38,w-45,39);
         detail.SetBounds(card.X+23,card.Y+84,w-44,53);
@@ -162,23 +256,12 @@ internal sealed class FirstRunGuide:Control
         else e.Graphics.Clear(Color.FromArgb(15,22,32));
         using(var dim=new SolidBrush(Color.FromArgb(165,5,10,18)))
             e.Graphics.FillRectangle(dim,ClientRectangle);
-        var focus=steps[index].Focus;
-        if(focus is not null&&focus.IsHandleCreated&&snapshot is not null)
+        var target=GetTargetRectangle();
+        if(target is Rectangle box&&snapshot is not null)
         {
-            try
-            {
-                var topLeft=PointToClient(focus.PointToScreen(Point.Empty));
-                var box=new Rectangle(topLeft.X-5,topLeft.Y-5,
-                    focus.Width+10,focus.Height+10);
-                box.Intersect(ClientRectangle);
-                if(box.Width>4&&box.Height>4)
-                {
-                    e.Graphics.DrawImage(snapshot,box,box,GraphicsUnit.Pixel);
-                    using var outline=new Pen(Color.FromArgb(96,209,246),3);
-                    e.Graphics.DrawRoundedRectangleIfSupported(box,outline);
-                }
-            }
-            catch(InvalidOperationException){}
+            e.Graphics.DrawImage(snapshot,box,box,GraphicsUnit.Pixel);
+            using var outline=new Pen(Color.FromArgb(96,209,246),3);
+            e.Graphics.DrawRoundedRectangleIfSupported(box,outline);
         }
         using var fill=new SolidBrush(Color.FromArgb(21,31,43));
         using var stroke=new Pen(Color.FromArgb(57,103,125),1);

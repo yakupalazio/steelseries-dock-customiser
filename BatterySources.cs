@@ -115,6 +115,15 @@ internal static class BatterySources
     internal static void MergeVerifiedBleReadings(BatterySnapshot snapshot,
         IReadOnlyList<BatteryReading> discovered)
     {
+        // A unique connected phone may share the Phone Link slot. If
+        // multiple distinct phones are present, never attribute one
+        // device's charge level to another.
+        int phoneCount=discovered.Where(r=>r.Available &&
+            r.Kind.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase) &&
+            LocalBatteryDeviceNames.ClassifyConnectedBluetooth(
+                r.FriendlyName)=="Phone")
+            .Select(r=>r.Kind).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
         foreach(var value in discovered)
         {
             if(!value.Available || !value.Kind.StartsWith("Ble:",
@@ -122,12 +131,21 @@ internal static class BatterySources
             string name=value.FriendlyName.ToLowerInvariant();
             string? known=name.Contains("aerox 3")?"Mouse":
                 name.Contains("nova pro wireless")?"Headset":
-                name.Contains("galaxy s24")?"Phone":
+                phoneCount==1&&
+                    LocalBatteryDeviceNames.ClassifyConnectedBluetooth(
+                        value.FriendlyName)=="Phone"?"Phone":
                 name.Contains("dualsense")?"DualSense":null;
             if(known is not null)
             {
                 if(!snapshot[known].Available)
-                    snapshot.Values[known]=value with {Kind=known};
+                    snapshot.Values[known]=value with {
+                        Kind=known,
+                        IconKind=known=="Phone"?"Phone":value.IconKind};
+                else if(known=="Phone" &&
+                    snapshot.Values.TryGetValue(known,out var existingPhone) &&
+                    existingPhone.IconKind!="Phone")
+                    snapshot.Values[known]=existingPhone with{
+                        IconKind="Phone"};
                 // Never append another OLED slot for a known GG/Phone model.
                 continue;
             }
@@ -204,6 +222,12 @@ internal static class BatterySources
     internal static void MergeVerifiedWindowsBluetoothReadings(
         BatterySnapshot snapshot,IReadOnlyList<BatteryReading> discovered)
     {
+        int phones=discovered.Where(r=>r.Available &&
+            r.Kind.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase) &&
+            LocalBatteryDeviceNames.ClassifyConnectedBluetooth(
+                r.FriendlyName)=="Phone")
+            .Select(r=>r.Kind)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Count();
         foreach(var reading in discovered)
         {
             if(!reading.Available ||
@@ -212,11 +236,19 @@ internal static class BatterySources
             string name=reading.FriendlyName.ToLowerInvariant();
             string? slot=name.Contains("arctis nova pro")?"Headset":
                 name.Contains("dualsense")?"DualSense":
-                null;
+                phones==1&&
+                    LocalBatteryDeviceNames.ClassifyConnectedBluetooth(
+                        reading.FriendlyName)=="Phone"?"Phone":null;
             if(slot is not null)
             {
                 if(!snapshot[slot].Available)
-                    snapshot.Values[slot]=reading with{Kind=slot};
+                    snapshot.Values[slot]=reading with{
+                        Kind=slot,
+                        IconKind=slot=="Phone"?"Phone":reading.IconKind};
+                else if(slot=="Phone" &&
+                    snapshot.Values.TryGetValue(slot,out var current) &&
+                    current.IconKind!="Phone")
+                    snapshot.Values[slot]=current with{IconKind="Phone"};
                 continue;
             }
             // Prefer validated BLE/HID/vendor when the same unique

@@ -296,8 +296,9 @@ internal static class OledRenderer
         "Clock" or "MediaClock"=>
             DateTime.Now.ToString(ClockDateFormats.ClockFormat(w.Format),CultureInfo.InvariantCulture),
         "Date"=>DateTime.Now.ToString(ClockDateFormats.DateFormat(w.Format),CultureInfo.InvariantCulture),
-        "Track"=>playback?.IsPlaying==true ? playback.Title : "PALE TORTURED",
-        "Artist"=>playback?.IsPlaying==true ? playback.Artist : "DRACONIAN",
+        "Track"=>playback?.IsPlaying==true && !string.IsNullOrWhiteSpace(playback.Title)
+            ?playback.Title:"No media playing",
+        "Artist"=>playback?.IsPlaying==true ? playback.Artist : "",
         "Custom text" or "GameLabel"=>w.Text,
         "GameTitle"=>w.Text,
         _=>""
@@ -464,11 +465,18 @@ internal static class OledRenderer
                     device=currentDevices[slot-1];
                 }
                 var reading=batteries?[device];
-                string iconKind=reading?.IconKind?.Length>0
+                string defaultIcon=reading?.IconKind?.Length>0
                     ?reading.IconKind
                     :device.StartsWith("Ble:",StringComparison.OrdinalIgnoreCase) ||
-                     device.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase)
+                     device.StartsWith("Hid:",StringComparison.OrdinalIgnoreCase) ||
+                     device.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase) ||
+                     device.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)
                         ?BatteryDeviceCatalog.Icon(device):device;
+                if(device=="Phone" &&
+                   defaultIcon is "Bluetooth" or "Wireless" or "Usb")
+                    defaultIcon="Phone";
+                string iconKind=BatteryDeviceIconOverrides.Resolve(
+                    device,reading?.FriendlyName,defaultIcon);
                 string pct=reading?.Display??"--%";
                 var layout=PlanBatteryRow(x,y,iconKind,pct);
                 DrawBatterySlotIcon(px,iconKind,x,layout.IconY,
@@ -1246,11 +1254,9 @@ internal static class OledRenderer
         var rows=IconLibrary.GetCurrent(kind);
         if(rows.Length==0)return;
         int sourceWidth=rows[0].Length,sourceHeight=rows.Length;
-        if(targetWidth==sourceWidth&&targetHeight==sourceHeight)
-        {
-            DrawIcon(frame,kind,x,y);
-            return;
-        }
+        // All battery icons, including per-device imported 11x11 artwork,
+        // render from the same saved one-bit rows. Never bypass imported
+        // artwork via the global icon-name-only drawing path.
         // Nearest-neighbor 1-bit projection with no modified source pixels.
         for(int yy=0;yy<targetHeight;yy++)
         for(int xx=0;xx<targetWidth;xx++)

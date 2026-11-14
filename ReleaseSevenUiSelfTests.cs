@@ -69,11 +69,28 @@ internal static class ReleaseSevenUiSelfTests
 
         using var dialog=new LayoutProfileDialog(ScreenMode.Idle,
             ()=>StudioProject.Defaults(ScreenMode.Idle),_=>{});
-        if(dialog.ClientSize.Height<580||
-           dialog.Controls.OfType<System.Windows.Forms.Panel>().Count()<2||
-           !dialog.Controls.OfType<System.Windows.Forms.Panel>().Any(p=>
-               p.Dock==System.Windows.Forms.DockStyle.Bottom))
-            throw new Exception("Profile dialog footer may be clipped.");
+        var layoutGrid=dialog.Controls.OfType<System.Windows.Forms.TableLayoutPanel>()
+            .FirstOrDefault();
+        var body=layoutGrid?.Controls.OfType<System.Windows.Forms.Panel>()
+            .FirstOrDefault(p=>p.Controls.OfType<System.Windows.Forms.ListBox>().Any());
+        var footer=layoutGrid?.Controls.OfType<System.Windows.Forms.Panel>()
+            .FirstOrDefault(p=>p.Controls.OfType<System.Windows.Forms.Button>().Any());
+        var preview=body?.Controls.OfType<System.Windows.Forms.Panel>()
+            .FirstOrDefault(p=>p.Name=="ProfileMiniPreview");
+        var use=body?.Controls.OfType<System.Windows.Forms.Button>()
+            .FirstOrDefault(b=>b.Text.Contains("Profili uygula",
+                StringComparison.OrdinalIgnoreCase));
+        var hint=body?.Controls.OfType<System.Windows.Forms.Label>()
+            .FirstOrDefault(l=>l.Left==390&&l.Top==439);
+        var close=footer?.Controls.OfType<System.Windows.Forms.Button>()
+            .FirstOrDefault();
+        if(dialog.ClientSize.Height!=555||body is null||!body.AutoScroll||
+           footer is null||footer.Height<54||preview is null||
+           use is null||hint is null||
+           use.Bounds.IntersectsWith(hint.Bounds) ||
+           close is null||close.Bottom>footer.Height)
+            throw new Exception(
+                "Compact profile preview/footer has clipped or overlapping controls.");
 
         Console.WriteLine(
             "PASS: 4-row lyrics and 5 monotone timecoded transitions; "+

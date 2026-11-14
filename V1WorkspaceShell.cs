@@ -520,6 +520,9 @@ internal sealed partial class PixelStudioForm
     }
 
     internal void ShowFirstRunGuideForCapture()=>ShowFirstRunGuide(true);
+    internal void SelectGuideStepForCapture(int step)=>
+        Controls.OfType<FirstRunGuide>().FirstOrDefault()
+            ?.SelectStepForCapture(step);
     internal Bitmap CaptureFirstRunGuideForTest()
     {
         var guide=Controls.OfType<FirstRunGuide>().FirstOrDefault()

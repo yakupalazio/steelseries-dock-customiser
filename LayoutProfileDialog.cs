@@ -17,11 +17,17 @@ internal sealed class LayoutProfileDialog : Form
     private readonly ScreenMode mode;
     private readonly Func<LayoutState> snapshot;
     private readonly Action<LayoutState> apply;
-    private readonly ListBox list=new(){Left=23,Top=107,Width=340,Height=285,
+    private readonly ListBox list=new(){Left=23,Top=106,Width=340,Height=251,
         BorderStyle=BorderStyle.None,BackColor=Surface,ForeColor=Fore,
         Font=new Font("Segoe UI",11f)};
-    private readonly Label hint=new(){Left=24,Top=404,Width=610,Height=52,
+    // Never overlap "Apply profile" or the left-side mini preview.
+    private readonly Label hint=new(){Left=390,Top=439,Width=247,Height=48,
         ForeColor=Color.FromArgb(151,169,187)};
+    private readonly Panel miniPreview=new(){
+        Name="ProfileMiniPreview",
+        Left=23,Top=382,Width=340,Height=108,
+        BorderStyle=BorderStyle.FixedSingle,BackColor=Color.Black};
+    private Bitmap? miniFrame;
 
     public LayoutProfileDialog(ScreenMode editingMode,Func<LayoutState> current,
         Action<LayoutState> onApply)
@@ -31,20 +37,33 @@ internal sealed class LayoutProfileDialog : Form
         snapshot=current;
         apply=onApply;
         Text=UiLanguage.T("Profil yöneticisi");
-        ClientSize=new Size(705,628);
-        MinimumSize=new Size(675,530);
-        FormBorderStyle=FormBorderStyle.Sizable;
+        // Original compact window size; scrolling, not window growth,
+        // handles unusual system DPI and large accessibility font settings.
+        ClientSize=new Size(680,555);
+        MinimumSize=Size;
+        MaximumSize=Size;
+        FormBorderStyle=FormBorderStyle.FixedDialog;
         StartPosition=FormStartPosition.CenterParent;
-        MaximizeBox=true;MinimizeBox=false;
+        MaximizeBox=false;MinimizeBox=false;
         BackColor=Bg;ForeColor=Fore;
         Font=new Font("Segoe UI",10f);
         var body=new Panel{
             Dock=DockStyle.Fill,AutoScroll=true,
-            AutoScrollMinSize=new Size(662,500),
+            AutoScrollMinSize=new Size(654,490),
             BackColor=Bg};
-        var footer=new Panel{Dock=DockStyle.Bottom,Height=65,BackColor=Bg};
-        Controls.Add(body);
-        Controls.Add(footer);
+        var footer=new Panel{Dock=DockStyle.Bottom,Height=56,BackColor=Bg};
+        var frame=new TableLayoutPanel{
+            Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,
+            Margin=Padding.Empty,Padding=Padding.Empty,
+            BackColor=Bg};
+        frame.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        frame.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        frame.RowStyles.Add(new RowStyle(SizeType.Absolute,56));
+        body.Dock=DockStyle.Fill;
+        footer.Dock=DockStyle.Fill;
+        frame.Controls.Add(body,0,0);
+        frame.Controls.Add(footer,0,1);
+        Controls.Add(frame);
         body.Controls.Add(new Label{Left=23,Top=18,Width=620,Height=37,
             Text=UiLanguage.T("OLED tasarım profilleri"),ForeColor=Accent,
             Font=new Font("Segoe UI Semibold",19f,FontStyle.Bold)});
@@ -53,6 +72,27 @@ internal sealed class LayoutProfileDialog : Form
             ForeColor=Color.FromArgb(151,169,187)});
         body.Controls.Add(list);
         body.Controls.Add(hint);
+        body.Controls.Add(new Label{
+            Text=UiLanguage.English?"Selected profile preview":"Seçili profil önizlemesi",
+            Left=23,Top=361,Width=341,Height=21,ForeColor=Accent,
+            Font=new Font("Segoe UI Semibold",9.3f,FontStyle.Bold)});
+        body.Controls.Add(miniPreview);
+        miniPreview.Paint+=(_,e)=>{
+            e.Graphics.Clear(Color.Black);
+            if(miniFrame is null)return;
+            e.Graphics.InterpolationMode=
+                System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+            e.Graphics.PixelOffsetMode=
+                System.Drawing.Drawing2D.PixelOffsetMode.Half;
+            int h=Math.Max(1,miniPreview.ClientSize.Height-6);
+            int w=Math.Min(miniPreview.ClientSize.Width-6,h*2);
+            h=w/2;
+            int x=(miniPreview.ClientSize.Width-w)/2;
+            int y=(miniPreview.ClientSize.Height-h)/2;
+            e.Graphics.DrawImage(miniFrame,new Rectangle(x,y,w,h));
+        };
+        list.SelectedIndexChanged+=(_,_)=>RefreshPreview();
+        Disposed+=(_,_)=>{miniFrame?.Dispose();miniFrame=null;};
         var blank=Button("Boş oluştur",390,111,243);
         var copy=Button("Geçerli tasarımı kaydet",390,156,243);
         var overwrite=Button("↻ Seçili profilin üzerine kaydet",390,201,243);
@@ -63,7 +103,7 @@ internal sealed class LayoutProfileDialog : Form
         var use=Button("✓ Profili uygula",390,390,243);
         use.BackColor=Accent;use.ForeColor=Bg;
         body.Controls.AddRange([blank,copy,overwrite,rename,remove,import,export,use]);
-        var close=Button("Kapat",545,12,115);
+        var close=Button("Kapat",545,9,115);
         close.Anchor=AnchorStyles.Top|AnchorStyles.Right;
         close.Click+=(_,_)=>Close();
         footer.Controls.Add(close);
@@ -122,6 +162,7 @@ internal sealed class LayoutProfileDialog : Form
         });
         RefreshList();
         UiSkin.ApplyDark(this);
+        miniPreview.BackColor=Color.Black;
     }
 
     private static Button Button(string title,int x,int y,int width)=>new DarkButton{
@@ -166,6 +207,27 @@ internal sealed class LayoutProfileDialog : Form
                 .FirstOrDefault(x=>x.Id==select);
         else if(list.Items.Count>0)list.SelectedIndex=0;
         hint.Text=UiLanguage.T("Profiller yalnızca bu bilgisayarda saklanır.");
+        RefreshPreview();
+    }
+
+    private void RefreshPreview()
+    {
+        Bitmap? next=null;
+        if(list.SelectedItem is SavedLayoutProfile chosen)
+        {
+            try
+            {
+                // A static local 128x64 render, never a HID write.
+                next=OledRenderer.Render(chosen.Layout,
+                    mode==ScreenMode.Media,true,false,protectHeader:true,
+                    layoutMode:mode);
+            }
+            catch{ /* Corrupt import still cannot block profile management. */ }
+        }
+        var previous=miniFrame;
+        miniFrame=next;
+        previous?.Dispose();
+        miniPreview.Invalidate();
     }
 
     private void Run(Action action)

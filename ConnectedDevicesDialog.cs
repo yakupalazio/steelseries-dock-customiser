@@ -20,6 +20,7 @@ internal sealed class ConnectedDevicesDialog:Form
     private readonly Label status=new();
     private readonly Button refreshButton=new();
     private readonly Button copyReportButton=new();
+    private readonly DarkButton iconButton=new();
     private readonly System.Windows.Forms.Timer timer=new(){Interval=20000};
     private IReadOnlyList<ConnectedPeripheral> detected=[];
     private bool busy;
@@ -90,15 +91,36 @@ internal sealed class ConnectedDevicesDialog:Form
             catch{status.Text=UiLanguage.English
                 ?"Could not copy report.":"Rapor kopyalanamadı.";}
         };
+        iconButton.Text=UiLanguage.English?"Change icon":"İkonu değiştir";
+        iconButton.SetBounds(582,7,132,36);
+        iconButton.BackColor=Color.FromArgb(38,69,87);
+        iconButton.ForeColor=Color.White;
+        iconButton.Click+=(_,_)=>{
+            if(table.CurrentRow?.Tag is not string identity)return;
+            var device=detected.FirstOrDefault(item=>item.Id==identity);
+            if(device is null)return;
+            using var editor=new BatteryDeviceIconPickerDialog(
+                device.BatteryKind,device.Name,device.IconKind);
+            if(editor.ShowDialog(this)!=DialogResult.OK)return;
+            status.Text=UiLanguage.English
+                ?"Icon saved on this computer; OLED will update on refresh."
+                :"Cihaz ikonu kaydedildi; OLED yenilenince görünecek.";
+            _=RefreshAsync();
+        };
         toolbar.Controls.Add(searchLabel);
         toolbar.Controls.Add(filter);
+        toolbar.Controls.Add(iconButton);
         toolbar.Controls.Add(copyReportButton);
         toolbar.Controls.Add(refreshButton);
-        toolbar.Resize+=(_,_)=>{
-            filter.Width=Math.Max(160,toolbar.ClientSize.Width-455);
-            copyReportButton.Left=Math.Max(250,toolbar.ClientSize.Width-304);
-            refreshButton.Left=Math.Max(402,toolbar.ClientSize.Width-148);
-        };
+        void RepositionToolbar()
+        {
+            refreshButton.Left=Math.Max(600,toolbar.ClientSize.Width-143);
+            copyReportButton.Left=refreshButton.Left-154;
+            iconButton.Left=copyReportButton.Left-141;
+            filter.Width=Math.Max(130,iconButton.Left-filter.Left-14);
+        }
+        toolbar.Resize+=(_,_)=>RepositionToolbar();
+        RepositionToolbar();
 
         table.Dock=DockStyle.Fill;
         table.ReadOnly=true;

@@ -326,6 +326,45 @@ internal sealed class BatteryStatusDialog : Form
             ForeColor=Color.FromArgb(138,199,224),
             Font=new Font("Segoe UI Semibold",9f,FontStyle.Bold)};
         Controls.Add(alertHeading);
+
+        // In Settings this form is a dock-filled child: its absolute
+        // 900px content must NOT cover the bottom Save button at 125/150%
+        // scale or when the user has enlarged Windows text. A scrolling
+        // body and a permanently visible right-aligned footer keep every
+        // action accessible without enlarging the settings window.
+        var body=new Panel{
+            Dock=DockStyle.Fill,AutoScroll=true,BackColor=BackColor,
+            AutoScrollMinSize=new Size(875,680)};
+        var footer=new Panel{
+            Dock=DockStyle.Bottom,Height=58,BackColor=BackColor};
+        var existing=Controls.Cast<Control>()
+            .Where(c=>!ReferenceEquals(c,applyButton)).ToArray();
+        foreach(var element in existing)
+        {
+            Controls.Remove(element);
+            body.Controls.Add(element);
+        }
+        Controls.Remove(applyButton);
+        footer.Controls.Add(applyButton);
+        applyButton.Top=10;
+        applyButton.Left=Math.Max(14,footer.Width-applyButton.Width-22);
+        applyButton.Anchor=AnchorStyles.Top|AnchorStyles.Right;
+        footer.Resize+=(_,_)=>applyButton.Left=Math.Max(
+            14,footer.ClientSize.Width-applyButton.Width-22);
+        var frame=new TableLayoutPanel{
+            Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,
+            Margin=Padding.Empty,Padding=Padding.Empty,
+            BackColor=BackColor};
+        frame.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        frame.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        frame.RowStyles.Add(new RowStyle(SizeType.Absolute,58));
+        body.Dock=DockStyle.Fill;
+        footer.Dock=DockStyle.Fill;
+        frame.Controls.Add(body,0,0);
+        frame.Controls.Add(footer,0,1);
+        Controls.Add(frame);
+        AutoScroll=false;
+
         ApplyLanguage();
     }
 

@@ -26,6 +26,8 @@ internal static class IconLibrary
 
     public static string[] GetCurrent(string name)
     {
+        var deviceRows=BatteryDeviceIconOverrides.CustomRows(name);
+        if(deviceRows is not null)return deviceRows;
         return Custom.TryGetValue(name,out var s)
             ? s.ToArray() : OledRenderer.GetOriginalIconRows(name);
     }

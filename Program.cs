@@ -754,6 +754,21 @@ internal static class Program
                 shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
                 setup.Close();return;
             }
+            if(args.Contains("--capture-device-icon-picker"))
+            {
+                using var picker=new BatteryDeviceIconPickerDialog(
+                    "Vendor:Compx:synthetic","ATK Mouse 1K Dongle","Mouse");
+                picker.StartPosition=FormStartPosition.Manual;
+                picker.Location=new System.Drawing.Point(-5000,-5000);
+                picker.ShowInTaskbar=false;
+                picker.Show();Application.DoEvents();
+                using var shot=new System.Drawing.Bitmap(
+                    picker.Width,picker.Height);
+                picker.DrawToBitmap(shot,new System.Drawing.Rectangle(
+                    0,0,shot.Width,shot.Height));
+                shot.Save(args[at+1],System.Drawing.Imaging.ImageFormat.Png);
+                picker.Close();return;
+            }
             if(args.Contains("--capture-wireless-library"))
             {
                 using var library=new WirelessCompatibilityDialog();
@@ -943,7 +958,13 @@ internal static class Program
             studio.Show();
             Application.DoEvents();
             if(args.Contains("--capture-guide"))
+            {
                 studio.ShowFirstRunGuideForCapture();
+                var guideAt=Array.IndexOf(args,"--guide-step");
+                if(guideAt>=0&&guideAt+1<args.Length&&
+                   int.TryParse(args[guideAt+1],out int guideStep))
+                    studio.SelectGuideStepForCapture(guideStep);
+            }
             studio.PerformLayout();
             Application.DoEvents();
             using var preview=args.Contains("--capture-editor-only")

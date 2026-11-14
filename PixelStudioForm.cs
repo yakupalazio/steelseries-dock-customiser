@@ -205,7 +205,7 @@ internal sealed partial class PixelStudioForm : Form
     public PixelStudioForm()
     {
         UiPolish.Register(this);
-        Text = "Steelseries Dock Customiser 1.1.1 RC7.1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.1.1 RC7.2 | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -1180,23 +1180,30 @@ internal sealed partial class PixelStudioForm : Form
         if(dialog.ShowDialog(this)!=DialogResult.OK)return;
         var updated=dialog.Updated;
         Record();
-        selected.LyricOffsetMs=updated.LyricOffsetMs;
-        selected.LyricLines=updated.LyricLines;
-        selected.VisualizerStyle=updated.VisualizerStyle;
-        selected.AudioEndpointId=updated.AudioEndpointId;
-        selected.VisualizerGain=updated.VisualizerGain;
-        selected.VisualizerHeight=updated.VisualizerHeight;
-        selected.WidgetWidth=updated.WidgetWidth;
-        selected.GifAssetId=updated.GifAssetId;
-        selected.GifFit=updated.GifFit;
-        selected.GifDither=updated.GifDither;
-        selected.GifSpeedPercent=updated.GifSpeedPercent;
-        selected.GifThreshold=updated.GifThreshold;
+        TransferOptionalMediaSettings(selected,updated);
         if(selected.Kind=="AnimatedGif")
             AnimatedGifWidgetStore.EnsureBackground(selected);
         RefreshWidgetList();
         Redraw();
         SetStatus("Widget ayarları güncellendi. Kaydet ile sakla.");
+    }
+
+    internal static void TransferOptionalMediaSettings(
+        DockWidget destination,DockWidget updated)
+    {
+        destination.LyricOffsetMs=updated.LyricOffsetMs;
+        destination.LyricLines=updated.LyricLines;
+        destination.LyricTransitionStyle=updated.LyricTransitionStyle;
+        destination.VisualizerStyle=updated.VisualizerStyle;
+        destination.AudioEndpointId=updated.AudioEndpointId;
+        destination.VisualizerGain=updated.VisualizerGain;
+        destination.VisualizerHeight=updated.VisualizerHeight;
+        destination.WidgetWidth=updated.WidgetWidth;
+        destination.GifAssetId=updated.GifAssetId;
+        destination.GifFit=updated.GifFit;
+        destination.GifDither=updated.GifDither;
+        destination.GifSpeedPercent=updated.GifSpeedPercent;
+        destination.GifThreshold=updated.GifThreshold;
     }
 
     private async void EditGameLogo()

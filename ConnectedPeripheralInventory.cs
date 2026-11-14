@@ -216,18 +216,37 @@ internal static class ConnectedPeripheralInventory
     {
         var rows=new List<ConnectedPeripheral>();
         var candidatesArray=candidates.Take(250).ToArray();
-        // Matching a phone's battery to a different phone is worse than
-        // displaying unknown. Only one connected phone may receive the
-        // Phone Link / ADB battery reading without explicit pairing.
+        // The same dual-mode phone may be exposed by Windows twice:
+        // one Classic Bluetooth profile plus one BLE profile with different
+        // container IDs. Collapse only a unique same-name Classic+LE pair.
+        // Two phones with the same model, or ambiguous names, stay distinct
+        // to avoid falsely attaching Phone Link battery to another device.
+        var dualModeNames=candidatesArray
+            .Where(c=>LocalBatteryDeviceNames.ClassifyConnectedBluetooth(c.Name)
+                =="Phone" &&
+                c.Connection is "Bluetooth" or "Bluetooth LE")
+            .GroupBy(c=>Normalize(c.Name),StringComparer.OrdinalIgnoreCase)
+            .Where(g=>g.Key.Length>=5 && g.Count()==2 &&
+                g.Count(c=>c.Connection=="Bluetooth")==1 &&
+                g.Count(c=>c.Connection=="Bluetooth LE")==1)
+            .Select(g=>g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string DeviceGroup(Candidate c)
+        {
+            string name=Normalize(c.Name);
+            return dualModeNames.Contains(name) &&
+                (c.Connection is "Bluetooth" or "Bluetooth LE")
+                    ?"same-phone:"+name:c.Identity;
+        }
+        // Only a unique phone identity may inherit the Phone Link battery.
         int phoneCount=candidatesArray
             .Where(c=>LocalBatteryDeviceNames.ClassifyConnectedBluetooth(c.Name)
                 =="Phone")
-            .Select(c=>c.Identity).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(DeviceGroup).Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
         var now=DateTimeOffset.Now;
         var usable=snapshot.Values.Values.Where(r=>BatteryPriority.IsCurrent(r,now))
             .ToArray();
-        foreach(var group in candidatesArray.GroupBy(x=>x.Identity,
+        foreach(var group in candidatesArray.GroupBy(DeviceGroup,
             StringComparer.OrdinalIgnoreCase))
         {
             var selected=group.OrderByDescending(x=>NameScore(x.Name)).First();
@@ -285,8 +304,15 @@ internal static class ConnectedPeripheralInventory
                        StringComparison.OrdinalIgnoreCase)))
                 name=recognized.Name+(UiLanguage.English
                     ?" (receiver)":" (alıcı)");
+            string deviceDefaultIcon=reading?.IconKind?.Length>0
+                ?reading.IconKind:icon;
+            if(kind=="Phone"&&
+               deviceDefaultIcon is "Bluetooth" or "Wireless" or "Usb")
+                deviceDefaultIcon="Phone";
+            string deviceIcon=BatteryDeviceIconOverrides.Resolve(
+                reading?.Kind??kind,name,deviceDefaultIcon);
             rows.Add(new ConnectedPeripheral(group.Key,name,connection,maker,
-                reading?.IconKind?.Length>0?reading.IconKind:icon,
+                deviceIcon,
                 reading?.Percent,
                 reading?.Source??(compx
                     ?"CompX pil okuyucusu":recognized is null
