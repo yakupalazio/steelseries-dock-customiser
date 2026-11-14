@@ -1,0 +1,40 @@
+name: Publish binary-only public beta
+on:
+  push:
+    branches:
+      - beta-downloads
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    if: github.repository == 'yakupalazio/steelseries-dock-customiser'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out binary-only release branch
+        uses: actions/checkout@v4
+      - name: Verify ZIP SHA-256 and no private assets
+        shell: bash
+        run: |
+          sha256sum -c SHA256SUMS.txt
+          if unzip -Z1 SteelseriesDockCustomiser-v1.0.0-beta.1-win-x64.zip | grep -Ei '\.(cs|py|ts|mjs)$|dock-photo-local\.png|iCUESDK.*\.dll'; then
+            echo "Blocked: source code, user photograph or unlicensed SDK in package"
+            exit 1
+          fi
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view v1.0.0-beta.1 --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Beta prerelease already exists; not replacing an asset."
+            exit 0
+          fi
+          gh release create v1.0.0-beta.1 \
+            SteelseriesDockCustomiser-v1.0.0-beta.1-win-x64.zip \
+            SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "SteelSeries Dock Customiser v1.0.0 Beta 1" \
+            --notes-file RELEASE_NOTES.md \
+            --prerelease

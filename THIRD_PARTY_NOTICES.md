@@ -1,0 +1,17 @@
+# Third-party notices
+
+- **NAudio.Wasapi / NAudio.Core 3.3.0**, <https://github.com/naudio/NAudio>: MIT licensed libraries for optional, read-only Windows system output loopback. Audio sample bytes are processed only in memory for the active visualizer widget; no audio file is recorded. Complete MIT license copied from the upstream NAudio repository in `THIRD_PARTY_LICENSES/NAudio-MIT-LICENSE.txt`.
+- **Halo Battery Compx battery protocol documentation**, <https://github.com/HeyOkay/HaloBattery/blob/main/docs/protocols.md> (HaloBattery is MIT licensed: <https://github.com/HeyOkay/HaloBattery/blob/main/LICENSE>): public hardware status-frame descriptions and independently collected tester reports were consulted for the 17-byte 0x08/0x04 battery-only Compx protocol. Dock Customiser independently implements the C# protocol adapter; HaloBattery Python and OpenMouse AGPL source code are **not** bundled, linked or copied. No manufacturer configuration/firmware command is used.
+- **GGIF Studio** <https://github.com/D4rkTT/GGIF-Studio>: MIT project consulted as an architecture and dithering **reference only**. Its Electron/TypeScript source code was not copied or included. The app has its own standalone C# implementation.
+- **LRCLIB** <https://lrclib.net/docs>: voluntary external lyrics service called only when a user enables the optional lyrics widget; no lyrics corpus or track-specific data is bundled. Users should respect applicable lyrics rights.
+
+
+- **HidSharp 2.6.4**, <https://github.com/IntergatedCircuits/HidSharp>: Apache License 2.0 NuGet dependency used for the optional, user-confirmed experimental OLED transport and optional **read-only** volume/ChatMix dial telemetry. License and copyright notice are provided in `THIRD_PARTY_LICENSES/HidSharp-LICENSE.txt` and `THIRD_PARTY_LICENSES/HidSharp-NOTICE.txt`. No firmware flashing or brightness changes are implemented.
+- **ggoled v0.3.0**, <https://github.com/JerwuQu/ggoled>: external, independently downloaded command-line utility for the experimental OLED physical display test. It is **not bundled**, copied into Git, or statically linked. A known SHA-256 protects against accidental substitution of the tested release binary.
+- **BQC / SteelClock**, <https://github.com/pozitronik/bqc> and <https://github.com/pozitronik/steelclock-go>: GPL-3.0 projects reviewed only as public technical references. Their code is not bundled, copied, or imported; the Bluetooth readers in this project are independent Windows API implementations.
+- **SteelSeries GameSense SDK**, <https://github.com/SteelSeries/gamesense-sdk>: research reference for the documented GameSense API, not used by the physical dock test.
+- **Microsoft Win32 / Phone Link / CrossDevice**: Windows APIs and system metadata used for phone and laptop battery status, with the documented limitations of unofficial internal integration.
+- **Nova Pro dial protocol documentation:** <https://github.com/TimP4w/HaloDaemon-plugins/blob/main/steelseries_arctis/docs/protocol.md> and <https://github.com/Swiftlyx/OpenChatMix>. Public protocol descriptions were referenced for report IDs `07 25` and `07 45`; no third-party source code was copied into the implementation.
+- The user-provided SteelSeries product photograph is excluded from Git. A local-only ZIP may include it for private product review by SteelSeries; no general redistribution rights are implied.
+
+This application is not endorsed by these companies. Always check licenses before distributing third-party files.
