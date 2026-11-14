@@ -1,0 +1,65 @@
+name: "Beta device compatibility / Cihaz uyumluluğu"
+description: "Report a battery reading, unsupported dongle or Bluetooth device / Pil ve cihaz testleri."
+title: "[Device beta] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report **actual** device observations. A recognized model is not proof that its battery protocol works.
+        Do not include serial numbers, raw device paths, Bluetooth addresses, personal documents or hidden account information.
+        GitHub sign-in is needed; data is only sent once you click Submit new issue.
+  - type: input
+    id: summary
+    attributes:
+      label: "Device / Cihaz"
+      placeholder: "Example: ATK Mouse 1K Dongle / WLMOUSE..."
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: "App version / Uygulama sürümü"
+      placeholder: "1.0.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: category
+    attributes:
+      label: "Connection and symptom / Bağlantı ve sorun"
+      placeholder: "Battery / Device"
+    validations:
+      required: false
+  - type: textarea
+    id: details
+    attributes:
+      label: "Battery result and reproduction / Pil sonucu ve adımlar"
+      description: "How is it connected (2.4 GHz/BT)? Is the mouse awake? What does manufacturer software report?"
+      placeholder: |
+        - Connection: Bluetooth / USB receiver
+        - Dock Customiser: --%
+        - Manufacturer software: 75%
+        - Steps: ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Windows, public VID/PID (optional)"
+      description: "Public VID/PID is sufficient; do not include serial/MAC/raw device paths."
+    validations:
+      required: false
+  - type: upload
+    id: screenshot
+    attributes:
+      label: "Screenshot or safe device report / Görsel veya güvenli cihaz raporu"
+      description: "Use the application's Copy report button only after reviewing the friendly names and public IDs."
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.log,.txt,.zip"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: "Privacy / Gizlilik"
+      options:
+        - label: "I checked that this public report and attachment contain no personal information / Kişisel bilgi olmadığını kontrol ettim."
+          required: true
