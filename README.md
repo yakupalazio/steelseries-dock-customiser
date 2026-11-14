@@ -1,3 +1,20 @@
+# SteelSeries Dock Customiser — Public Beta 1 (Windows x64)
+
+**[Download the v1.0.0 Beta 1 Windows ZIP](https://github.com/yakupalazio/steelseries-dock-customiser/releases/download/v1.0.0-beta.1/SteelseriesDockCustomiser-v1.0.0-beta.1-win-x64.zip)** · [Release notes and SHA-256](https://github.com/yakupalazio/steelseries-dock-customiser/releases/tag/v1.0.0-beta.1)
+
+**We are looking for beta testers! / Beta test kullanıcıları arıyoruz.** The beta is free to use and is an independent unofficial SteelSeries accessory.
+
+- [Report a bug / Hata bildir](https://github.com/yakupalazio/steelseries-dock-customiser/issues/new?template=beta_bug.yml)
+- [Test a mouse, keyboard, headset or battery / Cihaz ve pil uyumluluğu bildir](https://github.com/yakupalazio/steelseries-dock-customiser/issues/new?template=beta_device.yml)
+- [All tester feedback / Tüm geri bildirimler](https://github.com/yakupalazio/steelseries-dock-customiser/issues)
+- [Beta test instructions](https://github.com/yakupalazio/steelseries-dock-customiser/blob/beta-downloads/BETA_TESTING.md)
+
+To report a bug from the Windows app, use **Settings → Hata Bildir**, enter details, optionally choose a screenshot and select **GitHub bildirim formunu aç**. Log in to GitHub and **press Submit new issue** to publish. Screenshots and other attached files are public; please check them for personal information before submitting.
+
+**Important:** This repository also contains historical development files. Those sources are not the source for the new proprietary beta binary. The current beta distribution branch contains only the executable ZIP, documentation and release automation; no current C# source is published in the release package.
+
+---
+
 # Steelseries Dock Customiser 1.1 — OLED Studio
 
 ## New in 1.1: dark OLED Studio and radial controls
