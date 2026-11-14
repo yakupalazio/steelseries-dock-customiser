@@ -274,7 +274,9 @@ internal static class Beta5SelfTests
         // photograph as the larger photo preview, never user OLED pixels.
         string photoPath=Path.Combine(AppContext.BaseDirectory,
             "dock-photo-local.png");
-        using(var photo=new Bitmap(photoPath))
+        // A public binary must pass with or without the separate,
+        // non-redistributable dock photograph.
+        using(var photo=File.Exists(photoPath)?new Bitmap(photoPath):null)
         using(var header=DockFactoryHeaderReference.Extract(photo,
             [
                 new PointF(346,301),new PointF(589,302),

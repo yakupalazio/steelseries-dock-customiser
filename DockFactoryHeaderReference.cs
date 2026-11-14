@@ -22,7 +22,10 @@ internal static class DockFactoryHeaderReference
 
     internal static Bitmap? Extract(Image? photo,IReadOnlyList<PointF> corners)
     {
-        if(photo is not Bitmap||corners.Count!=4)return null;
+        // This is original hand-drawn pixel art; it does not sample
+        // photograph pixels. Public beta builds intentionally omit the
+        // developer-only product photo, but still need a clean OEM guide.
+        if(corners.Count!=4)return null;
         var result=new Bitmap(Width,Height);
         using(var graphics=Graphics.FromImage(result))
             graphics.Clear(Color.Black);

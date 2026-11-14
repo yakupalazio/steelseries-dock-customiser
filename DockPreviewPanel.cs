@@ -124,7 +124,7 @@ internal sealed class DockPreviewPanel : UserControl
     {
         if(_protectedHeaderReference is not null)
             return _protectedHeaderReference;
-        if(_photo is null || _settings.Corners.Count!=4)return null;
+        if(_settings.Corners.Count!=4)return null;
         _protectedHeaderReference=DockFactoryHeaderReference.Extract(
             _photo,_settings.Corners);
         return _protectedHeaderReference;
