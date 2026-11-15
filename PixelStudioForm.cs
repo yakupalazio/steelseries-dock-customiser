@@ -205,7 +205,7 @@ internal sealed partial class PixelStudioForm : Form
     public PixelStudioForm()
     {
         UiPolish.Register(this);
-        Text = "Steelseries Dock Customiser 1.0.0 Beta 1 | OLED Studio";
+        Text = "Steelseries Dock Customiser 1.0.0 Beta 2 Preview | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
@@ -773,10 +773,9 @@ internal sealed partial class PixelStudioForm : Form
                SyncedLyricsProvider.Key(mediaSnapshot)==SyncedLyricsProvider.Key(track))
             {
                 var result=SyncedLyricsProvider.Current(track);
-                if(result.Lines.Count==0&&result.Source.Length>0)
-                    SetStatus((UiLanguage.English
-                        ?"No synchronized lyrics for this track: "
-                        :"Bu parça için senkronize söz yok: ")+result.Source);
+                // Empty cache / unavailable internet => absolutely no
+                // on-screen lyrics text or "lyrics unavailable" status.
+                // The renderer already draws nothing when Lines is empty.
                 Redraw();
             }
         }
@@ -1176,7 +1175,7 @@ internal sealed partial class PixelStudioForm : Form
     {
         if(selected?.Kind is not ("Lyrics" or "AudioVisualizer" or
             "AnimatedGif"))return;
-        using var dialog=new OptionalMediaWidgetDialog(selected);
+        using var dialog=new OptionalMediaWidgetDialog(selected,mediaSnapshot);
         if(dialog.ShowDialog(this)!=DialogResult.OK)return;
         var updated=dialog.Updated;
         Record();

@@ -36,8 +36,10 @@ internal static class GameLogoProvider
         Beta5Sandbox.SettingsDirectory,"game-logo-art-v1");
     private static string Key(GameSnapshot game)
     {
-        string identity=game.Executable.Trim().ToLowerInvariant()+"\n"+
-            game.Name.Trim().ToLowerInvariant();
+        // The executable remains stable across GG display-name changes,
+        // localized titles and next session. Generic shared launchers are
+        // rejected by GG detection separately.
+        string identity=game.Executable.Trim().ToLowerInvariant();
         return Convert.ToHexString(SHA256.HashData(
             Encoding.UTF8.GetBytes(identity)));
     }
@@ -53,13 +55,22 @@ internal static class GameLogoProvider
         try
         {
             string file=PrivateFile(game);
+            if(!File.Exists(file))
+            {
+                // Old files include the GG display name in their filename.
+                // Keep existing player assets functional after upgrading.
+                string legacy=game.Executable.Trim().ToLowerInvariant()+"\n"+
+                    game.Name.Trim().ToLowerInvariant();
+                string oldKey=Convert.ToHexString(SHA256.HashData(
+                    Encoding.UTF8.GetBytes(legacy)));
+                string oldFile=Path.Combine(DirectoryPath,oldKey+".json");
+                if(File.Exists(oldFile))file=oldFile;
+            }
             if(File.Exists(file)&&new FileInfo(file).Length<12000)
             {
                 var asset=JsonSerializer.Deserialize<Asset>(File.ReadAllText(file));
                 if(asset is not null&&
                    string.Equals(asset.Executable,game.Executable,
-                       StringComparison.OrdinalIgnoreCase)&&
-                   string.Equals(asset.Name,game.Name,
                        StringComparison.OrdinalIgnoreCase)&&
                    TryReadRows(asset.Rows,out var pixels))
                     return new(game.Executable,game.Name,Canvas,pixels,
@@ -141,10 +152,26 @@ internal static class GameLogoProvider
             int h=Math.Max(1,(int)Math.Round(source.Height*scale));
             g.DrawImage(source,(Canvas-w)/2,(Canvas-h)/2,w,h);
         }
-        int fullyTransparent=0;
+        int transparent=0;
+        int brightBorder=0,opaqueBorder=0;
         for(int y=0;y<Canvas;y++)for(int x=0;x<Canvas;x++)
-            if(bitmap.GetPixel(x,y).A<32)fullyTransparent++;
-        bool silhouette=fullyTransparent>Canvas*Canvas/10;
+        {
+            var c=bitmap.GetPixel(x,y);
+            if(c.A<32)transparent++;
+            if(x is 0 or Canvas-1 || y is 0 or Canvas-1)
+            {
+                if(c.A>200)
+                {
+                    opaqueBorder++;
+                    if((c.R*3+c.G*6+c.B)/10>=170)brightBorder++;
+                }
+            }
+        }
+        bool silhouette=transparent>Canvas*Canvas/10;
+        // White-background logos: foreground is DARK, not the entire
+        // white rectangle. Dark-background art is the opposite.
+        bool lightBackground=opaqueBorder>20 &&
+            brightBorder>=opaqueBorder*7/10;
         var pixels=new bool[Canvas*Canvas];
         for(int y=0;y<Canvas;y++)for(int x=0;x<Canvas;x++)
         {
@@ -152,7 +179,8 @@ internal static class GameLogoProvider
             if(c.A<88)continue;
             int luminosity=(c.R*3+c.G*6+c.B)/10;
             pixels[y*Canvas+x]=silhouette
-                ?c.A>110:luminosity>=112;
+                ?c.A>110:lightBackground
+                    ?luminosity<=145:luminosity>=110;
         }
         return pixels;
     }

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>1.0.0-beta.1</Version>
+    <Version>1.0.0-beta.2-rc7.3</Version>
     <ApplicationIcon>dock-customiser-rc4.ico</ApplicationIcon>
     <Product>Steelseries Dock Customiser</Product>
     <Authors>Yakup Can Palaz</Authors>

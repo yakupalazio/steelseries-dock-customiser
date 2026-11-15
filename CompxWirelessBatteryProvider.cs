@@ -133,7 +133,8 @@ internal sealed class CompxWirelessBatteryProvider:IPeripheralBatteryProvider
     private static extern bool HidD_FreePreparsedData(IntPtr preparsed);
 
     internal sealed record CollectionCaps(
-        int UsagePage,int Usage,int InputLength,int OutputLength);
+        int UsagePage,int Usage,int InputLength,int OutputLength,
+        int FeatureLength=0);
 
     /// <summary>
     /// Read-only HidP_GetCaps call against this one HID collection. Not an
@@ -162,7 +163,8 @@ internal sealed class CompxWirelessBatteryProvider:IPeripheralBatteryProvider
                     ushort page=unchecked((ushort)Marshal.ReadInt16(caps,2));
                     ushort input=unchecked((ushort)Marshal.ReadInt16(caps,4));
                     ushort output=unchecked((ushort)Marshal.ReadInt16(caps,6));
-                    return new(page,usage,input,output);
+                    ushort feature=unchecked((ushort)Marshal.ReadInt16(caps,8));
+                    return new(page,usage,input,output,feature);
                 }
                 finally{Marshal.FreeHGlobal(caps);}
             }

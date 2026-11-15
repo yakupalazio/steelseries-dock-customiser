@@ -211,6 +211,14 @@ internal static class ConnectedPeripheralInventory
         => MergeAndAttachBatteries(source.Select(c=>
             new Candidate(c.Id,c.Name,c.Connection,c.Manufacturer)),snapshot);
 
+    internal static IReadOnlyList<ConnectedPeripheral> MergeAndAttachBatteries(
+        IEnumerable<(string Id,string Name,string Connection,
+            string Manufacturer,string HardwareId)> source,
+        BatterySnapshot snapshot)
+        =>MergeAndAttachBatteries(source.Select(c=>
+            new Candidate(c.Id,c.Name,c.Connection,c.Manufacturer,
+                c.HardwareId)),snapshot);
+
     private static IReadOnlyList<ConnectedPeripheral> MergeAndAttachBatteries(
         IEnumerable<Candidate> candidates,BatterySnapshot snapshot)
     {
@@ -285,6 +293,33 @@ internal static class ConnectedPeripheralInventory
                 {
                     reading=same[0];
                     kind=reading.Kind;
+                }
+            }
+            if(reading is null&&usbId.HasValue)
+            {
+                // Independent vendor readers may name the actual mouse
+                // while Windows names only its USB dongle. Match a live
+                // reading by exact *public* VID/PID when this physical
+                // receiver is unique; never guess from a brand name.
+                string marker=$"{usbId.Value.Vid:X4}:{usbId.Value.Pid:X4}";
+                int receiverCount=candidatesArray.Select(c=>
+                    (Id:DeviceGroup(c),Usb:
+                        WirelessCompatibilityCatalog.ReadHardwareId(
+                            c.HardwareId)))
+                    .Where(item=>item.Usb.HasValue &&
+                        item.Usb.Value.Vid==usbId.Value.Vid &&
+                        item.Usb.Value.Pid==usbId.Value.Pid)
+                    .Select(item=>item.Id)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+                if(receiverCount==1)
+                {
+                    var matching=usable.Where(r=>r.Detail.Contains(marker,
+                        StringComparison.OrdinalIgnoreCase)).ToArray();
+                    if(matching.Length==1)
+                    {
+                        reading=matching[0];
+                        kind=reading.Kind;
+                    }
                 }
             }
             string icon=BatteryDeviceClassifier.IconFor(name,

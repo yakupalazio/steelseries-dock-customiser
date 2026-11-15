@@ -50,15 +50,18 @@ internal static class DockFactoryHeaderReference
         }
         // Headset silhouette and two-battery row, matching the native
         // 10-pixel firmware header proportions without photo-derived noise.
-        Pattern(4,2,
+        // Open-cup headset silhouette, not a closed circle. The original
+        // dock photo shows a straight band and two hanging earpieces.
+        Pattern(4,1,
             "0011111100",
-            "0100000010",
+            "0110000110",
+            "1100000011",
             "1100000011",
             "1100000011",
             "1100000011",
             "1100000011",
             "0110000110",
-            "0011111100");
+            "0110000110");
         Outline(16,2,18,8);
         for(int bx=19;bx<=28;bx+=4)
             for(int yy=4;yy<=7;yy++)
@@ -88,15 +91,18 @@ internal static class DockFactoryHeaderReference
             xCursor+=5;
         }
         // Right-hand power/charging symbol and battery outline.
-        Pattern(93,2,
-            "0001000000",
+        // Thin angled bolt; older wide triangular blob obscured the right
+        // headphone spare-battery glyph at 128x10 native resolution.
+        Pattern(93,1,
+            "0010000000",
+            "0011000000",
             "0011100000",
-            "0011110000",
-            "1111111000",
+            "1111110000",
+            "0111111000",
             "0001111100",
             "0000111000",
-            "0000110000",
-            "0000100000");
+            "0000011000",
+            "0000001000");
         Outline(104,2,18,8);
         for(int bx=107;bx<=115;bx+=4)
             for(int yy=4;yy<=7;yy++)

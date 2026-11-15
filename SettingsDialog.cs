@@ -26,6 +26,9 @@ internal sealed class SettingsDialog : Form
     private BatteryStatusDialog? batteryEditor;
     private Action<int>? selectPageForCapture;
     internal void SelectPageForCapture(int page)=>selectPageForCapture?.Invoke(page);
+    internal void SetFoundDevicesForCapture(
+        IReadOnlyList<ConnectedPeripheral> sample)
+        =>batteryEditor?.SetFoundForCapture(sample);
 
     public void UpdateBatteryRows()
     {
@@ -106,7 +109,7 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO • Beta 1", Left = 18, Top = 704,
+            Text = "OLED STUDIO • RC7.3", Left = 18, Top = 704,
             Width = 180, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 7.6f)
         });
@@ -165,7 +168,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.0.0 Beta 1\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   1.0.0 Beta 2 Preview\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });

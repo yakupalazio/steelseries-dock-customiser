@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -64,23 +65,67 @@ internal static class SyncedLyricsProvider
         if(!track.IsPlaying||string.IsNullOrWhiteSpace(track.Title)||
            string.IsNullOrWhiteSpace(track.Artist))return;
         string key=Key(track);
-        if(Volatile.Read(ref current).TrackKey==key)return;
+        if(Volatile.Read(ref current) is {Lines.Count:>0} currentResult &&
+           currentResult.TrackKey==key)return;
         if(!await Gate.WaitAsync(0))return;
         try
         {
-            if(current.TrackKey==key)return;
+            if(current.TrackKey==key&&current.Lines.Count>0)return;
             if(Cache.TryGetValue(key,out var cached)&&
                cached.Expires>DateTimeOffset.UtcNow)
             {
                 Volatile.Write(ref current,cached.Result);
                 return;
             }
+            // Disk-backed song matching survives restarts and connectivity
+            // loss. No network access is necessary for a cached track.
+            var offline=OfflineLyricsCache.Read(key);
+            if(offline is not null)
+            {
+                Volatile.Write(ref current,offline);
+                if(Cache.Count>=48)Cache.Clear();
+                Cache[key]=(offline,DateTimeOffset.UtcNow+
+                    TimeSpan.FromHours(4));
+                return;
+            }
             if(DateTimeOffset.UtcNow<retryAfter)return;
             var found=await FetchAsync(track,key);
             Volatile.Write(ref current,found);
+            if(found.Lines.Count>0)OfflineLyricsCache.Store(found);
             if(Cache.Count>=48)Cache.Clear();
             Cache[key]=(found,DateTimeOffset.UtcNow+
                 (found.Lines.Count>0?TimeSpan.FromHours(2):TimeSpan.FromMinutes(10)));
+        }
+        finally{Gate.Release();}
+    }
+
+    /// <summary>
+    /// Explicit per-song offline LRC import. No network/Spotify endpoint,
+    /// no file path stored. Import only into the currently playing song.
+    /// </summary>
+    internal static async Task<bool> ImportLocalLrcAsync(
+        MediaSnapshot track,string lrcFile,string? cacheDirectoryForTest=null)
+    {
+        if(!track.IsPlaying || string.IsNullOrWhiteSpace(track.Title) ||
+           string.IsNullOrWhiteSpace(track.Artist) ||
+           !string.Equals(Path.GetExtension(lrcFile),".lrc",
+               StringComparison.OrdinalIgnoreCase) ||
+           !File.Exists(lrcFile)||
+           new FileInfo(lrcFile).Length>256_000)return false;
+        string source=await File.ReadAllTextAsync(lrcFile);
+        var lines=Parse(source);
+        if(lines.Count==0)return false;
+        string key=Key(track);
+        var synced=new SyncedLyricsSnapshot(key,lines,"Local LRC import");
+        if(!await Gate.WaitAsync(TimeSpan.FromSeconds(3)))return false;
+        try
+        {
+            if(!OfflineLyricsCache.Store(
+                synced,cacheDirectoryForTest))return false;
+            Cache[key]=(synced,DateTimeOffset.UtcNow+
+                TimeSpan.FromHours(4));
+            Volatile.Write(ref current,synced);
+            return true;
         }
         finally{Gate.Release();}
     }

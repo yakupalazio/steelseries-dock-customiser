@@ -79,11 +79,65 @@ internal static class GgGameDetector
                     catch(System.ComponentModel.Win32Exception){}
                 }
             }
-            return candidates.OrderByDescending(c=>c.Started)
-                .Select(c=>c.Game).FirstOrDefault()??GameSnapshot.None;
+            var selected=candidates.OrderByDescending(c=>c.Started)
+                .Select(c=>c.Game).FirstOrDefault();
+            // GG is preferred, but not mandatory. A foreground executable
+            // beneath a recognized game-library installation is also a
+            // useful, read-only game identity when GG missed registration.
+            var foreground=DetectForegroundInstalledGame();
+            if(foreground.IsRunning)
+                return candidates.Select(c=>c.Game).FirstOrDefault(g=>
+                    g.ProcessId==foreground.ProcessId)??foreground;
+            return selected??GameSnapshot.None;
         }
         catch{return GameSnapshot.None;}
         finally{foreach(var p in processes)p.Dispose();}
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(
+        IntPtr hwnd,out uint processId);
+
+    internal static bool IsInstalledGamePath(string? raw)
+    {
+        if(string.IsNullOrWhiteSpace(raw)||
+           !raw.EndsWith(".exe",StringComparison.OrdinalIgnoreCase))
+            return false;
+        string path=raw.Replace('/','\\').ToLowerInvariant();
+        return path.Contains("\\steamapps\\common\\") ||
+            path.Contains("\\epic games\\") ||
+            path.Contains("\\riot games\\") ||
+            path.Contains("\\xboxgames\\") ||
+            path.Contains("\\gog galaxy\\games\\");
+    }
+
+    private static GameSnapshot DetectForegroundInstalledGame()
+    {
+        try
+        {
+            IntPtr handle=GetForegroundWindow();
+            if(handle==IntPtr.Zero)return GameSnapshot.None;
+            GetWindowThreadProcessId(handle,out uint pid);
+            if(pid is 0 or >int.MaxValue)return GameSnapshot.None;
+            using var process=Process.GetProcessById((int)pid);
+            if(process.HasExited||string.IsNullOrWhiteSpace(
+                process.MainWindowTitle))return GameSnapshot.None;
+            string? path=process.MainModule?.FileName;
+            if(!IsInstalledGamePath(path)||
+               GenericExecutables.Contains(process.ProcessName))
+                return GameSnapshot.None;
+            string title=process.MainWindowTitle.Trim();
+            // Never expose a potentially sensitive long window title.
+            if(title.Length>80)title=
+                Path.GetFileNameWithoutExtension(path)??process.ProcessName;
+            return new(title,process.ProcessName,process.Id);
+        }
+        catch(Exception ex) when(ex is System.ComponentModel.Win32Exception or
+            InvalidOperationException or ArgumentException or
+            UnauthorizedAccessException or System.IO.IOException)
+        {return GameSnapshot.None;}
     }
 
     /// <summary>
@@ -101,6 +155,20 @@ internal static class GgGameDetector
                    game.Executable,StringComparison.OrdinalIgnoreCase)&&
                File.Exists(exe))
                 return exe;
+        // A Steam/Epic/Riot/XboxGames foreground fallback can supply a
+        // real executable icon without GG database access.
+        try
+        {
+            using var process=Process.GetProcessById(game.ProcessId);
+            string? path=process.MainModule?.FileName;
+            if(IsInstalledGamePath(path)&&
+               string.Equals(process.ProcessName,game.Executable,
+                   StringComparison.OrdinalIgnoreCase)&&File.Exists(path))
+                return path;
+        }
+        catch(Exception ex) when(ex is System.ComponentModel.Win32Exception or
+            InvalidOperationException or ArgumentException or
+            UnauthorizedAccessException or System.IO.IOException){}
         return null;
     }
 

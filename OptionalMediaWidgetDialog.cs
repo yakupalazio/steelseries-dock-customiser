@@ -23,9 +23,12 @@ internal sealed class OptionalMediaWidgetDialog:Form
     private static readonly Color TextColor=Color.FromArgb(234,243,250);
     private static readonly Color Muted=Color.FromArgb(151,169,187);
 
-    public OptionalMediaWidgetDialog(DockWidget source)
+    private readonly MediaSnapshot? mediaTrack;
+    public OptionalMediaWidgetDialog(DockWidget source,
+        MediaSnapshot? currentMedia=null)
     {
         UiPolish.Register(this);
+        mediaTrack=currentMedia;
         Updated=JsonSerializer.Deserialize<DockWidget>(
             JsonSerializer.Serialize(source))??new DockWidget{Kind=source.Kind};
         Text=source.Kind switch
@@ -120,8 +123,48 @@ internal sealed class OptionalMediaWidgetDialog:Form
         var width=Number(16,128,1,Updated.WidgetWidth);
         Row("Yazı alanı genişliği",width);
         width.ValueChanged+=(_,_)=>Updated.WidgetWidth=(int)width.Value;
-        Note("Bu öğe yalnızca Medya ekranında kullanılabilir. "+
-            "Kaynakta senkronize söz yoksa sahte satır gösterilmez.");
+        var local=Button(UiLanguage.English
+            ?"Import local .LRC":"Yerel .LRC içe aktar");
+        local.Width=250;
+        local.Click+=async (_,_)=>{
+            if(mediaTrack?.IsPlaying!=true)
+            {
+                MessageBox.Show(this,UiLanguage.English
+                    ?"Play a song first to match its LRC timestamps."
+                    :"Önce bir şarkı aç. LRC sözleri o parçaya bağlanacak.",
+                    Text,MessageBoxButtons.OK,MessageBoxIcon.Information);
+                return;
+            }
+            using var choose=new OpenFileDialog{
+                Filter="Synced lyrics (*.lrc)|*.lrc",
+                Title=UiLanguage.English?"Choose a local LRC file":
+                    "Yerel şarkı sözü dosyası seç",CheckFileExists=true};
+            if(choose.ShowDialog(this)!=DialogResult.OK)return;
+            try
+            {
+                bool imported=await SyncedLyricsProvider.ImportLocalLrcAsync(
+                    mediaTrack,choose.FileName);
+                MessageBox.Show(this,imported
+                    ?(UiLanguage.English
+                        ?"Lyrics saved to local offline cache."
+                        :"Şarkı sözleri çevrimdışı önbelleğe kaydedildi.")
+                    :(UiLanguage.English
+                        ?"This file has no valid synced LRC timestamps."
+                        :"Dosyada geçerli zaman kodlu söz bulunamadı."),
+                    Text,MessageBoxButtons.OK,
+                    imported?MessageBoxIcon.Information:
+                        MessageBoxIcon.Warning);
+            }
+            catch(Exception ex) when(ex is System.IO.IOException or
+                UnauthorizedAccessException or ArgumentException)
+            {MessageBox.Show(this,ex.Message,Text);}
+        };
+        content.Controls.Add(local);
+        Note(UiLanguage.English
+            ?"Lyrics already cached or manually imported work offline. "+
+              "Without lyrics the OLED widget is completely blank."
+            :"Önbellekteki veya içe aktarılan sözler internetsiz çalışır. "+
+              "Söz yoksa OLED widget'ı tamamen boş kalır.");
     }
 
     private void BuildVisualizer()

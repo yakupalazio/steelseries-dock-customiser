@@ -930,7 +930,24 @@ internal static class Program
                 settings.EnableOffscreenCapture();
                 settings.Show();
                 Application.DoEvents();
-                if(args.Contains("--capture-battery"))settings.SelectPageForCapture(1);
+                if(args.Contains("--capture-battery") ||
+                   args.Contains("--capture-battery-found-synthetic"))
+                {
+                    settings.SelectPageForCapture(1);
+                    if(args.Contains("--capture-battery-found-synthetic"))
+                        settings.SetFoundDevicesForCapture([
+                            new("wl", "WLMOUSE Beast X Pro 8K Receiver",
+                                "USB / Dock","WLMOUSE","Mouse",null,
+                                "Wireless catalog","Protocol test pending",null),
+                            new("bt","HUAWEI FreeBuds SE 2",
+                                "Bluetooth","Huawei","Earbuds",null,
+                                "Bluetooth","Connected; no level from OS",null),
+                            new("at","ATK Mouse 1K Dongle",
+                                "USB / Dock","ATK","Mouse",70,
+                                "CompX","Verified, live value",
+                                "Vendor:Compx:synthetic")
+                        ]);
+                }
                 else if(args.Contains("--capture-about"))settings.SelectPageForCapture(2);
                 else if(args.Contains("--capture-display"))settings.SelectPageForCapture(3);
                 else if(args.Contains("--capture-windows"))settings.SelectPageForCapture(4);

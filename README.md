@@ -1,3 +1,7 @@
+# Private RC7.3 Battery + Render Stabilization Preview
+
+> This is a **private tester package**. **Public GitHub v1.0.0-beta.1 remains unchanged.** Added permanent offline LRC song cache and per-song local .lrc import; **if no lyrics are available, the widget is completely blank**. Battery Settings now discovers and lists wireless USB/Bluetooth accessories even with --% and lets users track/hide them. Added experimental WLMOUSE status-only battery reader; fixed game logo PNG rasterization and non-GG foreground game detection. The **original dock photo is included in the private ZIP**, not redistributed in public GitHub. The top ten firmware rows remain physically protected. See [RC7.3 notes](RELEASE_NOTES_RC73_BATTERY_RENDER_OFFLINE.md).
+
 # SteelSeries Dock Customiser — Public Beta 1 (Windows x64)
 
 > **New:** Beta 1 feedback hand-off opens public GitHub Issue forms (with a separate optional screenshot upload that the tester confirms). The app never silently uploads a report or embeds a GitHub credential. Windows x64 single-file beta is self-contained. Refer to [BETA_TESTING.md](BETA_TESTING.md) and [RELEASE_NOTES_BETA1_PUBLIC.md](RELEASE_NOTES_BETA1_PUBLIC.md). The bundled ZIP excludes the private dock photograph and any third-party SDK binary; all source remains in the developer's local working tree.

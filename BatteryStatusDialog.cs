@@ -20,6 +20,11 @@ internal sealed class BatteryPreferences
     public int WarningRepeatMinutes {get;set;}=30;
     public Dictionary<string,int> LowBatteryThresholds {get;set;}=new();
     public bool AutoMinimizePhoneLink {get;set;}=false;
+    // User-controlled recognition/tracking of connected peripherals.
+    // No fake percentages or fixed model defaults shipped.
+    public string[] FollowedDevices {get;set;}=[];
+    public string[] HiddenDevices {get;set;}=[];
+    public Dictionary<string,string> FollowedNames {get;set;}=new();
     public static string FilePath=>Path.Combine(
         Beta5Sandbox.SettingsDirectory,"batteries-v098.json");
 
@@ -31,7 +36,11 @@ internal sealed class BatteryPreferences
             {
                 var pref=JsonSerializer.Deserialize<BatteryPreferences>(File.ReadAllText(FilePath));
                 if(pref!=null){pref.PriorityKinds=BatteryPriority.Sanitize(pref.PriorityKinds);
-                    pref.LowBatteryThresholds??=new();return pref;}
+                    pref.LowBatteryThresholds??=new();
+                    pref.FollowedDevices??=[];
+                    pref.HiddenDevices??=[];
+                    pref.FollowedNames??=new();
+                    return pref;}
             }
             // Carry over the old experimental-device flag, but apply the new
             // default priority instead of the former hard-coded 3 devices.
@@ -65,6 +74,9 @@ internal sealed class BatteryPreferences
 internal sealed class BatteryStatusDialog : Form
 {
     private readonly BatteryPreferences prefs;
+    private IReadOnlyList<ConnectedPeripheral> discovered=[];
+    private bool discoveryBusy;
+    private sealed record DisconnectedTracked(string Id,string Name);
     private readonly Func<BatterySnapshot> snapshotGetter;
     private readonly Func<Task> refresh;
     private readonly Action onApply;
@@ -117,6 +129,93 @@ internal sealed class BatteryStatusDialog : Form
         AutoScrollMinSize=new Size(875,730);
         Font=new Font("Segoe UI",9.5f);
         Controls.Add(grid);
+        var discoveredMenu=new ContextMenuStrip();
+        UiPolish.StyleMenu(discoveredMenu);
+        var followAction=new ToolStripMenuItem(
+            UiLanguage.English?"Track device":"Cihazı takibe al");
+        var hideAction=new ToolStripMenuItem(
+            UiLanguage.English?"Hide from list":"Listeden gizle");
+        var showHidden=new ToolStripMenuItem(UiLanguage.English
+            ?"Show hidden devices again":"Gizlenen cihazları tekrar göster");
+        var changeIcon=new ToolStripMenuItem(UiLanguage.English
+            ?"Customize device icon...":"Cihaz ikonunu özelleştir...");
+        discoveredMenu.Items.AddRange([
+            followAction,changeIcon,hideAction,showHidden]);
+        discoveredMenu.Opening+=(_,_)=>{
+            object? selected=grid.CurrentRow?.Tag;
+            string id=selected switch{
+                ConnectedPeripheral d=>d.Id,
+                DisconnectedTracked d=>d.Id,
+                _=>""};
+            bool followed=(prefs.FollowedDevices??[]).Contains(id,
+                StringComparer.OrdinalIgnoreCase);
+            followAction.Enabled=id.Length>0;
+            changeIcon.Enabled=selected is ConnectedPeripheral;
+            hideAction.Enabled=selected is ConnectedPeripheral;
+            followAction.Text=followed
+                ?(UiLanguage.English?"Stop tracking":"Takibi bırak")
+                :(UiLanguage.English?"Track device":"Cihazı takibe al");
+            showHidden.Enabled=(prefs.HiddenDevices??[]).Length>0;
+        };
+        followAction.Click+=(_,_)=>{
+            object? selection=grid.CurrentRow?.Tag;
+            string id=selection switch{
+                ConnectedPeripheral d=>d.Id,
+                DisconnectedTracked d=>d.Id,
+                _=>""};
+            if(id.Length==0)return;
+            bool followed=(prefs.FollowedDevices??[]).Contains(id,
+                StringComparer.OrdinalIgnoreCase);
+            if(followed)
+            {
+                prefs.FollowedDevices=(prefs.FollowedDevices??[])
+                    .Where(x=>!x.Equals(id,
+                        StringComparison.OrdinalIgnoreCase)).ToArray();
+                prefs.FollowedNames.Remove(id);
+            }
+            else if(selection is ConnectedPeripheral device)
+            {
+                prefs.FollowedDevices=(prefs.FollowedDevices??[]).Append(id)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                prefs.FollowedNames[id]=device.Name;
+                prefs.HiddenDevices=(prefs.HiddenDevices??[])
+                    .Where(x=>!x.Equals(id,
+                        StringComparison.OrdinalIgnoreCase)).ToArray();
+                if(device.Percent.HasValue &&
+                   device.BatteryKind is string kind)
+                    prefs.PriorityKinds=BatteryPriority.Sanitize(
+                        prefs.PriorityKinds.Prepend(kind));
+            }
+            prefs.Save();onApply();UpdateRows();
+        };
+        hideAction.Click+=(_,_)=>{
+            if(grid.CurrentRow?.Tag is not ConnectedPeripheral device)return;
+            prefs.HiddenDevices=(prefs.HiddenDevices??[]).Append(device.Id)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            prefs.FollowedDevices=(prefs.FollowedDevices??[])
+                .Where(x=>!x.Equals(device.Id,
+                    StringComparison.OrdinalIgnoreCase)).ToArray();
+            prefs.FollowedNames.Remove(device.Id);
+            prefs.Save();UpdateRows();
+        };
+        changeIcon.Click+=(_,_)=>{
+            if(grid.CurrentRow?.Tag is not ConnectedPeripheral device)return;
+            using var picker=new BatteryDeviceIconPickerDialog(
+                device.BatteryKind,device.Name,device.IconKind);
+            if(picker.ShowDialog(this)==DialogResult.OK)
+                UpdateRows();
+        };
+        showHidden.Click+=(_,_)=>{
+            prefs.HiddenDevices=[];
+            prefs.Save();UpdateRows();
+        };
+        grid.ContextMenuStrip=discoveredMenu;
+        grid.MouseDown+=(_,e)=>{
+            if(e.Button!=MouseButtons.Right)return;
+            var hit=grid.HitTest(e.X,e.Y);
+            if(hit.RowIndex>=0)grid.CurrentCell=
+                grid.Rows[hit.RowIndex].Cells[0];
+        };
         grid.Columns.Add("device","Cihaz");
         grid.Columns.Add("pct","Pil");
         grid.Columns.Add("source","Doğrulanan kaynak");
@@ -131,7 +230,13 @@ internal sealed class BatteryStatusDialog : Form
         var now=new DarkButton{Left=17,Top=232,Width=125,Height=31,Text="Şimdi yenile"};
         now.Click+=async (_,_)=>{
             now.Enabled=false;
-            try{await refresh();UpdateRows();}finally{now.Enabled=true;}
+            try
+            {
+                await refresh();
+                await RefreshFoundDevicesAsync();
+                UpdateRows();
+            }
+            finally{now.Enabled=true;}
         };
         Controls.Add(now);Controls.Add(lastUpdated);
         lastUpdated.Width=400;
@@ -366,6 +471,21 @@ internal sealed class BatteryStatusDialog : Form
         AutoScroll=false;
 
         ApplyLanguage();
+        Shown+=async (_,_)=>await RefreshFoundDevicesAsync();
+    }
+
+    private async Task RefreshFoundDevicesAsync()
+    {
+        if(discoveryBusy||IsDisposed)return;
+        discoveryBusy=true;
+        try
+        {
+            discovered=await ConnectedPeripheralInventory.DiscoverAsync(
+                snapshotGetter());
+            if(!IsDisposed)UpdateRows();
+        }
+        catch{/* No USB/Bluetooth enumeration permission is not zero devices. */}
+        finally{discoveryBusy=false;}
     }
 
     public void ApplyLanguage()
@@ -399,6 +519,31 @@ internal sealed class BatteryStatusDialog : Form
         active.Text=UiLanguage.T("Şu anda seçilenler:\n")+string.Join("  ·  ",
             display.Select(k=>BatteryPriority.DisplayName(k,snapshotGetter())));
     }
+    internal void SetFoundForCapture(
+        IReadOnlyList<ConnectedPeripheral> sample)
+    {
+        discovered=sample;
+        UpdateRows();
+    }
+
+    internal static bool IsBatteryCandidate(ConnectedPeripheral device)
+    {
+        if(device.Percent.HasValue)return true;
+        if(device.Connection.Contains("Bluetooth",
+            StringComparison.OrdinalIgnoreCase))return true;
+        if(device.BatteryKind is "Headset" or "Mouse" or "Phone" or
+            "SpareBattery" or "DualSense")return true;
+        if(WirelessCompatibilityCatalog.Recognize(
+            device.Name,device.Manufacturer,device.Connection)!=null)
+            return true;
+        var match=System.Text.RegularExpressions.Regex.Match(
+            device.HardwareSummary,@"VID_([0-9A-F]{4}) PID_([0-9A-F]{4})");
+        return match.Success&&
+            CompxWirelessBatteryProvider.FindReceiver(
+                Convert.ToInt32(match.Groups[1].Value,16),
+                Convert.ToInt32(match.Groups[2].Value,16))!=null;
+    }
+
     public void UpdateRows()
     {
         if(IsDisposed)return;
@@ -408,17 +553,73 @@ internal sealed class BatteryStatusDialog : Form
                 BatteryPriority.IsCurrent(pair.Value,DateTimeOffset.Now))
             .Select(pair=>pair.Key))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if(grid.Rows.Count!=kinds.Length ||
-           kinds.Where((kind,i)=>i<grid.Rows.Count &&
-               !string.Equals(grid.Rows[i].Tag as string,kind,
-                   StringComparison.OrdinalIgnoreCase)).Any())
+        var blocked=(prefs.HiddenDevices??[])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var trackedIds=(prefs.FollowedDevices??[])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var linkedDevices=discovered.Where(d=>
+            !blocked.Contains(d.Id)&&IsBatteryCandidate(d) &&
+            // A linked live reading already has a normal battery slot.
+            !(d.BatteryKind is string kind &&
+                kinds.Contains(kind,StringComparer.OrdinalIgnoreCase)) &&
+            !kinds.Any(k=>string.Equals(
+                BatteryPriority.DisplayName(k,snap),d.Name,
+                StringComparison.OrdinalIgnoreCase)))
+            .Take(60).ToArray();
+        var tracked=linkedDevices.Where(d=>trackedIds.Contains(d.Id)).ToArray();
+        var found=linkedDevices.Where(d=>!trackedIds.Contains(d.Id)).ToArray();
+        grid.Rows.Clear();
+        foreach(var kind in kinds)
         {
-            grid.Rows.Clear();
-            foreach(var kind in kinds)
-            {
-                int row=grid.Rows.Add(BatteryPriority.DisplayName(kind,snap),"--%","","");
-                grid.Rows[row].Tag=kind;
-            }
+            int row=grid.Rows.Add(
+                BatteryPriority.DisplayName(kind,snap),"--%","","");
+            grid.Rows[row].Tag=kind;
+        }
+        foreach(var device in tracked)
+        {
+            int row=grid.Rows.Add("✓ "+device.Name,device.BatteryDisplay,
+                device.BatterySource,
+                (UiLanguage.English?"Tracking · ":"Takipte · ")+device.Detail);
+            grid.Rows[row].Tag=device;
+        }
+        var activeIds=discovered.Select(d=>d.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach(string id in trackedIds.Where(id=>!activeIds.Contains(id)))
+        {
+            string savedName=prefs.FollowedNames.TryGetValue(id,out var name)
+                ?name:(UiLanguage.English?"Previously tracked device":
+                    "Önceden takip edilen cihaz");
+            int row=grid.Rows.Add(
+                savedName,"--%",
+                UiLanguage.English?"Disconnected":"Bağlantı yok",
+                UiLanguage.English
+                    ?"Device not connected; no battery percent cached."
+                    :"Cihaz bağlı değil; eski pil yüzdesi gösterilmiyor.");
+            grid.Rows[row].Tag=new DisconnectedTracked(id,savedName);
+        }
+        if(found.Length>0)
+        {
+            int section=grid.Rows.Add(
+                UiLanguage.English
+                    ?$"FOUND DEVICES ({found.Length})"
+                    :$"BULUNAN CİHAZLAR ({found.Length})",
+                "",UiLanguage.English?"Connected / detected":
+                "Bağlı / tespit edildi",
+                UiLanguage.English
+                    ?"Right click: track / icon / hide"
+                    :"Sağ tık: takip / ikon / gizle");
+            grid.Rows[section].ReadOnly=true;
+            grid.Rows[section].DefaultCellStyle.BackColor=
+                Color.FromArgb(36,57,71);
+            grid.Rows[section].DefaultCellStyle.ForeColor=
+                Color.FromArgb(117,214,220);
+        }
+        foreach(var device in found)
+        {
+            int row=grid.Rows.Add(device.Name,
+                device.BatteryDisplay,device.BatterySource,
+                device.Detail);
+            grid.Rows[row].Tag=device;
         }
         foreach(var kind in kinds)
             if(!priority.Items.Cast<string>().Any(k=>
@@ -439,9 +640,15 @@ internal sealed class BatteryStatusDialog : Form
         ShowActive();
         int verified=kinds.Count(k=>BatteryPriority.IsCurrent(snap[k],
             DateTimeOffset.Now));
+        int foundCount=grid.Rows.Cast<DataGridViewRow>()
+            .Count(r=>r.Tag is ConnectedPeripheral);
         summary.Text=UiLanguage.English
-            ?$"{verified} verified live battery sources · {kinds.Length} tracked slots"
-            :$"{verified} doğrulanmış canlı pil · {kinds.Length} takip edilen yuva";
+            ?$"{verified} verified live · "+
+                $"{kinds.Length+trackedIds.Count} tracked · "+
+                $"{found.Length} discovered"
+            :$"{verified} canlı pil · "+
+                $"{kinds.Length+trackedIds.Count} takipte · "+
+                $"{found.Length} bulunan cihaz";
         summary.ForeColor=verified>0
             ?Color.FromArgb(108,211,197)
             :Color.FromArgb(152,182,200);
