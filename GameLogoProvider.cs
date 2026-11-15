@@ -72,7 +72,8 @@ internal static class GameLogoProvider
                 if(asset is not null&&
                    string.Equals(asset.Executable,game.Executable,
                        StringComparison.OrdinalIgnoreCase)&&
-                   TryReadRows(asset.Rows,out var pixels))
+                   TryReadRows(asset.Rows,out var pixels) &&
+                   !IsFilledRectangle(pixels))
                     return new(game.Executable,game.Name,Canvas,pixels,
                         "Kullanıcı logosu");
             }
@@ -116,6 +117,10 @@ internal static class GameLogoProvider
         var bits=ConvertImage(original);
         if(!bits.Any(x=>x))
             throw new InvalidDataException("Görselde OLED'e aktarılacak piksel bulunamadı.");
+        if(IsFilledRectangle(bits))
+            throw new InvalidDataException(
+                "Bu görsel düz beyaz kare olarak çevriliyor. "+
+                "Logonun arka planını temizle veya farklı görsel seç.");
         var asset=new Asset{
             Executable=game.Executable,Name=game.Name,
             Rows=Enumerable.Range(0,Canvas).Select(y=>
@@ -138,51 +143,122 @@ internal static class GameLogoProvider
         if(File.Exists(file))File.Delete(file);
     }
 
+    /// <summary>
+    /// The same monochrome conversion is used for user PNG/JPEG/ICO
+    /// images and extracted game EXE icons. Analyze the ORIGINAL image
+    /// background before letterboxing: a transparent letterbox is not
+    /// evidence that the entire opaque source rectangle is foreground.
+    /// Then crop the content bounding box and resample with antialiasing.
+    /// </summary>
+    internal static bool IsFilledRectangle(bool[] pixels)
+        =>pixels.Length==Canvas*Canvas &&
+          pixels.Count(x=>x)>900;
+
     internal static bool[] ConvertImage(Image source)
     {
-        using var bitmap=new Bitmap(Canvas,Canvas,PixelFormat.Format32bppArgb);
-        using(var g=Graphics.FromImage(bitmap))
+        using var original=new Bitmap(source.Width,source.Height,
+            PixelFormat.Format32bppArgb);
+        using(var g=Graphics.FromImage(original))
         {
             g.Clear(Color.Transparent);
-            g.InterpolationMode=InterpolationMode.HighQualityBicubic;
-            g.SmoothingMode=SmoothingMode.AntiAlias;
-            float scale=Math.Min((float)Canvas/source.Width,
-                (float)Canvas/source.Height);
-            int w=Math.Max(1,(int)Math.Round(source.Width*scale));
-            int h=Math.Max(1,(int)Math.Round(source.Height*scale));
-            g.DrawImage(source,(Canvas-w)/2,(Canvas-h)/2,w,h);
+            g.DrawImage(source,0,0,source.Width,source.Height);
         }
-        int transparent=0;
-        int brightBorder=0,opaqueBorder=0;
-        for(int y=0;y<Canvas;y++)for(int x=0;x<Canvas;x++)
+
+        Color[] corners=[
+            original.GetPixel(0,0),
+            original.GetPixel(original.Width-1,0),
+            original.GetPixel(0,original.Height-1),
+            original.GetPixel(original.Width-1,original.Height-1)
+        ];
+        int alphaCorners=corners.Count(c=>c.A<48);
+        bool alphaBackground=alphaCorners>=3;
+        // Near-uniform, opaque corners are a solid canvas, regardless
+        // of whether that canvas is white, black or another color.
+        var solid=corners.Where(c=>c.A>=220).ToArray();
+        bool solidBackground=!alphaBackground&&solid.Length>=3;
+        Color backdrop=solid.Length>0
+            ?Color.FromArgb(
+                (int)solid.Average(c=>c.R),
+                (int)solid.Average(c=>c.G),
+                (int)solid.Average(c=>c.B))
+            :Color.Black;
+
+        bool[] foreground=new bool[original.Width*original.Height];
+        int minX=original.Width,minY=original.Height,maxX=-1,maxY=-1;
+        for(int y=0;y<original.Height;y++)
+        for(int x=0;x<original.Width;x++)
         {
-            var c=bitmap.GetPixel(x,y);
-            if(c.A<32)transparent++;
-            if(x is 0 or Canvas-1 || y is 0 or Canvas-1)
+            Color c=original.GetPixel(x,y);
+            bool lit;
+            if(alphaBackground)
+                lit=c.A>=70;
+            else if(solidBackground)
             {
-                if(c.A>200)
-                {
-                    opaqueBorder++;
-                    if((c.R*3+c.G*6+c.B)/10>=170)brightBorder++;
-                }
+                int distance=Math.Max(Math.Abs(c.R-backdrop.R),
+                    Math.Max(Math.Abs(c.G-backdrop.G),
+                        Math.Abs(c.B-backdrop.B)));
+                lit=c.A>=70&&distance>=38;
             }
+            else
+            {
+                // Unusual multi-colored/photographic EXE art. Classify
+                // contrast relative to luminance, never every opaque
+                // pixel. This is a conservative fallback.
+                int luminance=(c.R*3+c.G*6+c.B)/10;
+                lit=c.A>=70&&luminance>=135;
+            }
+            if(!lit)continue;
+            foreground[y*original.Width+x]=true;
+            minX=Math.Min(x,minX);maxX=Math.Max(x,maxX);
+            minY=Math.Min(y,minY);maxY=Math.Max(y,maxY);
         }
-        bool silhouette=transparent>Canvas*Canvas/10;
-        // White-background logos: foreground is DARK, not the entire
-        // white rectangle. Dark-background art is the opposite.
-        bool lightBackground=opaqueBorder>20 &&
-            brightBorder>=opaqueBorder*7/10;
-        var pixels=new bool[Canvas*Canvas];
-        for(int y=0;y<Canvas;y++)for(int x=0;x<Canvas;x++)
+        var output=new bool[Canvas*Canvas];
+        if(maxX<minX||maxY<minY)return output;
+        // Hand-crafted 32x32 icon art is already composed for the OLED.
+        // Preserve its intentional margins instead of re-centering every
+        // stroke and invalidating existing user's Icon Workshop layouts.
+        if(original.Width<=Canvas&&original.Height<=Canvas)
         {
-            var c=bitmap.GetPixel(x,y);
-            if(c.A<88)continue;
-            int luminosity=(c.R*3+c.G*6+c.B)/10;
-            pixels[y*Canvas+x]=silhouette
-                ?c.A>110:lightBackground
-                    ?luminosity<=145:luminosity>=110;
+            minX=0;minY=0;
+            maxX=original.Width-1;maxY=original.Height-1;
         }
-        return pixels;
+
+        // Leave a one-pixel OLED border and preserve the logo aspect.
+        int srcW=maxX-minX+1,srcH=maxY-minY+1;
+        int target=Canvas-2;
+        float ratio=Math.Min((float)target/srcW,(float)target/srcH);
+        int targetW=Math.Max(1,(int)Math.Round(srcW*ratio));
+        int targetH=Math.Max(1,(int)Math.Round(srcH*ratio));
+        int left=(Canvas-targetW)/2,top=(Canvas-targetH)/2;
+
+        // Coverage resampling retains thin curls and letter strokes when
+        // reduced from a high-resolution raster to 32 monochrome pixels.
+        // A pixel is on if sufficient source foreground area overlaps it.
+        double srcPerX=(double)srcW/targetW;
+        double srcPerY=(double)srcH/targetH;
+        for(int yy=0;yy<targetH;yy++)
+        for(int xx=0;xx<targetW;xx++)
+        {
+            double x0=minX+xx*srcPerX,x1=minX+(xx+1)*srcPerX;
+            double y0=minY+yy*srcPerY,y1=minY+(yy+1)*srcPerY;
+            int firstX=Math.Max(minX,(int)Math.Floor(x0));
+            int lastX=Math.Min(maxX,(int)Math.Ceiling(x1)-1);
+            int firstY=Math.Max(minY,(int)Math.Floor(y0));
+            int lastY=Math.Min(maxY,(int)Math.Ceiling(y1)-1);
+            double area=0;
+            for(int sy=firstY;sy<=lastY;sy++)
+            for(int sx=firstX;sx<=lastX;sx++)
+            {
+                if(!foreground[sy*original.Width+sx])continue;
+                area+=Math.Max(0,Math.Min(x1,sx+1)-Math.Max(x0,sx))*
+                    Math.Max(0,Math.Min(y1,sy+1)-Math.Max(y0,sy));
+            }
+            // At least ~20% coverage. This retains hairline blackletter
+            // strokes without turning the background into a white square.
+            output[(top+yy)*Canvas+left+xx]=
+                area/Math.Max(0.01,(x1-x0)*(y1-y0))>=0.19;
+        }
+        return output;
     }
 
     private static bool TryReadRows(string[]? rows,out bool[] pixels)

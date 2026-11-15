@@ -975,13 +975,18 @@ internal static class OledRenderer
         int x=widget.X,y=widget.Y;
         var snapshot=current??new DialSnapshot(DialView.Volume,null,null,null,
             DateTimeOffset.MinValue,"Veri yok");
-        bool fresh=snapshot.UpdatedAt!=DateTimeOffset.MinValue &&
-            DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromMinutes(10);
+        // Hardware sends wheel events only during physical movement.
+        // Silence is NOT a 0% level and NOT a disconnected sample. The
+        // last genuinely decoded reading remains the last known value
+        // until a new event arrives, even after 10+ minutes.
+        bool hasReading=snapshot.HasData;
+        bool physicallyMoving=snapshot.UpdatedAt!=DateTimeOffset.MinValue &&
+            DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2);
         int width=Math.Max(3,bounds.Width-2);
 
         if(widget.DialStyle=="MiniWheel")
         {
-            MiniWheelArtwork.Draw(tile,mask,x,y,WheelArtwork.Value(snapshot,fresh),
+            MiniWheelArtwork.Draw(tile,mask,x,y,WheelArtwork.Value(snapshot,hasReading),
                 snapshot.View,widget.WheelGapAngle,
                 widget.WheelRingThickness,widget.WheelShowGame,widget.WheelShowChat,
                 widget.WheelGameOffsetX,widget.WheelGameOffsetY,
@@ -992,11 +997,10 @@ internal static class OledRenderer
         else if(widget.DialStyle=="Wheel")
         {
             WheelArtwork.Draw(tile,mask,x,y,widget.WheelPixels,
-                WheelArtwork.Value(snapshot,fresh),snapshot.View,widget.WheelAutoLabel,
+                WheelArtwork.Value(snapshot,hasReading),snapshot.View,widget.WheelAutoLabel,
                 widget.WheelGapAngle,
-                fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2)
-                    ?snapshot.VolumeAttenuationSteps:null,
-                fresh&&DateTimeOffset.UtcNow-snapshot.UpdatedAt<TimeSpan.FromSeconds(2),
+                physicallyMoving?snapshot.VolumeAttenuationSteps:null,
+                physicallyMoving,
                 widget.WheelIconsFollowRing,widget.WheelGameOffsetX,
                 widget.WheelGameOffsetY,widget.WheelChatOffsetX,
                 widget.WheelChatOffsetY,widget.WheelShowGame,widget.WheelShowChat,
@@ -1008,14 +1012,14 @@ internal static class OledRenderer
         if(snapshot.View==DialView.ChatMix)
         {
             DrawSplitChatMix(tile,x,y,width,
-                WheelArtwork.Value(snapshot,fresh),
+                WheelArtwork.Value(snapshot,hasReading),
                 widget.WheelShowGame,widget.WheelShowChat,
                 widget.BarFrameThickness,widget.BarFillThickness);
         }
         else
         {
             DrawText(tile,"VOLUME",x+1,y+1,1);
-            int? volume=fresh?snapshot.Volume:null;
+            int? volume=hasReading?snapshot.Volume:null;
             DrawText(tile,volume.HasValue?$"{volume.Value}%":"--%",
                 x+49,y+1,1);
             DrawBarWithThickness(tile,x+1,y+14,width,volume??0,

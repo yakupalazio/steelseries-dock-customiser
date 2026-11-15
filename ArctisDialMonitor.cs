@@ -44,9 +44,28 @@ internal sealed class ArctisDialMonitor : IDisposable
     /// <summary>Unsolicited hardware event. Handlers must marshal to the UI.</summary>
     public event Action? Updated;
 
+    internal static DialSnapshot DescribeIdleSnapshot(
+        DialSnapshot value,DateTimeOffset now)
+    {
+        if(!value.HasData||value.UpdatedAt==DateTimeOffset.MinValue||
+           now-value.UpdatedAt<=TimeSpan.FromMinutes(2))
+            return value;
+        // A non-event is NOT an audio level of zero. Keep the last
+        // *actual* report but disclose that it is a remembered reading.
+        return value with {
+            Status=UiLanguage.English
+                ?"Last known dial setting (no recent wheel movement)"
+                :"Son bilinen tekerlek değeri (yeni hareket yok)"
+        };
+    }
+
     public DialSnapshot Snapshot
     {
-        get { lock (gate) return current; }
+        get
+        {
+            lock(gate)
+                return DescribeIdleSnapshot(current,DateTimeOffset.UtcNow);
+        }
     }
 
     internal static bool TryDecode(ReadOnlySpan<byte> report, out DialEvent value)

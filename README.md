@@ -1,3 +1,7 @@
+# Private RC7.4 Logo / Dial / Battery UI Hotfix
+
+> **Private test package only — no new public GitHub release.** Fixed non-square Lies of P black/white PNGs and game EXE icon monochrome conversion (no all-white square), Volume & ChatMix last-known value preservation past the previous 10-minute idle cutoff (unknown is not zero), and the Battery Settings Last read/button overlap. Previously broken 1-bit logo overrides must be **re-imported** once. Existing profiles, offline lyrics cache and public Beta 1 remain unchanged. [RC7.4 release details](RELEASE_NOTES_RC74_LOGO_DIAL_LAYOUT.md).
+
 # Private RC7.3 Battery + Render Stabilization Preview
 
 > This is a **private tester package**. **Public GitHub v1.0.0-beta.1 remains unchanged.** Added permanent offline LRC song cache and per-song local .lrc import; **if no lyrics are available, the widget is completely blank**. Battery Settings now discovers and lists wireless USB/Bluetooth accessories even with --% and lets users track/hide them. Added experimental WLMOUSE status-only battery reader; fixed game logo PNG rasterization and non-GG foreground game detection. The **original dock photo is included in the private ZIP**, not redistributed in public GitHub. The top ten firmware rows remain physically protected. See [RC7.3 notes](RELEASE_NOTES_RC73_BATTERY_RENDER_OFFLINE.md).

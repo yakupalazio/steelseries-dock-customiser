@@ -94,7 +94,9 @@ internal sealed class BatteryStatusDialog : Form
         DrawMode=DrawMode.OwnerDrawFixed,ItemHeight=24
     };
     private readonly Label active=new(){Left=402,Top=329,Width=450,Height=73};
-    private readonly Label lastUpdated=new(){Left=150,Top=234,Width=700,Height=27};
+    private readonly Label lastUpdated=new(){
+        Left=17,Top=269,Width=820,Height=20,AutoEllipsis=true,
+        ForeColor=Color.FromArgb(145,171,188)};
     private readonly Label summary=new(){
         Left=18,Top=48,Width=832,Height=15,
         ForeColor=Color.FromArgb(143,188,203),
@@ -239,7 +241,6 @@ internal sealed class BatteryStatusDialog : Form
             finally{now.Enabled=true;}
         };
         Controls.Add(now);Controls.Add(lastUpdated);
-        lastUpdated.Width=400;
         var connectedDevices=new DarkButton{
             Left=604,Top=232,Width=252,Height=32,
             Text=UiLanguage.English?"Connected devices":"Bağlı cihazlar"
@@ -380,6 +381,11 @@ internal sealed class BatteryStatusDialog : Form
         ForeColor=Color.FromArgb(235,242,248);
         foreach(Control control in Controls)
         {
+            // All content below the four actions begins on the NEXT row.
+            // Avoid the old 700px 'Last read' label painting across three
+            // adjacent buttons at 100/125/150% DPI scaling.
+            if(!ReferenceEquals(control,lastUpdated)&&control.Top>=270)
+                control.Top+=27;
             control.Top+=45;
             if(control is Label label)
             {
@@ -425,12 +431,9 @@ internal sealed class BatteryStatusDialog : Form
             ForeColor=Color.FromArgb(235,242,248),BackColor=BackColor
         });
         Controls.Add(summary);
-        var alertHeading=new Label{
-            Text=UiLanguage.English?"LOW BATTERY ALERTS":"DÜŞÜK PİL UYARILARI",
-            Left=17,Top=537,Width=640,Height=22,
-            ForeColor=Color.FromArgb(138,199,224),
-            Font=new Font("Segoe UI Semibold",9f,FontStyle.Bold)};
-        Controls.Add(alertHeading);
+        // The "Düşük pil uyarıları" checkbox below is already the section
+        // heading. A second absolute-position heading overlapped the
+        // preceding source explanation at different DPI scales.
 
         // In Settings this form is a dock-filled child: its absolute
         // 900px content must NOT cover the bottom Save button at 125/150%
@@ -439,7 +442,7 @@ internal sealed class BatteryStatusDialog : Form
         // action accessible without enlarging the settings window.
         var body=new Panel{
             Dock=DockStyle.Fill,AutoScroll=true,BackColor=BackColor,
-            AutoScrollMinSize=new Size(875,680)};
+            AutoScrollMinSize=new Size(875,722)};
         var footer=new Panel{
             Dock=DockStyle.Bottom,Height=58,BackColor=BackColor};
         var existing=Controls.Cast<Control>()
@@ -486,6 +489,16 @@ internal sealed class BatteryStatusDialog : Form
         }
         catch{/* No USB/Bluetooth enumeration permission is not zero devices. */}
         finally{discoveryBusy=false;}
+    }
+
+    internal bool LastReadOverlapsButtonsForTest()
+    {
+        if(lastUpdated.Parent is null)return true;
+        // In the same scrolled content panel, compare actual (post layout)
+        // control bounds rather than assumed pixel coordinates.
+        return lastUpdated.Parent.Controls.OfType<Button>()
+            .Any(button=>
+                button.Bounds.IntersectsWith(lastUpdated.Bounds));
     }
 
     public void ApplyLanguage()

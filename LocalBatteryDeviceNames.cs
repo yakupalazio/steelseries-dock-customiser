@@ -37,7 +37,7 @@ internal static class LocalBatteryDeviceNames
                 :kind.StartsWith("WinBt:",StringComparison.OrdinalIgnoreCase)
                     ?(UiLanguage.English?"Bluetooth battery":"Bluetooth pili")
                     :kind.StartsWith("Vendor:",StringComparison.OrdinalIgnoreCase)
-                    ?(UiLanguage.English?"Vendor battery":"Üretici pili")
+                    ?(UiLanguage.English?"Vendor HID / SDK":"Üretici kaynağı (HID/SDK)")
                     :BatteryDeviceCatalog.Name(kind)
     };
 
