@@ -1,0 +1,72 @@
+name: Publish RC7.9 Windows pre-release asset
+
+on:
+  push:
+    branches:
+      - feature/release-candidate-ui-lyrics-motion
+    paths:
+      - .github/workflows/rc79-cloud-release.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rc79-public-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Check out the verified RC7.9 source tag
+        uses: actions/checkout@v4
+        with:
+          ref: v1.0.0-beta.2-rc7.9
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build and validate portable Windows x64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'SteelseriesDockCustomiser-RC79'
+          dotnet publish SteelseriesDockCustomiser.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:DebugSymbols=false -o $stage
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+          $exe = Join-Path $stage 'SteelseriesDockCustomiser.exe'
+          if (!(Test-Path $exe)) { throw 'Published executable missing' }
+          & $exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'RC7.9 self-tests failed' }
+          foreach ($name in @('README.md', 'BETA_TESTING.md', 'LICENSE', 'TERMS.md', 'THIRD_PARTY_NOTICES.md', 'RELEASE_NOTES_RC75_GAME_LOGO_SINGLE_INSTANCE.md', 'RELEASE_NOTES_RC76_NOTES_LOGO_SUPPORT.md', 'RELEASE_NOTES_RC77_ICON_BATTERY.md', 'RELEASE_NOTES_RC78_VALORANT_NFS.md', 'RELEASE_NOTES_RC79_AMONG_US_DETECTION.md')) {
+            if (Test-Path $name) { Copy-Item -LiteralPath $name -Destination $stage -Force }
+          }
+          if (Test-Path THIRD_PARTY_LICENSES) { Copy-Item THIRD_PARTY_LICENSES -Destination $stage -Recurse -Force }
+          if (Test-Path VendorSDK) { Copy-Item VendorSDK -Destination $stage -Recurse -Force }
+          $zipName = 'SteelseriesDockCustomiser-v1.0.0-beta.2-rc7.9-win-x64.zip'
+          $zip = Join-Path $env:GITHUB_WORKSPACE $zipName
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+          if ((Get-Item $zip).Length -lt 10000000) { throw 'Generated archive is suspiciously small' }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'SHA256SUMS-rc7.9.txt') -Value "$hash  $zipName" -Encoding ascii
+
+      - name: Attach artifact and publish the existing draft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v1.0.0-beta.2-rc7.9'
+          $asset = 'SteelseriesDockCustomiser-v1.0.0-beta.2-rc7.9-win-x64.zip'
+          $release = gh release view $tag --json isDraft,assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'RC7.9 draft release not found' }
+          $present = @($release.assets | Where-Object { $_.name -eq $asset })
+          if ($present.Count -eq 0) {
+            gh release upload $tag $asset 'SHA256SUMS-rc7.9.txt'
+            if ($LASTEXITCODE -ne 0) { throw 'GitHub release asset upload failed' }
+          }
+          gh release edit $tag --draft=false --prerelease
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release publishing failed' }
+          gh release view $tag --json url,isDraft,assets
