@@ -161,8 +161,11 @@ internal static class GgGameDetector
         {
             using var process=Process.GetProcessById(game.ProcessId);
             string? path=process.MainModule?.FileName;
-            if(IsInstalledGamePath(path)&&
-               string.Equals(process.ProcessName,game.Executable,
+            // The selected PID already comes from GG or the verified
+            // foreground-game detector. Microsoft Store game EXEs live in
+            // WindowsApps rather than Steam/Epic/GOG folders; don't reject
+            // their readable local executable solely because of that path.
+            if(string.Equals(process.ProcessName,game.Executable,
                    StringComparison.OrdinalIgnoreCase)&&File.Exists(path))
                 return path;
         }

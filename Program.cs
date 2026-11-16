@@ -8,6 +8,8 @@ namespace SteelseriesDockCustomiser;
 
 internal static class Program
 {
+    internal static bool RestartAfterExit { get; set; }
+
     [STAThread]
     static void Main()
     {
@@ -1006,10 +1008,31 @@ internal static class Program
             PixelStudioForm.RunTraySmoke();
             return;
         }
-        // Never request UAC at login. A saved preference can only try the
-        // process's normal, non-elevated High class and can fail harmlessly.
-        WindowsIntegration.ApplySavedPriorityAtLaunch();
-        Application.Run(new PixelStudioForm());
+        // Acquire before constructing the main window or any OLED transport.
+        // Different release folders share the same per-session owner.
+        var single=StudioSingleInstance.TryAcquire();
+        if(single is null)
+        {
+            StudioSingleInstance.NotifyExisting();
+            return;
+        }
+        using(single)
+        {
+            // Never request UAC at login. A saved preference can only try the
+            // process's normal, non-elevated High class and can fail harmlessly.
+            WindowsIntegration.ApplySavedPriorityAtLaunch();
+            using var studio=new PixelStudioForm();
+            single.Bind(studio,studio.RestoreFromSecondLaunch);
+            Application.Run(studio);
+        }
+        // Restart only AFTER disposing the previous OLED owner and mutex;
+        // Application.Restart() races the incoming process against the lock.
+        if(RestartAfterExit && Environment.ProcessPath is string executable)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(executable)
+                { UseShellExecute=true,WorkingDirectory=AppContext.BaseDirectory }); }
+            catch(System.ComponentModel.Win32Exception) { }
+        }
     }
 }
 

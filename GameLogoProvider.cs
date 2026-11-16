@@ -83,22 +83,39 @@ internal static class GameLogoProvider
         catch(UnauthorizedAccessException){}
 
         string? registered=GgGameDetector.RegisteredExecutable(game);
-        if(registered is null)return null;
-        try
+        return registered is null?null:ResolveFromExecutable(game,registered);
+    }
+
+    // Shared by the normal GG workflow and read-only regression diagnostics.
+    internal static GameLogoSnapshot? ResolveFromExecutable(
+        GameSnapshot game,string executable)
+    {
+        GameLogoSnapshot? TryBitmap(Bitmap? bitmap,string source)
         {
-            using var icon=Icon.ExtractAssociatedIcon(registered);
-            if(icon is null)return null;
-            using var image=icon.ToBitmap();
-            var data=ConvertImage(image);
-            return data.Any(x=>x)
-                ?new(game.Executable,game.Name,Canvas,data,"Oyun EXE simgesi")
-                :null;
+            if(bitmap is null)return null;
+            using(bitmap)
+            {
+                bool[] pixels=ConvertImage(bitmap);
+                int lit=pixels.Count(v=>v);
+                // A completely blank icon or near-solid image is never a
+                // usable OLED game logo; try the next real local source.
+                if(lit<12||lit>820||IsFilledRectangle(pixels))return null;
+                return new(game.Executable,game.Name,Canvas,pixels,source);
+            }
         }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
-            or ArgumentException or System.Runtime.InteropServices.ExternalException)
+
+        // MSIX/UWP games (notably Minecraft) commonly keep useful logo art
+        // alongside a low-contrast or generic executable icon.
+        foreach(string asset in GameIconSources.NearbyArtwork(executable))
         {
-            return null;
+            var candidate=TryBitmap(GameIconSources.ReadImage(asset),
+                "Yerel oyun görseli");
+            if(candidate is not null)return candidate;
         }
+        return TryBitmap(GameIconSources.ReadEmbedded(executable),
+                   "Oyun EXE simgesi")
+            ?? TryBitmap(GameIconSources.ReadShell(executable),
+                   "Windows Shell simgesi");
     }
 
     internal static void ImportOverride(GameSnapshot game,string file)
@@ -175,13 +192,50 @@ internal static class GameLogoProvider
         // Near-uniform, opaque corners are a solid canvas, regardless
         // of whether that canvas is white, black or another color.
         var solid=corners.Where(c=>c.A>=220).ToArray();
-        bool solidBackground=!alphaBackground&&solid.Length>=3;
         Color backdrop=solid.Length>0
             ?Color.FromArgb(
                 (int)solid.Average(c=>c.R),
                 (int)solid.Average(c=>c.G),
                 (int)solid.Average(c=>c.B))
             :Color.Black;
+        // Four opaque corners alone DO NOT imply a solid background:
+        // Minecraft's grass/dirt texture is opaque at every corner.
+        int alikeCorners=solid.Count(c=>Math.Max(Math.Abs(c.R-backdrop.R),
+            Math.Max(Math.Abs(c.G-backdrop.G),
+                     Math.Abs(c.B-backdrop.B)))<=25);
+        bool solidBackground=!alphaBackground&&alikeCorners>=3;
+
+        // Non-uniform full-color icons require an adaptive threshold.
+        // Choosing the less common luminance class retains both dark-on-light
+        // and light-on-dark artwork without a hard-coded 135 cutoff.
+        int[] histogram=new int[256];
+        int totalSamples=0;
+        int stepX=Math.Max(1,original.Width/128);
+        int stepY=Math.Max(1,original.Height/128);
+        for(int yy=0;yy<original.Height;yy+=stepY)
+        for(int xx=0;xx<original.Width;xx+=stepX)
+        {
+            Color sample=original.GetPixel(xx,yy);
+            if(sample.A<70)continue;
+            int lum=(sample.R*3+sample.G*6+sample.B)/10;
+            histogram[lum]++;
+            totalSamples++;
+        }
+        int Quantile(double proportion)
+        {
+            int target=(int)(totalSamples*proportion),accumulated=0;
+            for(int lum=0;lum<256;lum++)
+            {
+                accumulated+=histogram[lum];
+                if(accumulated>target)return lum;
+            }
+            return 128;
+        }
+        int low=Quantile(0.12),high=Quantile(0.88);
+        int adaptiveThreshold=(low+high)/2;
+        int brightSamples=histogram.Skip(adaptiveThreshold).Sum();
+        bool preferBright=brightSamples<=totalSamples-brightSamples;
+        bool hasContrast=high-low>=12;
 
         bool[] foreground=new bool[original.Width*original.Height];
         int minX=original.Width,minY=original.Height,maxX=-1,maxY=-1;
@@ -201,11 +255,13 @@ internal static class GameLogoProvider
             }
             else
             {
-                // Unusual multi-colored/photographic EXE art. Classify
-                // contrast relative to luminance, never every opaque
-                // pixel. This is a conservative fallback.
+                // Textured game icons (e.g. Minecraft) have opaque, differing
+                // corners. The minority brightness class shows the texture
+                // instead of deleting the entire low-luminance image.
                 int luminance=(c.R*3+c.G*6+c.B)/10;
-                lit=c.A>=70&&luminance>=135;
+                lit=hasContrast && c.A>=70 &&
+                    (preferBright ? luminance>=adaptiveThreshold
+                                  : luminance<adaptiveThreshold);
             }
             if(!lit)continue;
             foreground[y*original.Width+x]=true;
@@ -214,10 +270,16 @@ internal static class GameLogoProvider
         }
         var output=new bool[Canvas*Canvas];
         if(maxX<minX||maxY<minY)return output;
+        // Dense square emblems need their surrounding margin preserved.
+        // Cropping a filled Minecraft-style tile to its own bounding box
+        // scales it into a solid white square on the 1-bit OLED.
+        int boxArea=(maxX-minX+1)*(maxY-minY+1);
+        bool denseRectangle=boxArea>0 &&
+            foreground.Count(v=>v)>=boxArea*0.70;
         // Hand-crafted 32x32 icon art is already composed for the OLED.
         // Preserve its intentional margins instead of re-centering every
         // stroke and invalidating existing user's Icon Workshop layouts.
-        if(original.Width<=Canvas&&original.Height<=Canvas)
+        if((original.Width<=Canvas&&original.Height<=Canvas)||denseRectangle)
         {
             minX=0;minY=0;
             maxX=original.Width-1;maxY=original.Height-1;

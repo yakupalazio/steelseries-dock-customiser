@@ -129,6 +129,8 @@ internal sealed partial class PixelStudioForm
         Item(english?"Quit application":"Uygulamayı kapat",QuitFromTray);
     }
 
+    internal void RestoreFromSecondLaunch()=>OpenFromTray();
+
     private void OpenFromTray()
     {
         if(IsDisposed)return;
@@ -161,7 +163,8 @@ internal sealed partial class PixelStudioForm
         if(!traySmokeMode)SaveLayout();
         exitRequested=true;
         if(tray!=null)tray.Visible=false;
-        Application.Restart();
+        Program.RestartAfterExit=true;
+        Close();
     }
 
     private void QuitFromTray()
