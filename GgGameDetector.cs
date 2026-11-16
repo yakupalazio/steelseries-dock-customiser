@@ -28,6 +28,9 @@ internal static class GgGameDetector
         "setup","update","bootstrapper","crashreporter","riotclientservices"
     };
     private static List<(string Name,string Exe)> games=[];
+    // GG may mark an actually installed game as uninstalled after its
+    // launcher moves or rescans it. Never trust this record by name alone.
+    private static List<(string Name,string Exe)> staleGgRegistrations=[];
     private static List<(string Name,string Directory)> directoryRegistrations=[];
     private static List<(string Name,string Artwork)> registeredArtwork=[];
     private static DateTimeOffset cachedAt=DateTimeOffset.MinValue;
@@ -76,6 +79,49 @@ internal static class GgGameDetector
                     catch(System.ComponentModel.Win32Exception){}
                 }
             }
+            // GG occasionally marks an installed game as "uninstalled"
+            // even while its executable still exists (Among Us is one
+            // example). Only consider such a record if the REAL running
+            // process reports its exact installation directory and its
+            // executable basename matches after whitespace normalization.
+            // No process path => no stale-record fallback, to avoid
+            // treating an unrelated process as a running game.
+            // Index GG stale entries once per poll. A game library may
+            // contain hundreds of stale rows, whereas process enumeration
+            // should stay inexpensive for continuous OLED updates.
+            var staleByName=staleGgRegistrations
+                .GroupBy(item=>NormalizeGameIdentity(
+                    Path.GetFileNameWithoutExtension(item.Exe)))
+                .Where(group=>group.Key.Length>=3 &&
+                    !GenericExecutables.Contains(group.Key))
+                .ToDictionary(group=>group.Key,group=>group.ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+            foreach(var process in processes)
+            {
+                try
+                {
+                    string basename=NormalizeGameIdentity(process.ProcessName);
+                    if(!staleByName.TryGetValue(basename,out var registered)||
+                       process.HasExited)continue;
+                    string? actual=ReadOnlyProcessPath(process);
+                    foreach(var (name,registeredExe) in registered)
+                    {
+                        if(!StaleRegistrationMatchesActual(actual,registeredExe))
+                            continue;
+                        DateTime started;
+                        try{started=process.StartTime;}
+                        catch{started=DateTime.MinValue;}
+                        candidates.Add((new GameSnapshot(name,
+                            process.ProcessName,process.Id),started));
+                        break;
+                    }
+                }
+                catch(System.ComponentModel.Win32Exception){}
+                catch(InvalidOperationException){}
+                catch(UnauthorizedAccessException){}
+                catch(System.IO.IOException){}
+            }
+
             // Some EA App / GG library entries provide a registered game
             // directory but leave exe_path empty. Verify BOTH the live
             // process executable and the matching registered installation
@@ -217,6 +263,48 @@ internal static class GgGameDetector
         {return GameSnapshot.None;}
     }
 
+    /// <summary>
+    /// Restrictive recovery for GG records marked uninstalled. The actual
+    /// process image must exist under the same full directory as the
+    /// recorded installation; only executable whitespace/casing may differ.
+    /// Never allow a name-only match or an arbitrary game-folder search.
+    /// </summary>
+    internal static bool StaleRegistrationMatchesActual(
+        string? actualExecutable,string? registeredExecutable)
+    {
+        if(string.IsNullOrWhiteSpace(actualExecutable)||
+           string.IsNullOrWhiteSpace(registeredExecutable)||
+           !actualExecutable.EndsWith(".exe",StringComparison.OrdinalIgnoreCase)||
+           !registeredExecutable.EndsWith(".exe",StringComparison.OrdinalIgnoreCase)||
+           !File.Exists(actualExecutable))
+            return false;
+        try
+        {
+            string actual=Path.GetFullPath(
+                actualExecutable.Replace('/','\\'));
+            string registered=Path.GetFullPath(
+                registeredExecutable.Replace('/','\\'));
+            string? actualDirectory=Path.GetDirectoryName(actual);
+            string? ggDirectory=Path.GetDirectoryName(registered);
+            if(string.IsNullOrEmpty(actualDirectory)||
+               string.IsNullOrEmpty(ggDirectory)||
+               !string.Equals(actualDirectory,ggDirectory,
+                   StringComparison.OrdinalIgnoreCase))
+                return false;
+            string actualName=NormalizeGameIdentity(
+                Path.GetFileNameWithoutExtension(actual));
+            string ggName=NormalizeGameIdentity(
+                Path.GetFileNameWithoutExtension(registered));
+            return actualName.Length>=3 && actualName==ggName &&
+                !GenericExecutables.Contains(actualName);
+        }
+        catch(Exception ex) when(ex is ArgumentException or
+            NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     // Normalize only for matching a verified live process directory against
     // GG's sometimes whitespace-stripped installation metadata.
     internal static string NormalizeRegisteredPath(string path)=>
@@ -334,6 +422,7 @@ internal static class GgGameDetector
     {
         var result=new List<(string,string)>();
         var missingExe=new List<(string Name,string Directory)>();
+        var stale=new List<(string Name,string Exe)>();
         var artwork=new List<(string Name,string Artwork)>();
         if(!File.Exists(Database))return result;
         IntPtr db=IntPtr.Zero,query=IntPtr.Zero;
@@ -341,8 +430,8 @@ internal static class GgGameDetector
         {
             if(SqliteOpen(Database,out db,1,IntPtr.Zero)!=0 || db==IntPtr.Zero)
                 return result;
-            const string sql="SELECT name, exe_path, directory, image_path "+
-                "FROM library_scan WHERE uninstalled=0 AND name IS NOT NULL";
+            const string sql="SELECT name, exe_path, directory, image_path, uninstalled "+
+                "FROM library_scan WHERE name IS NOT NULL";
             if(SqlitePrepare(db,sql,-1,out query,IntPtr.Zero)!=0 ||
                query==IntPtr.Zero)return result;
             int step,count=0;
@@ -352,24 +441,32 @@ internal static class GgGameDetector
                 string? exe=Marshal.PtrToStringUTF8(SqliteColumnText(query,1));
                 string? directory=Marshal.PtrToStringUTF8(SqliteColumnText(query,2));
                 string? image=Marshal.PtrToStringUTF8(SqliteColumnText(query,3));
+                bool ggClaimsUninstalled=SqliteColumnInt(query,4)!=0;
                 if(string.IsNullOrWhiteSpace(name))continue;
                 name=name.Trim();
                 if(!string.IsNullOrWhiteSpace(image))
                     artwork.Add((name,image.Trim()));
                 if(string.IsNullOrWhiteSpace(exe))
                 {
-                    if(!string.IsNullOrWhiteSpace(directory))
+                    // A deleted entry with an empty executable is never
+                    // eligible for directory-only game detection.
+                    if(!ggClaimsUninstalled &&
+                       !string.IsNullOrWhiteSpace(directory))
                         missingExe.Add((name,directory.Trim()));
                     continue;
                 }
                 exe=exe.Replace('/','\\').Trim();
                 string filename=Path.GetFileNameWithoutExtension(exe);
                 if(filename.Length>=3&&!GenericExecutables.Contains(filename))
-                    result.Add((name,exe));
+                {
+                    if(ggClaimsUninstalled)stale.Add((name,exe));
+                    else result.Add((name,exe));
+                }
             }
             // Atomically publish both auxiliary snapshots after a successful
             // read. GG database remains strictly read-only.
             directoryRegistrations=missingExe;
+            staleGgRegistrations=stale;
             registeredArtwork=artwork;
         }
         catch(DllNotFoundException){}
@@ -383,6 +480,17 @@ internal static class GgGameDetector
         return result;
     }
 
+    // Offline regression only. GG's local SQLite stays read-only.
+    internal static string? StaleRegisteredNameForQa(string actualExe)
+    {
+        LoadGgLibrary();
+        return staleGgRegistrations
+            .Where(item=>StaleRegistrationMatchesActual(
+                actualExe,item.Exe))
+            .Select(item=>item.Name)
+            .FirstOrDefault();
+    }
+
     [DllImport("winsqlite3.dll",EntryPoint="sqlite3_open_v2",
         CallingConvention=CallingConvention.Cdecl,CharSet=CharSet.Ansi)]
     private static extern int SqliteOpen(string file,out IntPtr db,int flags,IntPtr vfs);
@@ -393,6 +501,8 @@ internal static class GgGameDetector
     private static extern int SqliteStep(IntPtr stmt);
     [DllImport("winsqlite3.dll",EntryPoint="sqlite3_column_text",CallingConvention=CallingConvention.Cdecl)]
     private static extern IntPtr SqliteColumnText(IntPtr stmt,int column);
+    [DllImport("winsqlite3.dll",EntryPoint="sqlite3_column_int",CallingConvention=CallingConvention.Cdecl)]
+    private static extern int SqliteColumnInt(IntPtr stmt,int column);
     [DllImport("winsqlite3.dll",EntryPoint="sqlite3_finalize",CallingConvention=CallingConvention.Cdecl)]
     private static extern int SqliteFinalize(IntPtr stmt);
     [DllImport("winsqlite3.dll",EntryPoint="sqlite3_close",CallingConvention=CallingConvention.Cdecl)]
