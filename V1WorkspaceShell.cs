@@ -98,7 +98,9 @@ internal sealed partial class PixelStudioForm
         Decorate(export);
         save.Text="Kaydet";save.Width=105;save.Height=37;
         load.Text="Tasarımı aç";load.Width=106;load.Height=37;
-        export.Text="PNG";export.Width=80;export.Height=37;
+        export.Text="PNG dışa aktar";export.Width=120;export.Height=37;
+        export.AccessibleDescription=
+            "Seçili OLED tasarımını 128×64 PNG görüntüsü olarak kaydet.";
         headerButtons.Controls.AddRange([save,load,export]);
 
         var sidebar=new Panel{Dock=DockStyle.Fill,BackColor=UiSidebar};

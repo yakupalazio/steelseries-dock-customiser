@@ -607,7 +607,11 @@ internal static class OledRenderer
             TimeSpan.FromMilliseconds(widget.LyricOffsetMs);
         if(SyncedLyricsProvider.InstrumentalAt(lyrics.Lines,at))
         {
-            DrawInstrumentalNote(pixels,textLeft+2,baseline,right,bottom);
+            // Center a readable 15x12 double-note silhouette in the
+            // available lyrics viewport; no song text is drawn over it.
+            int noteLeft=textLeft+Math.Max(0,(available-15)/2);
+            int noteTop=baseline+Math.Max(0,(rows-1)*4);
+            DrawInstrumentalNote(pixels,noteLeft,noteTop,right,bottom);
             return;
         }
         var motion=IslandLyricsMotion.Evaluate(lyrics.Lines,at,available);
@@ -663,18 +667,34 @@ internal static class OledRenderer
         }
     }
 
-    private static void DrawInstrumentalNote(bool[] pixels,int x,int y,
+    // Two clearly connected eighth-notes: 15px wide and 12px high.
+    // Explicit OLED pixels avoid font fallback, missing Unicode glyphs
+    // and 7x7 strokes that looked like disconnected dots on the dock.
+    private static readonly string[] InstrumentalNoteSprite=[
+        "000001111111110",
+        "000001111111110",
+        "000001100000110",
+        "000001100000110",
+        "000001100000110",
+        "000001100000110",
+        "000001100000110",
+        "000001100000110",
+        "000111100011110",
+        "001111100111110",
+        "001111000111100",
+        "000110000011000"
+    ];
+
+    internal static void DrawInstrumentalNote(bool[] pixels,int x,int y,
         int clipRight,int clipBottom)
     {
-        // Compact 7x7 note drawn ONLY when no lyric is scheduled.
-        // This is a visual placeholder, not an extra timecoded LRC entry.
-        for(int dy=0;dy<5;dy++)
-            if(x+5<clipRight && y+dy<clipBottom)Dot(pixels,x+5,y+dy);
-        for(int dx=2;dx<=5;dx++)
-            if(x+dx<clipRight&&y<clipBottom)Dot(pixels,x+dx,y);
-        for(int dy=0;dy<2;dy++)for(int dx=0;dx<3;dx++)
-            if(dx+dy<3&&x+dx<clipRight&&y+5+dy<clipBottom)
-                Dot(pixels,x+dx,y+5+dy);
+        for(int dy=0;dy<InstrumentalNoteSprite.Length;dy++)
+        for(int dx=0;dx<InstrumentalNoteSprite[dy].Length;dx++)
+        {
+            if(InstrumentalNoteSprite[dy][dx]!='1')continue;
+            int px=x+dx,py=y+dy;
+            if(px<clipRight&&py<clipBottom)Dot(pixels,px,py);
+        }
     }
 
     private static void DrawLyricRows(bool[] pixels,string text,

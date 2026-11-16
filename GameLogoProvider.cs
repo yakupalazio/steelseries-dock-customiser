@@ -168,8 +168,27 @@ internal static class GameLogoProvider
     /// Then crop the content bounding box and resample with antialiasing.
     /// </summary>
     internal static bool IsFilledRectangle(bool[] pixels)
-        =>pixels.Length==Canvas*Canvas &&
-          pixels.Count(x=>x)>900;
+    {
+        if(pixels.Length!=Canvas*Canvas)return false;
+        int on=0,minX=Canvas,minY=Canvas,maxX=-1,maxY=-1;
+        for(int y=0;y<Canvas;y++)for(int x=0;x<Canvas;x++)
+        {
+            if(!pixels[y*Canvas+x])continue;
+            on++;
+            minX=Math.Min(minX,x);maxX=Math.Max(maxX,x);
+            minY=Math.Min(minY,y);maxY=Math.Max(maxY,y);
+        }
+        if(on>900)return true;
+        if(on==0)return false;
+        int width=maxX-minX+1,height=maxY-minY+1;
+        int area=width*height;
+        // Legacy converters could serialize a perfectly filled 31x25
+        // rectangle (775/1024 lit pixels). Pixel density alone missed it.
+        // Preserve detailed high-density logos: reject only near-solid,
+        // large axis-aligned blocks, not arbitrary bright artwork.
+        return width>=16&&height>=16&&
+            area>=Canvas*Canvas*0.42&&on>=area*0.97;
+    }
 
     internal static bool[] ConvertImage(Image source)
     {

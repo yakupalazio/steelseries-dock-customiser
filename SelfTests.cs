@@ -1195,6 +1195,7 @@ internal static class SelfTests
             WlmouseBatterySelfTests.Run();
             ReleaseSevenFourHotfixSelfTests.Run();
             StudioLaunchLogoSelfTests.Run();
+            ReleaseSevenSixHotfixSelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

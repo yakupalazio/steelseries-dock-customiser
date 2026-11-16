@@ -127,8 +127,13 @@ internal static class ReleaseTextMotionSelfTests
             protectHeader:true,layoutMode:ScreenMode.Media,
             lyrics:instrumentalSnapshot))
         {
-            // Note's leading stem in the lyric strip: X+12+2+5, Y+4.
-            if(!Lit(note,lyric.X+19,lyric.Y+4))
+            // The 15x12 double note is now centered in the lyric strip
+            // rather than drawn as a tiny, left-aligned 7x7 mark.
+            int noteLeft=lyric.X+12+
+                Math.Max(0,(lyric.WidgetWidth-12-15)/2);
+            if(!Lit(note,noteLeft+5,lyric.Y+4)||
+               !AnyLit(note,noteLeft,noteLeft+15,
+                   lyric.Y+10,lyric.Y+16))
                 throw new Exception("Missing instrumental music-note glyph");
         }
         Console.WriteLine(

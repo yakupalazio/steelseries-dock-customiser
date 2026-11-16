@@ -43,7 +43,9 @@ internal static class UiLanguage
         ["Öğe"]="Widget",
         ["▶ Geçişi önizle"]="▶ Preview transition",
         ["Dock Customiser — Hata Bildir"]="Dock Customiser — Report a bug",
-        ["SÜRÜM   1.0.0 Beta 2 RC7.4\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]="VERSION   1.0.0 Beta 2 RC7.4\nPLATFORM   Windows 11  ·  .NET 10\nSCREEN   128 × 64  ·  Monochrome OLED",
+        ["SÜRÜM   "+SettingsDialog.DisplayVersion+"\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED"]=
+            "VERSION   "+SettingsDialog.DisplayVersion+
+            "\nPLATFORM   Windows 11  ·  .NET 10\nDISPLAY   128 × 64  ·  Monochrome OLED",
         // RC5: Windows startup and non-Realtime process priority.
         ["Windows ve performans"]="Windows & performance",
         ["WINDOWS ENTEGRASYONU"]="WINDOWS INTEGRATION",
@@ -251,6 +253,11 @@ internal static class UiLanguage
             "Off: edit the full 128×64 OLED. Confirmation is required before sending.",
         ["DOCK  /  CUSTOMISER"]="DOCK  /  CUSTOMISER",
         ["Kaydet"]="Save",["Tasarımı aç"]="Open layout",
+        ["PNG dışa aktar"]="Export PNG",
+        ["Beni Destekle / Support Me"]="Support Me",
+        ["Projeyi beğendiysen GitHub profilimi ziyaret edip projeye yıldız verebilirsin."]=
+            "Like the project? Visit my GitHub profile and star the repository.",
+        ["GitHub profilim"]="GitHub profile",
         ["Özel tasarım"]="Custom layout",["Orijinal"]="Original",
         ["✓ Uygula"]="✓ Apply",["▶ Canlı"]="▶ Live",
         ["■ Durdur"]="■ Stop",["↻ Dock Reset"]="↻ Dock reset",

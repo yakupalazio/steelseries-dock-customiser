@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -8,6 +9,9 @@ namespace SteelseriesDockCustomiser;
 /// <summary>Settings / About window. The Easter egg is deliberately not advertised.</summary>
 internal sealed class SettingsDialog : Form
 {
+    internal const string SupportGithubUrl="https://github.com/yakupalazio";
+    internal static string DisplayVersion=>
+        Application.ProductVersion.Split('+')[0];
     private bool captureMode;
     internal void EnableOffscreenCapture()
     {
@@ -109,7 +113,7 @@ internal sealed class SettingsDialog : Form
         menu.Controls.Add(languageItem);
         menu.Controls.Add(new Label
         {
-            Text = "OLED STUDIO • RC7.4", Left = 18, Top = 704,
+            Text = "OLED STUDIO • "+DisplayVersion, Left = 18, Top = 704,
             Width = 180, Height = 23, ForeColor = Muted,
             Font = new Font("Segoe UI", 7.6f)
         });
@@ -168,7 +172,7 @@ internal sealed class SettingsDialog : Form
         content.Controls.Add(info);
         info.Controls.Add(new Label
         {
-            Text = "SÜRÜM   1.0.0 Beta 2 RC7.4\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
+            Text = "SÜRÜM   "+DisplayVersion+"\nPLATFORM   Windows 11  ·  .NET 10\nEKRAN   128 × 64  ·  Monokrom OLED",
             Dock = DockStyle.Fill, ForeColor = Primary,
             Font = new Font("Segoe UI", 9.3f), TextAlign = ContentAlignment.MiddleLeft
         });
@@ -192,10 +196,36 @@ internal sealed class SettingsDialog : Form
             ForeColor = Muted, Font = new Font("Segoe UI", 8.4f)
         });
 
+        // A voluntary way to support the project: profile/repository links
+        // only, with no payments, account collection or hidden external calls.
+        var supportPanel=new Panel{
+            Left=30,Top=430,Width=472,Height=113,BackColor=Surface
+        };
+        content.Controls.Add(supportPanel);
+        supportPanel.Controls.Add(new Label{
+            Text="Beni Destekle / Support Me",Left=15,Top=12,
+            Width=420,Height=24,ForeColor=Accent,
+            Font=new Font("Segoe UI Semibold",12f,FontStyle.Bold)
+        });
+        supportPanel.Controls.Add(new Label{
+            Text="Projeyi beğendiysen GitHub profilimi ziyaret edip projeye yıldız verebilirsin.",
+            Left=15,Top=45,Width=267,Height=52,ForeColor=Muted,
+            Font=new Font("Segoe UI",9f)
+        });
+        var supportButton=new DarkButton{
+            Name="SupportGithubButton",
+            Text="GitHub profilim",Left=294,Top=51,Width=161,Height=39,
+            BackColor=Color.FromArgb(38,68,82),
+            ForeColor=Accent,Cursor=Cursors.Hand,
+            Font=new Font("Segoe UI Semibold",9.4f,FontStyle.Bold)
+        };
+        supportButton.Click+=(_,_)=>OpenSupportGithub();
+        supportPanel.Controls.Add(supportButton);
+
         var close = new DarkButton
         {
             Text = "Kapat", Width = 94, Height = 34,
-            Left = 410, Top = 413, FlatStyle = FlatStyle.Flat,
+            Left = 410, Top = 563, FlatStyle = FlatStyle.Flat,
             BackColor = Surface, ForeColor = Primary,
             Cursor = Cursors.Hand
         };
@@ -566,6 +596,22 @@ internal sealed class SettingsDialog : Form
         languageSelector.SelectedIndex=UiLanguage.English?1:0;
         UiLanguage.ApplyTree(this);
         SwitchPage(0);
+    }
+
+    private void OpenSupportGithub()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(SupportGithubUrl){
+                UseShellExecute=true
+            });
+        }
+        catch(Exception ex) when(ex is System.ComponentModel.Win32Exception
+            or InvalidOperationException)
+        {
+            MessageBox.Show(this,"GitHub bağlantısı açılamadı: "+ex.Message,
+                "GitHub",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+        }
     }
 
     private void AdvanceSecret(Keys key)

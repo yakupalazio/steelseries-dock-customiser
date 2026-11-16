@@ -205,7 +205,8 @@ internal sealed partial class PixelStudioForm : Form
     public PixelStudioForm()
     {
         UiPolish.Register(this);
-        Text = "Steelseries Dock Customiser 1.0.0 Beta 2 RC7.4 | OLED Studio";
+        Text = "Steelseries Dock Customiser "+
+            Application.ProductVersion.Split('+')[0]+" | OLED Studio";
         try { Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* Default system icon if running from a DLL in development. */ }
         StartPosition = FormStartPosition.CenterScreen;
