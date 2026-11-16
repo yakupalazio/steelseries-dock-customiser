@@ -197,11 +197,30 @@ internal static class BatterySources
     internal static void MergeVerifiedVendorReadings(BatterySnapshot snapshot,
         IReadOnlyList<BatteryReading> discovered)
     {
+        int reportedDualSense=discovered.Count(x=>x.Available &&
+            x.Kind.StartsWith("Vendor:WinGamepad:",
+                StringComparison.OrdinalIgnoreCase) &&
+            x.FriendlyName=="DualSense Wireless Controller");
         foreach(var reading in discovered)
         {
             if(!reading.Available ||
                !reading.Kind.StartsWith("Vendor:",
                    StringComparison.OrdinalIgnoreCase))continue;
+            // Windows' public game-controller API can reveal a genuine
+            // connected DualSense battery when standard HID/GATT cannot.
+            // Map only positively identified Sony controllers to its
+            // existing slot; never attach a generic "Wireless Controller".
+            if(reading.Kind.StartsWith("Vendor:WinGamepad:",
+                StringComparison.OrdinalIgnoreCase) &&
+               reading.FriendlyName=="DualSense Wireless Controller")
+            {
+                if(reportedDualSense==1 && !snapshot["DualSense"].Available)
+                    snapshot.Values["DualSense"]=reading with{
+                        Kind="DualSense",IconKind="DualSense"};
+                else if(reportedDualSense>1)
+                    snapshot.Values[reading.Kind]=reading;
+                continue;
+            }
             if(reading.FriendlyName.Length>2&&
                snapshot.Values.Values.Any(existing=>
                    existing.Available&&existing.FriendlyName.Length>2&&

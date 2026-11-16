@@ -22,6 +22,10 @@ internal sealed class VendorBatterySourcesDialog:Form
             return [
                 new("SteelSeries GG","Local Engine API",
                     "Built in","Nova Pro headset/spare status from verified GG"),
+                new("Windows game controllers","Windows.Gaming.Input BatteryReport",
+                    "Built in; device support varies",
+                    "Read-only capacity for connected controllers and headsets "+
+                    "when the Windows driver provides a valid live report"),
                 new("ATK / VXE / Pulsar","CompX 0x04 battery-status HID",
                     "Built in for exact receiver IDs; hardware varies",
                     "27 positive-listed USB IDs, FF02:0002; mouse must be "+
@@ -43,10 +47,10 @@ internal sealed class VendorBatterySourcesDialog:Form
                     "Model protocol pending",
                     "No public generic battery API confirmed; some HID "+
                     "devices have documented model-specific protocols"),
-                new("WLMOUSE","BLE / standard HID",
-                    "Model protocol pending",
-                    "Some mice use receiver-specific reports; not a "+
-                    "publicly supported manufacturer app battery API"),
+                new("WLMOUSE","Read-only receiver 0x83 / BLE / HID",
+                    "Built in for exact allowlisted receivers",
+                    "Only documented firmware report shapes; model-specific "+
+                    "support varies and missing percent stays unknown"),
                 new("Other brands","BLE GATT / USB HID Battery",
                     "Automatically checked",
                     "A live, verified percentage is required; no cached guess")
@@ -54,6 +58,10 @@ internal sealed class VendorBatterySourcesDialog:Form
         return [
             new("SteelSeries GG","Yerel Engine API",
                 "Yerleşik","Nova Pro ana ve yedek pil: doğrulanmış GG durumu"),
+            new("Windows oyun kontrolcüleri","Windows.Gaming.Input pil raporu",
+                "Yerleşik; cihaz sürücüsüne bağlı",
+                "Windows'un bağlı kontrolcü veya kulaklık için verdiği "+
+                "gerçek kapasite okunur; yoksa yüzde gösterilmez"),
             new("ATK / VXE / Pulsar","CompX 0x04 pil durumu HID",
                 "Kesin alıcı kimliklerinde yerleşik; cihaz testi gerekli",
                 "27 izinli USB kimliği, FF02:0002; fare uyanık olmalı. "+
@@ -75,10 +83,10 @@ internal sealed class VendorBatterySourcesDialog:Form
                 "Model protokolü bekleniyor",
                 "Genel pil API'si doğrulanmadı; bazı HID modelleri "+
                 "için belgelenmiş özel protokoller mevcut"),
-            new("WLMOUSE","BLE / standart HID",
-                "Model protokolü bekleniyor",
-                "Bazı farelerde alıcıya özel raporlar kullanılır; "+
-                "genel resmî uygulama pil API'si doğrulanmadı"),
+            new("WLMOUSE","Salt-okunur 0x83 / BLE / HID",
+                "Kesin doğrulanmış alıcılarda yerleşik",
+                "Yalnızca belgelenen firmware raporları; destek modele göre "+
+                "değişir, bilinmeyen değerler tahmin edilmez"),
             new("Diğer markalar","BLE GATT / USB HID pil",
                 "Otomatik kontrol ediliyor",
                 "Yalnızca canlı, doğrulanmış yüzde gösterilir; önbellek tahmini yok")
