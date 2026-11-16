@@ -73,6 +73,7 @@ internal static class GameLogoProvider
                    string.Equals(asset.Executable,game.Executable,
                        StringComparison.OrdinalIgnoreCase)&&
                    TryReadRows(asset.Rows,out var pixels) &&
+                   pixels.Count(v=>v)>=12 &&
                    !IsFilledRectangle(pixels))
                     return new(game.Executable,game.Name,Canvas,pixels,
                         "Kullanıcı logosu");
@@ -83,12 +84,15 @@ internal static class GameLogoProvider
         catch(UnauthorizedAccessException){}
 
         string? registered=GgGameDetector.RegisteredExecutable(game);
-        return registered is null?null:ResolveFromExecutable(game,registered);
+        string? localGgArtwork=GgGameDetector.RegisteredArtwork(game);
+        return registered is null
+            ?ResolveFromArtwork(game,localGgArtwork)
+            :ResolveFromExecutable(game,registered,localGgArtwork);
     }
 
     // Shared by the normal GG workflow and read-only regression diagnostics.
     internal static GameLogoSnapshot? ResolveFromExecutable(
-        GameSnapshot game,string executable)
+        GameSnapshot game,string executable,string? registeredArtwork=null)
     {
         GameLogoSnapshot? TryBitmap(Bitmap? bitmap,string source)
         {
@@ -112,10 +116,32 @@ internal static class GameLogoProvider
                 "Yerel oyun görseli");
             if(candidate is not null)return candidate;
         }
-        return TryBitmap(GameIconSources.ReadEmbedded(executable),
+        var extracted=TryBitmap(GameIconSources.ReadEmbedded(executable),
                    "Oyun EXE simgesi")
             ?? TryBitmap(GameIconSources.ReadShell(executable),
                    "Windows Shell simgesi");
+        var official=ResolveFromArtwork(game,registeredArtwork);
+        // Preserve good EXE extraction for LoL/Minecraft/Sekiro/etc.
+        // When the extracted icon contains too few visible strokes, prefer
+        // an independently registered local GG image if one is readable.
+        if(official is not null &&
+           (extracted is null || extracted.Pixels.Count(p=>p)<145))
+            return official;
+        return extracted??official;
+    }
+
+    private static GameLogoSnapshot? ResolveFromArtwork(
+        GameSnapshot game,string? trustedArtwork)
+    {
+        if(string.IsNullOrWhiteSpace(trustedArtwork))return null;
+        using var img=GameIconSources.ReadImage(trustedArtwork);
+        if(img is null)return null;
+        bool[] pixels=ConvertImage(img);
+        int white=pixels.Count(p=>p);
+        if(white is <12 or >820||IsFilledRectangle(pixels))
+            return null;
+        return new(game.Executable,game.Name,Canvas,pixels,
+            "SteelSeries GG yerel oyun görseli");
     }
 
     internal static void ImportOverride(GameSnapshot game,string file)
