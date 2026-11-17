@@ -85,6 +85,15 @@ internal static class BatterySources
         MergeVerifiedHidReadings(snapshot,genericReadings);
         MergeVerifiedVendorReadings(snapshot,genericReadings);
         MergeVerifiedWindowsBluetoothReadings(snapshot,genericReadings);
+        // If both independent sources genuinely failed, show both reasons
+        // instead of implying a missing GG field means no battery exists.
+        foreach(string role in new[]{"Headset","SpareBattery"})
+            if(!snapshot[role].Available)
+                snapshot.Values[role]=new BatteryReading(role,null,
+                    "SteelSeries GG + Nova Pro dock HID",
+                    GgBatteryProvider.LastDiagnostic+" | "+
+                    NovaProDockBatteryProvider.LastDiagnostic,
+                    DateTimeOffset.Now);
         // SetupAPI is useful for unsupported Classic Bluetooth hardware,
         // including checking whether Windows has ever seen a phone battery.
         // Its percentages can be stale while the device is disconnected,
@@ -206,6 +215,19 @@ internal static class BatterySources
             if(!reading.Available ||
                !reading.Kind.StartsWith("Vendor:",
                    StringComparison.OrdinalIgnoreCase))continue;
+            // Nova Pro Wireless can supply an approximate 9-step level
+            // directly from its dock when a tester's GG Engine revision
+            // omits batteryLevels. Preserve a more precise GG percentage
+            // whenever GG is already providing one.
+            if(reading.Kind is "Vendor:NovaPro:Headset" or
+                "Vendor:NovaPro:SpareBattery")
+            {
+                string role=reading.Kind.EndsWith(":Headset",
+                    StringComparison.Ordinal)?"Headset":"SpareBattery";
+                if(!snapshot[role].Available)
+                    snapshot.Values[role]=reading with{Kind=role};
+                continue;
+            }
             // Windows' public game-controller API can reveal a genuine
             // connected DualSense battery when standard HID/GATT cannot.
             // Map only positively identified Sony controllers to its
@@ -346,7 +368,11 @@ internal static class BatterySources
             // A brief GG dropout keeps the last fresh reading, but a
             // disconnected device never retains an obsolete percentage.
             if(values.TryGetValue(role,out var old)&&
-               old.Available&&(now-old.CheckedAt).TotalSeconds<=10)continue;
+               old.Available &&
+               (now-old.CheckedAt).TotalSeconds<=
+                  (old.Source.StartsWith("Nova Pro dock HID",
+                       StringComparison.OrdinalIgnoreCase)?16:10))
+                continue;
             values[role]=new BatteryReading(role,null,
                 "SteelSeries GG Engine",
                 GgBatteryProvider.LastDiagnostic,now);

@@ -23,8 +23,8 @@ internal static class DockFactoryHeaderReference
     internal static Bitmap? Extract(Image? photo,IReadOnlyList<PointF> corners)
     {
         // This is original hand-drawn pixel art; it does not sample
-        // photograph pixels. Public beta builds intentionally omit the
-        // developer-only product photo, but still need a clean OEM guide.
+        // photograph pixels. The published default dock photo is strictly
+        // for presentation, while this native OEM guide remains pixel sharp.
         if(corners.Count!=4)return null;
         var result=new Bitmap(Width,Height);
         using(var graphics=Graphics.FromImage(result))

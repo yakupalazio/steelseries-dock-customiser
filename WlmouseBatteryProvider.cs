@@ -150,17 +150,41 @@ internal sealed class WlmouseBatteryProvider:IPeripheralBatteryProvider
                             if(result is not null)break;
                         }
                     }
-                    if(result is null&&passive)
+                    if(result is null && !active &&
+                       caps!.FeatureLength is >=64 and <=65)
                     {
-                        stream.ReadTimeout=90;
-                        byte[] raw=new byte[caps!.InputLength];
+                        // Exact newer WLMOUSE receivers (e.g. Beast X Pro)
+                        // do not have a verified 0x83 output/query handshake.
+                        // Try a standard HID GET_FEATURE read only; never
+                        // send the older mouse's control packet blindly.
                         try
                         {
-                            int count=stream.Read(raw,0,raw.Length);
-                            if(count>0)
-                                result=ParseHeartbeat(raw.AsSpan(0,count));
+                            var report=new byte[caps.FeatureLength];
+                            report[0]=0;
+                            stream.GetFeature(report);
+                            result=ParseFeature(report);
                         }
-                        catch(TimeoutException){}
+                        catch(Exception ex) when(ex is IOException or
+                            TimeoutException or InvalidOperationException or
+                            NotSupportedException){}
+                    }
+                    if(result is null&&passive)
+                    {
+                        stream.ReadTimeout=180;
+                        byte[] raw=new byte[caps!.InputLength];
+                        // Some dongles queue unrelated notifications first;
+                        // accept only a validated battery heartbeat.
+                        for(int attempt=0;attempt<3;attempt++)
+                        {
+                            try
+                            {
+                                int count=stream.Read(raw,0,raw.Length);
+                                if(count>0)
+                                    result=ParseHeartbeat(raw.AsSpan(0,count));
+                                if(result is not null)break;
+                            }
+                            catch(TimeoutException){break;}
+                        }
                     }
                     if(result is null)continue;
                     responded++;

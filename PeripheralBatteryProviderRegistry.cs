@@ -42,8 +42,10 @@ internal static class PeripheralBatteryProviderRegistry
     // a separately provided Corsair x64 SDK library is used only if present.
     // Neither a vendor application nor SDK is installed/started by us.
     private static readonly IPeripheralBatteryProvider[] Providers=[
-        new BleGatt(),new WindowsBluetooth(),new StandardHid(),
-        new WindowsGameControllerBatteryProvider(),
+        new BleGatt(),new WindowsBluetooth(),
+        new ConnectedBluetoothPropertyBatteryProvider(),
+        new StandardHid(),new WindowsGameControllerBatteryProvider(),
+        new NovaProDockBatteryProvider(),
         new CorsairIcueBatteryProvider(),new CompxWirelessBatteryProvider(),
         new WlmouseBatteryProvider()
     ];

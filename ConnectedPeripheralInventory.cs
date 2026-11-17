@@ -357,8 +357,18 @@ internal static class ConnectedPeripheralInventory
                       "alınamadı. Fareyi hareket ettirip yeniden dene. "+
                       CompxWirelessBatteryProvider.LastDiagnostic
                     :recognized is null
-                        ?"Bağlı; güncel pil yüzdesi sağlanmıyor. "+
-                         "Cihaz pilli olmayabilir veya üreticiye özel protokol gerektirebilir."
+                        ?(name.Contains("FreeBuds",StringComparison.OrdinalIgnoreCase)
+                            ?"Kulaklık bağlı; Windows HFP/BAS pil yüzdesi sağlamadı. "+
+                             "Windows Bluetooth ayarlarında da pil görünmüyorsa "+
+                             "üreticinin pil raporu desteklenmiyor olabilir."
+                            :"Bağlı; güncel pil yüzdesi sağlanmıyor. "+
+                             "Cihaz pilli olmayabilir veya üreticiye özel protokol gerektirebilir.")
+                        :recognized.Brand.Equals("WLMOUSE",StringComparison.OrdinalIgnoreCase)
+                            ?"Tanınan model: "+recognized.Name+
+                             ". WLMOUSE Beast X Pro için doğrulanmış aktif "+
+                             "pil sorgusu yok; yalnızca güvenli "+
+                             "GET_FEATURE / pasif rapor okunur. "+
+                             WlmouseBatteryProvider.LastDiagnostic
                         :recognized.ExactModel
                             ?"Tanınan model: "+recognized.Name+
                              ". Canlı pil okuyucusu doğrulanmadı; yüzde gösterilmiyor."

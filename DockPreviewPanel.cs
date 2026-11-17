@@ -748,7 +748,7 @@ internal sealed class DockPreviewPanel : UserControl
         _settings.Corners=_factoryCorners.ToList();
         SaveSettings();
         LoadImage();
-        _message.Text="Resmî SteelSeries ürün fotoğrafı yüklendi. Fotoğraf yalnızca yerel önizleme içindir.";
+        _message.Text="Yerleşik SteelSeries dock fotoğrafı geri yüklendi. Fotoğraf yalnızca önizleme içindir.";
     }
 
     private void ChoosePhoto()

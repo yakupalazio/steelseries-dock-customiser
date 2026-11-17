@@ -10,7 +10,8 @@ obj/
 !docs/*.png
 PixelOperator.ttf
 
-dock-photo-local.png
+# Only the specifically approved default dock preview image is public.
+!dock-photo-local.png
 **/user-dock-photo**.jpg
 *.jpeg
 *.webp

@@ -79,6 +79,31 @@ internal sealed class BatteryStatusDialog : Form
     private sealed record DisconnectedTracked(string Id,string Name);
     private readonly Func<BatterySnapshot> snapshotGetter;
     private readonly Func<Task> refresh;
+    internal static string BuildBatteryDiagnostics(BatterySnapshot snapshot,
+        IReadOnlyList<ConnectedPeripheral> devices)
+    {
+        var lines=new System.Collections.Generic.List<string>{
+            "SteelSeries Dock Customiser — Battery diagnostics",
+            "Version: "+Application.ProductVersion,
+            "Live battery readings (no serials or Bluetooth addresses):"
+        };
+        foreach(var reading in snapshot.Values.Values
+            .OrderBy(x=>x.Kind,StringComparer.OrdinalIgnoreCase))
+            lines.Add((reading.FriendlyName.Length>0?reading.FriendlyName:
+                BatteryPriority.DisplayName(reading.Kind,snapshot))+
+                ": "+reading.Display+" | "+reading.Source+
+                " | "+reading.Detail);
+        lines.Add("Discovered devices:");
+        foreach(var device in devices)
+            lines.Add(device.Name+": "+device.BatteryDisplay+" | "+
+                device.BatterySource+" | "+device.Detail);
+        lines.Add("GG: "+GgBatteryProvider.LastDiagnostic);
+        lines.Add("Nova Pro dock HID: "+
+            NovaProDockBatteryProvider.LastDiagnostic);
+        lines.Add("WLMOUSE: "+WlmouseBatteryProvider.LastDiagnostic);
+        lines.Add("No private configuration, device addresses, or token exported.");
+        return string.Join(Environment.NewLine,lines);
+    }
     private readonly Action onApply;
     private readonly DataGridView grid=new()
     {
@@ -141,8 +166,28 @@ internal sealed class BatteryStatusDialog : Form
             ?"Show hidden devices again":"Gizlenen cihazları tekrar göster");
         var changeIcon=new ToolStripMenuItem(UiLanguage.English
             ?"Customize device icon...":"Cihaz ikonunu özelleştir...");
+        var copyBatteryReport=new ToolStripMenuItem(UiLanguage.English
+            ?"Copy battery diagnostics":"Pil tanı raporunu kopyala");
         discoveredMenu.Items.AddRange([
-            followAction,changeIcon,hideAction,showHidden]);
+            followAction,changeIcon,hideAction,showHidden,
+            new ToolStripSeparator(),copyBatteryReport]);
+        copyBatteryReport.Click+=(_,_)=>{
+            try
+            {
+                Clipboard.SetText(BuildBatteryDiagnostics(
+                    snapshotGetter(),discovered));
+                MessageBox.Show(this,UiLanguage.English
+                    ?"Battery diagnostics copied. No addresses or serials are included."
+                    :"Pil tanı raporu kopyalandı. Adres ve seri numarası içermez.",
+                    "SteelSeries Dock Customiser",
+                    MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show(this,"Kopyalanamadı: "+ex.Message,
+                    "SteelSeries Dock Customiser");
+            }
+        };
         discoveredMenu.Opening+=(_,_)=>{
             object? selected=grid.CurrentRow?.Tag;
             string id=selected switch{

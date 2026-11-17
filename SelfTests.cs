@@ -1199,6 +1199,7 @@ internal static class SelfTests
             ReleaseSevenSevenSelfTests.Run();
             ReleaseSevenEightSelfTests.Run();
             ReleaseSevenNineSelfTests.Run();
+            ReleaseEightZeroSelfTests.Run();
             Console.WriteLine("All OLED Studio self-tests passed.");
             return 0;
         }

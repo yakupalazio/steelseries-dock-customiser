@@ -86,7 +86,8 @@ internal static class GameLogoProvider
         string? registered=GgGameDetector.RegisteredExecutable(game);
         string? localGgArtwork=GgGameDetector.RegisteredArtwork(game);
         return registered is null
-            ?ResolveFromArtwork(game,localGgArtwork)
+            ?ResolveFromArtwork(game,localGgArtwork) ??
+                (IsRobloxGame(game)?RobloxFallbackLogo(game):null)
             :ResolveFromExecutable(game,registered,localGgArtwork);
     }
 
@@ -127,7 +128,32 @@ internal static class GameLogoProvider
         if(official is not null &&
            (extracted is null || extracted.Pixels.Count(p=>p)<145))
             return official;
+        // Roblox Player on Windows is installed per-user, and is often not
+        // in GG's game library. If the real executable has no usable icon,
+        // keep Game mode readable with a tiny original 1-bit Roblox marker.
+        if(IsRobloxGame(game) &&
+           (extracted is null || extracted.Pixels.Count(p=>p)<45))
+            return RobloxFallbackLogo(game);
         return extracted??official;
+    }
+
+    internal static bool IsRobloxGame(GameSnapshot game)=>
+        string.Equals(game.Name,"Roblox",StringComparison.OrdinalIgnoreCase)&&
+        GgGameDetector.IsRobloxPlayerName(game.Executable);
+
+    internal static GameLogoSnapshot RobloxFallbackLogo(GameSnapshot game)
+    {
+        var pixelArt=new bool[Canvas*Canvas];
+        for(int y=0;y<Canvas;y++)
+        for(int x=0;x<Canvas;x++)
+        {
+            int distance=Math.Abs(2*x-31)+Math.Abs(2*y-31);
+            // Diamond with a clear hollow core, intentionally optimized
+            // for the monochrome 32x32 OLED rather than a colored tile.
+            pixelArt[y*Canvas+x]=distance<=27&&distance>=11;
+        }
+        return new(game.Executable,game.Name,Canvas,pixelArt,
+            "Yerleşik Roblox OLED simgesi");
     }
 
     private static GameLogoSnapshot? ResolveFromArtwork(

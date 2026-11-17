@@ -12,6 +12,6 @@
 - **SteelSeries GameSense SDK**, <https://github.com/SteelSeries/gamesense-sdk>: research reference for the documented GameSense API, not used by the physical dock test.
 - **Microsoft Win32 / Phone Link / CrossDevice**: Windows APIs and system metadata used for phone and laptop battery status, with the documented limitations of unofficial internal integration.
 - **Nova Pro dial protocol documentation:** <https://github.com/TimP4w/HaloDaemon-plugins/blob/main/steelseries_arctis/docs/protocol.md> and <https://github.com/Swiftlyx/OpenChatMix>. Public protocol descriptions were referenced for report IDs `07 25` and `07 45`; no third-party source code was copied into the implementation.
-- The user-provided SteelSeries product photograph is excluded from Git. A local-only ZIP may include it for private product review by SteelSeries; no general redistribution rights are implied.
+- The project-maintainer-supplied SteelSeries dock reference photograph is included in the downloadable preview asset (`dock-photo-local.png`) at the maintainer's explicit request. It is used solely for visual identification of the supported hardware. Third-party photograph rights and SteelSeries trademarks remain with their respective rights holders; its inclusion does not transfer those rights or imply SteelSeries endorsement. User-supplied custom photographs remain private and excluded.
 
 This application is not endorsed by these companies. Always check licenses before distributing third-party files.

@@ -160,6 +160,30 @@ internal static class GgGameDetector
                 catch(System.IO.IOException){}
             }
 
+            // Roblox's player is normally per-user in AppData and is not
+            // a Steam/EA/GG registration. Verify the real player executable
+            // and its installation family, never the launcher or Studio.
+            foreach(var process in processes)
+            {
+                try
+                {
+                    if(process.HasExited ||
+                       !IsRobloxPlayerName(process.ProcessName))continue;
+                    string? actual=ReadOnlyProcessPath(process);
+                    if(!IsTrustedRobloxPlayerPath(actual,process.ProcessName)||
+                       !File.Exists(actual)||process.MainWindowHandle==IntPtr.Zero)
+                        continue;
+                    DateTime start;
+                    try{start=process.StartTime;}
+                    catch{start=DateTime.MinValue;}
+                    candidates.Add((new GameSnapshot("Roblox",
+                        process.ProcessName,process.Id),start));
+                }
+                catch(System.ComponentModel.Win32Exception){}
+                catch(InvalidOperationException){}
+                catch(UnauthorizedAccessException){}
+                catch(System.IO.IOException){}
+            }
             var selected=candidates.OrderByDescending(c=>c.Started)
                 .Select(c=>c.Game).FirstOrDefault();
             // GG is preferred, but not mandatory. A foreground executable
@@ -303,6 +327,63 @@ internal static class GgGameDetector
         {
             return false;
         }
+    }
+
+    internal static bool IsRobloxPlayerName(string? name)=>
+        string.Equals(name,"RobloxPlayerBeta",StringComparison.OrdinalIgnoreCase)||
+        string.Equals(name,"Roblox",StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The verified Roblox Player ships either in a per-user versioned
+    /// Roblox folder or a signed Store package. Merely seeing "Roblox" in
+    /// the window title, a launcher executable or Roblox Studio is NOT a
+    /// game. The actual process path must agree with the executable name.
+    /// </summary>
+    internal static bool IsTrustedRobloxPlayerPath(
+        string? executable,string? processName,
+        string? localAppData=null,string? programFiles=null)
+    {
+        if(string.IsNullOrWhiteSpace(executable)||
+           !IsRobloxPlayerName(processName)||
+           !executable.EndsWith(".exe",StringComparison.OrdinalIgnoreCase))
+            return false;
+        try
+        {
+            string path=Path.GetFullPath(executable);
+            string basename=Path.GetFileNameWithoutExtension(path);
+            if(!string.Equals(basename,processName,
+               StringComparison.OrdinalIgnoreCase))return false;
+            localAppData??=Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
+            programFiles??=Environment.GetFolderPath(
+                Environment.SpecialFolder.ProgramFiles);
+            string versions=Path.Combine(
+                Path.GetFullPath(localAppData),"Roblox","Versions")+
+                Path.DirectorySeparatorChar;
+            if(path.StartsWith(versions,StringComparison.OrdinalIgnoreCase))
+            {
+                string tail=path[versions.Length..];
+                string[] parts=tail.Split(Path.DirectorySeparatorChar);
+                return parts.Length==2&&parts[0].StartsWith("version-",
+                    StringComparison.OrdinalIgnoreCase)&&
+                    !string.IsNullOrWhiteSpace(parts[0])&&
+                    basename.Equals("RobloxPlayerBeta",
+                        StringComparison.OrdinalIgnoreCase);
+            }
+            string apps=Path.Combine(Path.GetFullPath(programFiles),
+                "WindowsApps")+Path.DirectorySeparatorChar;
+            if(path.StartsWith(apps,StringComparison.OrdinalIgnoreCase))
+            {
+                string[] parts=path[apps.Length..].Split(
+                    Path.DirectorySeparatorChar);
+                return parts.Length==2 &&
+                   parts[0].StartsWith("ROBLOXCorporation.ROBLOX_",
+                       StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch(Exception ex) when(ex is ArgumentException or
+            NotSupportedException or PathTooLongException){}
+        return false;
     }
 
     // Normalize only for matching a verified live process directory against
