@@ -1,0 +1,87 @@
+name: Publish RC8 Roblox Battery Dock Photo
+
+on:
+  push:
+    branches:
+      - feature/release-candidate-ui-lyrics-motion
+    paths:
+      - .github/workflows/rc8-cloud-release.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rc8-public-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Checkout verified RC8 release tag
+        uses: actions/checkout@v4
+        with:
+          ref: v1.0.0-beta.2-rc8
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish Windows portable and test dock photo
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'SteelseriesDockCustomiser-RC8'
+          dotnet publish SteelseriesDockCustomiser.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:DebugSymbols=false -o $stage
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+          $exe = Join-Path $stage 'SteelseriesDockCustomiser.exe'
+          $photo = Join-Path $stage 'dock-photo-local.png'
+          if (!(Test-Path $exe)) { throw 'Published EXE missing' }
+          if (!(Test-Path $photo)) { throw 'Realistic dock preview photo was omitted from public build' }
+          if ((Get-Item $photo).Length -lt 50000) { throw 'Dock photo unexpectedly small' }
+          Add-Type -AssemblyName System.Drawing
+          $img = [System.Drawing.Image]::FromFile($photo)
+          try { if ($img.Width -lt 590 -or $img.Height -lt 420) { throw 'Dock photo resolution is too small' } }
+          finally { $img.Dispose() }
+          $env:DOCK_REQUIRE_DOCK_PHOTO = '1'
+          & $exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Published EXE regression tests failed' }
+          foreach ($name in @('README.md', 'BETA_TESTING.md', 'LICENSE', 'TERMS.md', 'THIRD_PARTY_NOTICES.md', 'RELEASE_NOTES_RC75_GAME_LOGO_SINGLE_INSTANCE.md', 'RELEASE_NOTES_RC76_NOTES_LOGO_SUPPORT.md', 'RELEASE_NOTES_RC77_ICON_BATTERY.md', 'RELEASE_NOTES_RC78_VALORANT_NFS.md', 'RELEASE_NOTES_RC79_AMONG_US_DETECTION.md', 'RELEASE_NOTES_RC8_ROBLOX_BATTERY_PHOTO.md')) {
+            if (Test-Path $name) { Copy-Item -LiteralPath $name -Destination $stage -Force }
+          }
+          if (Test-Path THIRD_PARTY_LICENSES) { Copy-Item THIRD_PARTY_LICENSES -Destination $stage -Recurse -Force }
+          if (Test-Path VendorSDK) { Copy-Item VendorSDK -Destination $stage -Recurse -Force }
+          if (!(Test-Path (Join-Path $stage 'dock-photo-local.png'))) { throw 'Dock image missing after final packaging' }
+          $zipName = 'SteelseriesDockCustomiser-v1.0.0-beta.2-rc8-win-x64.zip'
+          $zip = Join-Path $env:GITHUB_WORKSPACE $zipName
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+          if ((Get-Item $zip).Length -lt 10000000) { throw 'Generated ZIP is suspiciously small' }
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            if (!$archive.Entries.Where({$_.Name -eq 'SteelseriesDockCustomiser.exe'}).Count) { throw 'EXE absent from ZIP' }
+            if (!$archive.Entries.Where({$_.Name -eq 'dock-photo-local.png'}).Count) { throw 'Photo absent from ZIP' }
+          } finally { $archive.Dispose() }
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'SHA256SUMS-rc8.txt') -Value "$sha  $zipName" -Encoding ascii
+
+      - name: Create and publish GitHub pre-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v1.0.0-beta.2-rc8'
+          $zip = 'SteelseriesDockCustomiser-v1.0.0-beta.2-rc8-win-x64.zip'
+          gh release view $tag --json isDraft | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --draft --verify-tag --title 'SteelSeries Dock Customiser — Beta 2 RC8 (Windows x64)' --notes-file 'RELEASE_NOTES_RC8_ROBLOX_BATTERY_PHOTO.md'
+            if ($LASTEXITCODE -ne 0) { throw 'RC8 draft creation failed' }
+          }
+          gh release upload $tag $zip 'SHA256SUMS-rc8.txt'
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed; keep draft' }
+          gh release edit $tag --draft=false --prerelease
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+          gh release view $tag --json url,isDraft,assets
