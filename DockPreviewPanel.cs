@@ -219,6 +219,19 @@ internal sealed class DockPreviewPanel : UserControl
 
     public void InvalidateFrame() => _photoBox.Invalidate();
 
+    /// <summary>
+    /// A saved game/media priority change should update an already active
+    /// dock immediately. The existing hardware gate and transition handling
+    /// stay in charge; no independent OLED writer is created.
+    /// </summary>
+    public void RequestLiveRefresh()
+    {
+        InvalidateFrame();
+        if(!_liveEnabled||IsDisposed)return;
+        _forceNextLiveFrame=true;
+        _=RefreshLiveDock(force:true);
+    }
+
     private Func<ScreenMode>? activeModeProvider;
     private Func<DisplayPreferences>? modeTransitionSettings;
     private ScreenMode? lastRenderedMode;

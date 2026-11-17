@@ -347,6 +347,14 @@ internal sealed class StudioProject
             if(IsLocked(mode,w.Kind))w.Visible=true;
     }
 
-    public static ScreenMode Choose(bool gameRunning,bool mediaPlaying) =>
-        gameRunning?ScreenMode.Game:mediaPlaying?ScreenMode.Media:ScreenMode.Idle;
+    public static ScreenMode Choose(bool gameRunning,bool mediaPlaying,
+        string? simultaneousPriority="Game")
+    {
+        if(gameRunning && mediaPlaying)
+            return DisplayPreferences.NormalizeConcurrentModePriority(
+                simultaneousPriority)=="Media"
+                    ?ScreenMode.Media:ScreenMode.Game;
+        return gameRunning?ScreenMode.Game:
+            mediaPlaying?ScreenMode.Media:ScreenMode.Idle;
+    }
 }

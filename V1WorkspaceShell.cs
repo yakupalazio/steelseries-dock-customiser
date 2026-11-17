@@ -484,7 +484,8 @@ internal sealed partial class PixelStudioForm
                 ()=>dockPreview!.SuspendLiveForGameAsync(),
                 wasLive=>dockPreview!.ResumeLiveAfterGameAsync(wasLive),
                 ApplyLanguage,displayPreferences,
-                ()=>BeginInvoke((Action)(()=>ShowFirstRunGuide())));
+                ()=>BeginInvoke((Action)(()=>ShowFirstRunGuide())),
+                ()=>{Redraw();dockPreview?.RequestLiveRefresh();});
             settingsDialog=dialog;
             try{dialog.ShowDialog(this);}finally{settingsDialog=null;}
         };

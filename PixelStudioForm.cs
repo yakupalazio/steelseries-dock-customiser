@@ -564,7 +564,8 @@ internal sealed partial class PixelStudioForm : Form
     ];
 
     private ScreenMode ActiveMode =>
-        StudioProject.Choose(gameSnapshot.IsRunning,MediaActive);
+        StudioProject.Choose(gameSnapshot.IsRunning,MediaActive,
+            displayPreferences.ConcurrentModePriority);
 
     private Bitmap RenderScreen(ScreenMode mode,bool liveFull=false)
     {

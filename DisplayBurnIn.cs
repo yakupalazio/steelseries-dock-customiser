@@ -12,17 +12,33 @@ internal sealed class DisplayPreferences
     public string ModeTransitionEffect { get; set; } = "Slide";
     // 100 means normal: approx 350ms slide. Valid range 25..200%.
     public int ModeTransitionSpeed { get; set; } = 100;
+    // Applies ONLY when both a game and active media are detected. Existing
+    // display-v1.json files omit this property and remain game-first.
+    public string ConcurrentModePriority { get; set; } = "Game";
+
+    internal static string NormalizeConcurrentModePriority(string? value) =>
+        string.Equals(value,"Media",StringComparison.OrdinalIgnoreCase)
+            ?"Media":"Game";
+
     public static string FilePath => Path.Combine(
         Beta5Sandbox.SettingsDirectory,"display-v1.json");
     public static DisplayPreferences Load()
     {
-        try{return File.Exists(FilePath)
-            ?JsonSerializer.Deserialize<DisplayPreferences>(File.ReadAllText(FilePath))??new()
-            :new();}
+        try
+        {
+            var pref=File.Exists(FilePath)
+                ?JsonSerializer.Deserialize<DisplayPreferences>(
+                    File.ReadAllText(FilePath))??new():new();
+            pref.ConcurrentModePriority=NormalizeConcurrentModePriority(
+                pref.ConcurrentModePriority);
+            return pref;
+        }
         catch{return new();}
     }
     public void Save()
     {
+        ConcurrentModePriority=NormalizeConcurrentModePriority(
+            ConcurrentModePriority);
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         string temporary=FilePath+".tmp";
         File.WriteAllText(temporary,JsonSerializer.Serialize(this));

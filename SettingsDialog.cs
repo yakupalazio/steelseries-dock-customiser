@@ -54,7 +54,8 @@ internal sealed class SettingsDialog : Form
         Func<bool,Task>? resumeLive = null,
         Action? onLanguageChanged = null,
         DisplayPreferences? displayPreferences = null,
-        Action? onGuideRequested = null)
+        Action? onGuideRequested = null,
+        Action? onDisplayPriorityChanged = null)
     {
         UiPolish.Register(this);
         this.otherOledWriterActive = otherOledWriterActive ?? (() => false);
@@ -307,6 +308,7 @@ internal sealed class SettingsDialog : Form
 
         Button? displayButton=null;
         Panel? displayPage=null;
+        Action? updatePriorityLanguage=null;
         if(displayPreferences is not null)
         {
             displayButton=new DarkButton{
@@ -342,19 +344,87 @@ internal sealed class SettingsDialog : Form
                 displayPreferences.BurnInDrift=drift.Checked;
                 displayPreferences.Save();
             };
+            // The shared displayPreferences instance drives the actual
+            // live OLED renderer, not only the editor preview. Persist
+            // immediately; no change to stored per-mode designs.
+            var concurrentTitle=new Label{
+                Name="ConcurrentModePriorityTitle",
+                Left=32,Top=338,Width=730,Height=24,ForeColor=Accent,
+                Font=new Font("Segoe UI Semibold",10f,FontStyle.Bold)};
+            var concurrentPriority=new ComboBox{
+                Name="ConcurrentModePrioritySelector",
+                Left=33,Top=371,Width=235,Height=34,
+                BackColor=Surface,ForeColor=Primary,
+                DropDownStyle=ComboBoxStyle.DropDownList};
+            var concurrentHint=new Label{
+                Name="ConcurrentModePriorityHint",
+                Left=290,Top=367,Width=495,Height=55,ForeColor=Muted,
+                Font=new Font("Segoe UI",9.4f)};
+            bool priorityUiUpdating=false;
+            void UpdatePriorityLanguage()
+            {
+                priorityUiUpdating=true;
+                int current=DisplayPreferences.NormalizeConcurrentModePriority(
+                    displayPreferences.ConcurrentModePriority)=="Media"?1:0;
+                concurrentTitle.Text=UiLanguage.English
+                    ?"WHEN MUSIC AND A GAME RUN TOGETHER"
+                    :"OYUN VE MÜZİK AYNI ANDA AÇIKKEN";
+                concurrentPriority.Items.Clear();
+                concurrentPriority.Items.AddRange(UiLanguage.English
+                    ?new object[]{"Prioritize game screen",
+                        "Prioritize music screen"}
+                    :new object[]{"Oyun ekranı öncelikli",
+                        "Müzik ekranı öncelikli"});
+                concurrentPriority.SelectedIndex=current;
+                concurrentHint.Text=UiLanguage.English
+                    ?"Choose the OLED screen when both are active. With only one active, that screen always wins."
+                    :"İkisi de aktifse gösterilecek ekranı seç. Yalnızca biri aktifse her zaman onun ekranı gösterilir.";
+                priorityUiUpdating=false;
+            }
+            concurrentPriority.SelectedIndexChanged+=(_,_)=>{
+                if(priorityUiUpdating||concurrentPriority.SelectedIndex<0)
+                    return;
+                string requested=concurrentPriority.SelectedIndex==1
+                    ?"Media":"Game";
+                if(displayPreferences.ConcurrentModePriority==requested)
+                    return;
+                displayPreferences.ConcurrentModePriority=requested;
+                try
+                {
+                    displayPreferences.Save();
+                    onDisplayPriorityChanged?.Invoke();
+                }
+                catch(Exception ex)
+                {
+                    displayPreferences.ConcurrentModePriority=
+                        requested=="Media"?"Game":"Media";
+                    UpdatePriorityLanguage();
+                    MessageBox.Show(this,
+                        (UiLanguage.English
+                            ?"Could not save screen priority: "
+                            :"Ekran önceliği kaydedilemedi: ")+ex.Message,
+                        "SteelSeries Dock Customiser",
+                        MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                }
+            };
+            updatePriorityLanguage=UpdatePriorityLanguage;
+            UpdatePriorityLanguage();
+            displayPage.Controls.AddRange([concurrentTitle,
+                concurrentPriority,concurrentHint]);
+
             // Independent saved transition preference; no hardware write
             // happens when simply previewing effects in Settings.
             displayPage.Controls.Add(new Label{
                 Text="MOD GEÇİŞLERİ · MEDIA / GAME / IDLE",
-                Left=32,Top=350,Width=650,Height=26,ForeColor=Accent,
+                Left=32,Top=427,Width=650,Height=26,ForeColor=Accent,
                 Font=new Font("Segoe UI Semibold",10,FontStyle.Bold)});
             var effectEnabled=new DarkCheckBox{
                 Text="OLED mod geçiş animasyonlarını kullan",
-                Left=32,Top=379,Width=580,Height=35,
+                Left=32,Top=461,Width=580,Height=35,
                 Checked=displayPreferences.ModeTransitionEnabled,
                 ForeColor=Primary};
             var transitionEffect=new ComboBox{
-                Left=33,Top=424,Width=242,Height=34,
+                Left=33,Top=505,Width=242,Height=34,
                 BackColor=Surface,ForeColor=Primary,
                 DropDownStyle=ComboBoxStyle.DropDownList};
             transitionEffect.Items.AddRange(
@@ -362,23 +432,23 @@ internal sealed class SettingsDialog : Form
             transitionEffect.SelectedItem=OledModeTransition.Normalize(
                 displayPreferences.ModeTransitionEffect);
             var transitionSpeed=new TrackBar{
-                Left=293,Top=419,Width=282,Height=53,
+                Left=293,Top=500,Width=282,Height=53,
                 Minimum=25,Maximum=200,TickFrequency=25,
                 Value=Math.Clamp(displayPreferences.ModeTransitionSpeed,25,200),
                 BackColor=Background};
             var transitionInfo=new Label{
-                Left=585,Top=431,Width=195,Height=32,
+                Left=585,Top=512,Width=195,Height=32,
                 ForeColor=Muted,Font=new Font("Segoe UI",9f)};
             var transitionHint=new Label{
-                Left=32,Top=483,Width=700,Height=55,
+                Left=32,Top=561,Width=700,Height=55,
                 Text="Animasyon yalnızca mod değiştiğinde oynar; üstte korunan 10 pil satırı değişmez. "+
                     "Bağlantı koparsa veya donanım orijinal kontrol ekranını açarsa güvenli aktarım önceliklidir.",
                 ForeColor=Muted,Font=new Font("Segoe UI",9f)};
             var preview=new OledTransitionPreview{
-                Left=33,Top=546,Width=372,Height=112,
+                Left=33,Top=629,Width=372,Height=77,
                 BackColor=Color.Black};
             var play=new DarkButton{
-                Text="▶ Geçişi önizle",Left=427,Top=563,
+                Text="▶ Geçişi önizle",Left=427,Top=647,
                 Width=170,Height=38,BackColor=Surface,ForeColor=Primary};
             void SaveTransitionPreference(bool persist=true)
             {
@@ -592,6 +662,7 @@ internal sealed class SettingsDialog : Form
             this.onLanguageChanged();
             languageSelector.Invalidate();
             batteryEditor?.ApplyLanguage();
+            updatePriorityLanguage?.Invoke();
         };
         languageSelector.SelectedIndex=UiLanguage.English?1:0;
         UiLanguage.ApplyTree(this);
