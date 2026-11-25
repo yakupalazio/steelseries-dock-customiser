@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Download beta / Beta sürümünü indir"
+    url: "https://github.com/yakupalazio/steelseries-dock-customiser/tree/beta-downloads"
+    about: "Public Windows beta download packages and installation information."
